@@ -1,0 +1,27 @@
+{
+  "name": "splitpool",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "engines": { "node": ">=22.13.0" },
+  "overrides": {
+    "react-native-reanimated": "4.5.1",
+    "react-native-worklets": "0.10.1"
+  },
+  "scripts": {
+    "start": "npm run start --workspace @splitpool/mobile --",
+    "web": "npm run web --workspace @splitpool/mobile",
+    "android": "npm run android --workspace @splitpool/mobile",
+    "ios": "npm run ios --workspace @splitpool/mobile",
+    "api": "npm run dev --workspace @splitpool/api",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint --workspace @splitpool/mobile",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run lint && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.5"
+  }
+}

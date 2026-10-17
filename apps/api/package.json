@@ -1,0 +1,17 @@
+{
+  "name": "@splitpool/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.0.0",
+    "@splitpool/contracts": "0.1.0",
+    "fastify": "^5.0.0",
+    "tsx": "^4.0.0"
+  }
+}

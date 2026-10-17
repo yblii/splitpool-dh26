@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "SplitPool",
+    "slug": "splitpool",
+    "scheme": "splitpool",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      ["expo-image-picker", {
+        "photosPermission": "Choose a receipt photo to split your bill.",
+        "cameraPermission": "Take a receipt photo to split your bill.",
+        "microphonePermission": false
+      }]
+    ],
+    "experiments": { "typedRoutes": true }
+  }
+}
