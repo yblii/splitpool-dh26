@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { allocateCents, makeDemoBill, summarizeBill } from './index';
+import { allocateCents, makeDemoBill, summarizeBill } from './bill.js';
 
 describe('demo bill accounting', () => {
   it('keeps unclaimed money separate from participant shares', () => {

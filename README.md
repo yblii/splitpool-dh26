@@ -57,7 +57,7 @@ The preview profile produces an installable Android APK. For iOS, use `--platfor
 - Native navigation between the group, receipt, profile, and payment screens.
 - Local group renaming, demo display name, and whole/half item claims across three switchable demo participants.
 - Exact-cent totals with equal or proportional tax/tip splitting; incomplete claims block demo payment.
-- Native camera/photo selection and an explicitly labeled sample receipt preview.
+- Native camera/photo selection, GPT-4o receipt parsing via the local API (sample fallback without a key), and a host review screen that writes verified items into the local demo bill.
 - A demo card toggle and simulated contribution/merchant payment states.
 - Optional real Supabase email/password sign-up/sign-in, once configured.
 - A read-only Fastify health endpoint and demo bill endpoint, with an in-app connection check.
@@ -78,6 +78,9 @@ The API listens on port 3001:
 
 - `GET /api/v1/health`
 - `GET /api/v1/demo/bill`
+- `POST /api/v1/demo/receipt-extractions` — multipart field `image`; returns draft receipt JSON (GPT-4o when `OPENAI_API_KEY` is set on the API, otherwise the labeled sample fixture)
+
+Copy `apps/api/.env.example` to `apps/api/.env` and set `OPENAI_API_KEY` for live parsing. The key stays on the API only — never put it in `EXPO_PUBLIC_*` variables.
 
 To check it from the app, copy `apps/mobile/.env.example` to `apps/mobile/.env`, set `EXPO_PUBLIC_API_URL`, and restart Expo:
 
