@@ -149,6 +149,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     return reply.code(200).send(body);
   });
 
+  const ledger = options.ledger ?? new PaymentLedger();
   const collaboration = options.db && options.verifyToken
     ? new CollaborationService(options.db)
     : undefined;
@@ -158,7 +159,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
       : undefined);
   await registerPaymentRoutes(
     app,
-    options.ledger ?? new PaymentLedger(),
+    ledger,
     options.simulation !== false,
     options.stripe,
     syncBillState,
@@ -180,7 +181,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
       privateApp,
       collaboration,
       verify,
-      { parser, receiptRoot: options.receiptRoot },
+      { parser, receiptRoot: options.receiptRoot, ledger },
     ), { prefix: '/api/v1' });
     app.addHook('onClose', () => db.close());
   }

@@ -6,11 +6,13 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import type { GroupDetail } from '@splitpool/contracts';
 import { Button, Card, DemoNote, Screen, colors, styles } from '../../components/ui';
 import {
+  closeBill,
   createBill,
   createInvite,
   formatApiError,
   getGroup,
 } from '../../lib/apiClient';
+import { getBillPayment } from '../../lib/paymentApi';
 import { useAppProfile } from '../../state/appProfile';
 
 function inviteUrlForToken(token: string) {
@@ -26,14 +28,28 @@ export default function GroupScreen() {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    if (!groupId) return;
+    if (!groupId || !appProfile?.userId) return;
     setMessage('');
     try {
-      setGroup(await getGroup(groupId));
+      let next = await getGroup(groupId);
+      // If the payment ledger already finished, close the collaboration row before rendering.
+      if (next.activeBillId) {
+        try {
+          const payment = await getBillPayment(next.activeBillId, appProfile.userId);
+          const phase = payment?.session?.phase;
+          if (phase === 'paid' || phase === 'canceled') {
+            await closeBill(next.activeBillId, phase === 'paid' ? 'PAID' : 'CANCELLED');
+            next = await getGroup(groupId);
+          }
+        } catch {
+          // Keep the group view usable if payment status cannot be read.
+        }
+      }
+      setGroup(next);
     } catch (error) {
       setMessage(formatApiError(error));
     }
-  }, [groupId]);
+  }, [groupId, appProfile]);
 
   useFocusEffect(
     useCallback(() => {
@@ -54,6 +70,21 @@ export default function GroupScreen() {
       }
       const bill = await createBill(group.id);
       router.push({ pathname: '/bill/[billId]', params: { billId: bill.id } });
+    } catch (error) {
+      setMessage(formatApiError(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function markBillClosed() {
+    if (!group?.activeBillId || !isHost) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      await closeBill(group.activeBillId, 'PAID');
+      await load();
+      setMessage('Bill closed. It no longer appears as open.');
     } catch (error) {
       setMessage(formatApiError(error));
     } finally {
@@ -112,6 +143,14 @@ export default function GroupScreen() {
         disabled={busy || !group}
         onPress={() => void openOrCreateBill()}
       />
+      {group?.activeBillId && isHost && (
+        <Button
+          title="Close open bill"
+          secondary
+          disabled={busy}
+          onPress={() => void markBillClosed()}
+        />
+      )}
       {group && !group.activeBillId && (
         <Text style={styles.small}>No open bill. Paid bills stay closed here — start a new one when you need it.</Text>
       )}

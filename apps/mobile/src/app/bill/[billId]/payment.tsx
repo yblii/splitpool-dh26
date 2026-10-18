@@ -103,23 +103,31 @@ export default function BillPaymentScreen() {
     return () => clearTimeout(timer);
   }, [paymentPhase, paymentSessionId, refresh]);
 
-  // Collaboration listings key off bills.state. Close the Postgres row when the ledger finishes
-  // so landing/group pages drop activeBillId even if the payment-route mirror missed.
+  async function closeCollaborationBill(state: 'PAID' | 'CANCELLED') {
+    if (!billId) return;
+    if (bill?.state === state) return;
+    const next = await closeBill(billId, state);
+    setBill(next);
+  }
+
+  const billState = bill?.state;
+  // Collaboration listings key off bills.state. Retry close while the settled screen is open.
   useEffect(() => {
-    if (!billId || !bill) return;
+    if (!billId) return;
     if (paymentPhase !== 'paid' && paymentPhase !== 'canceled') return;
-    if (bill.state === 'PAID' || bill.state === 'CANCELLED') return;
+    if (billState === 'PAID' || billState === 'CANCELLED') return;
+    const state = paymentPhase === 'paid' ? 'PAID' as const : 'CANCELLED' as const;
     let cancelled = false;
     void (async () => {
       try {
-        const next = await closeBill(billId, paymentPhase === 'paid' ? 'PAID' : 'CANCELLED');
+        const next = await closeBill(billId, state);
         if (!cancelled) setBill(next);
-      } catch {
-        // refresh() retries; avoid blocking the settled UI on a transient close failure
+      } catch (error) {
+        if (!cancelled) setMessage(formatApiError(error));
       }
     })();
     return () => { cancelled = true; };
-  }, [billId, bill, paymentPhase]);
+  }, [billId, billState, paymentPhase]);
 
   async function run(action: () => Promise<unknown>) {
     if (!userId) return;
@@ -176,13 +184,19 @@ export default function BillPaymentScreen() {
   }
 
   async function onCharge() {
-    if (!session || !userId) return;
-    await run(() => simulateMerchantCharge(session.sessionId, userId, 'exact', `exact-${Date.now()}`));
+    if (!session || !userId || !billId) return;
+    await run(async () => {
+      await simulateMerchantCharge(session.sessionId, userId, 'exact', `exact-${Date.now()}`);
+      await closeCollaborationBill('PAID');
+    });
   }
 
   async function onCancel() {
-    if (!session || !userId) return;
-    await run(() => cancelPaymentSession(session.sessionId, userId, `cancel-${Date.now()}`));
+    if (!session || !userId || !billId) return;
+    await run(async () => {
+      await cancelPaymentSession(session.sessionId, userId, `cancel-${Date.now()}`);
+      await closeCollaborationBill('CANCELLED');
+    });
   }
 
   async function onReopen() {

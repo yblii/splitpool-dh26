@@ -3,7 +3,8 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import type { Group } from '@splitpool/contracts';
 import { Button, Card, DemoNote, Screen, colors, styles } from '../components/ui';
-import { createBill, createGroup, formatApiError, listGroups } from '../lib/apiClient';
+import { closeBill, createBill, createGroup, formatApiError, listGroups } from '../lib/apiClient';
+import { getBillPayment } from '../lib/paymentApi';
 import { useAppProfile } from '../state/appProfile';
 
 export default function LandingScreen() {
@@ -19,13 +20,30 @@ export default function LandingScreen() {
     setLoading(true);
     setMessage('');
     try {
-      setGroups(await listGroups());
+      let next = await listGroups();
+      const userId = appProfile?.userId;
+      if (userId) {
+        for (const group of next) {
+          if (!group.activeBillId) continue;
+          try {
+            const payment = await getBillPayment(group.activeBillId, userId);
+            const phase = payment?.session?.phase;
+            if (phase === 'paid' || phase === 'canceled') {
+              await closeBill(group.activeBillId, phase === 'paid' ? 'PAID' : 'CANCELLED');
+            }
+          } catch {
+            // Ignore per-group payment reads; listing still renders.
+          }
+        }
+        next = await listGroups();
+      }
+      setGroups(next);
     } catch (error) {
       setMessage(formatApiError(error));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [appProfile]);
 
   useFocusEffect(
     useCallback(() => {
