@@ -5,12 +5,14 @@ import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { Button, Card, DemoNote, Screen, colors, styles } from '../components/ui';
 import { useDemo } from '../state/demo';
-import { displayNameFromProfile, useAuth, type AuthProfile } from '../state/auth';
+import { useAuth, type AuthProfile } from '../state/auth';
+import { useAppProfile } from '../state/appProfile';
 import { apiUrl, checkApi } from '../lib/api';
 
 export default function ProfileScreen() {
   const { profileName, setProfileName, linked, setLinked, reset } = useDemo();
   const { configured, session, profile, updateProfile, uploadAvatar, signOut } = useAuth();
+  const { appProfile } = useAppProfile();
   const [draftProfile, setDraftProfile] = useState<AuthProfile | null>(null);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -20,14 +22,14 @@ export default function ProfileScreen() {
   const [showConnections, setShowConnections] = useState(false);
   const health = useQuery({ queryKey: ['health', apiUrl], queryFn: checkApi, enabled: false, retry: false });
 
+  // Sync local form fields from auth profile. Do not call setProfileName here —
+  // that updates DemoProvider and React forbids updating another component while rendering.
   if (profile !== draftProfile) {
     setDraftProfile(profile);
     if (profile) {
       setFirstName(profile.firstName);
       setLastName(profile.lastName);
       setPhone(profile.phone);
-      const name = displayNameFromProfile(profile);
-      if (name && name !== profileName) setProfileName(name);
     } else {
       setFirstName('');
       setLastName('');
@@ -161,6 +163,13 @@ export default function ProfileScreen() {
       </Card>
       <Card>
         <Text style={styles.heading}>Profile</Text>
+        {appProfile && (
+          <>
+            <Text style={styles.label}>Username</Text>
+            <Text style={styles.text}>@{appProfile.username}</Text>
+            <Text style={styles.small}>App username in PostgreSQL (used for invites). Display name on bills: {appProfile.displayName}</Text>
+          </>
+        )}
         <Text style={styles.label}>First name</Text>
         <TextInput
           accessibilityLabel="First name"
