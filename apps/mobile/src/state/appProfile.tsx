@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 import type { Profile } from '@splitpool/contracts';
-import { ApiClientError, getMe, isApiConfigured, saveAppProfile } from '../lib/apiClient';
+import { ApiClientError, formatApiError, getMe, isApiConfigured, saveAppProfile } from '../lib/apiClient';
 import { useAuth } from './auth';
 
 export type AppProfileStatus = 'loading' | 'needsSetup' | 'ready' | 'unavailable';
@@ -107,8 +107,7 @@ export function AppProfileProvider({ children }: PropsWithChildren) {
         });
         return undefined;
       } catch (error) {
-        if (error instanceof ApiClientError) return error.message;
-        return 'Could not save your profile. Try again.';
+        return formatApiError(error);
       }
     },
   }), [loadId, remote.error, remote.profile, remote.status]);

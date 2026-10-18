@@ -1,4 +1,4 @@
-import cors from '@fastify/cors';
+import cors, { type FastifyCorsOptions } from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import Fastify from 'fastify';
 import { makeDemoBill, type ExtractedReceipt } from '@splitpool/contracts';
@@ -21,7 +21,8 @@ export type BuildAppOptions = {
   parser?: ReceiptParser;
   db?: Database;
   verifyToken?: VerifyToken;
-  origins?: string[];
+  /** Passed to @fastify/cors `origin`. */
+  origins?: FastifyCorsOptions['origin'];
   logger?: boolean;
 };
 
@@ -42,7 +43,12 @@ export async function buildApp(options: BuildAppOptions = {}) {
     ajv: { customOptions: { removeAdditional: false, coerceTypes: false } },
   });
 
-  await app.register(cors, { origin: options.origins ?? false });
+  await app.register(cors, {
+    origin: options.origins ?? false,
+    // Browser (Expo web) sends a preflight for PATCH + Authorization + JSON.
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'Accept'],
+  });
   await app.register(multipart, {
     limits: { files: 1, fileSize: MAX_RECEIPT_BYTES },
   });

@@ -12,10 +12,24 @@ const configured = [DATABASE_URL, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY].filter
 if (configured !== 0 && configured !== 3) throw new Error('Set DATABASE_URL, SUPABASE_URL, and SUPABASE_PUBLISHABLE_KEY together.');
 if (process.env.NODE_ENV === 'production' && configured !== 3) throw new Error('Production requires database and authentication configuration.');
 
+function resolveCorsOrigin() {
+  const configured = process.env.CORS_ORIGINS?.split(',').map(origin => origin.trim()).filter(Boolean) ?? [];
+  const allowLocalhostDev = process.env.NODE_ENV !== 'production';
+  if (configured.length === 0 && !allowLocalhostDev) return false;
+  return (origin: string | undefined, cb: (err: Error | null, allow: boolean | string) => void) => {
+    // Non-browser clients (curl, React Native) often omit Origin.
+    if (!origin) return cb(null, true);
+    if (configured.includes(origin)) return cb(null, true);
+    // Expo web may use 8081, 8082, etc. — allow any localhost port in non-production.
+    if (allowLocalhostDev && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) return cb(null, true);
+    return cb(null, false);
+  };
+}
+
 const app = await buildApp({
   db: DATABASE_URL ? postgresDatabase(DATABASE_URL) : undefined,
   verifyToken: SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY ? supabaseVerifier(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY) : undefined,
-  origins: process.env.CORS_ORIGINS?.split(',').map(origin => origin.trim()).filter(Boolean),
+  origins: resolveCorsOrigin(),
 });
 
 app.log.info({

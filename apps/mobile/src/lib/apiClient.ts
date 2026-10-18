@@ -16,6 +16,20 @@ export class ApiClientError extends Error {
   }
 }
 
+export function isApiClientError(error: unknown): error is ApiClientError {
+  return error instanceof ApiClientError
+    || (typeof error === 'object' && error !== null && (error as { name?: string }).name === 'ApiClientError');
+}
+
+export function formatApiError(error: unknown): string {
+  if (isApiClientError(error)) {
+    const err = error as ApiClientError;
+    return err.status ? `${err.message} (${err.code}, HTTP ${err.status})` : err.message;
+  }
+  if (error instanceof Error && error.message) return error.message;
+  return 'Could not save your profile. Try again.';
+}
+
 export function isApiConfigured() {
   return Boolean(apiUrl);
 }
@@ -90,7 +104,15 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   if (!response.ok) throw await parseFailure(response);
   if (response.status === 204) return undefined as T;
-  return await response.json() as T;
+  try {
+    return await response.json() as T;
+  } catch {
+    throw new ApiClientError(
+      response.status,
+      'INVALID_RESPONSE',
+      `API returned a non-JSON body from ${url}. Check that EXPO_PUBLIC_API_URL points at the Fastify API (for laptop web use http://localhost:3001).`,
+    );
+  }
 }
 
 export async function getMe({ signal }: { signal?: AbortSignal } = {}) {
