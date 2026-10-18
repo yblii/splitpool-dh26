@@ -56,7 +56,7 @@ export function GroupCard({ id, name, members, recent, editing, selected, onPres
     <View style={{ borderRadius: 20, overflow: 'hidden', borderWidth: selected ? 1.5 : 0, borderColor: colors.primary, backgroundColor: PAPER }}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={editing ? `${name}. ${selected ? 'Selected. ' : ''}Drag up or down to reorder.` : `Open ${name}${recent ? `. Last split ${recent}` : ''}`}
+        accessibilityLabel={editing ? `${name}. ${selected ? 'Selected. ' : ''}Drag up or down to reorder.` : `Open ${name}. ${members.length} ${members.length === 1 ? 'member' : 'members'}${recent ? `. Last bill: ${recent}` : ''}`}
         accessibilityHint={editing ? 'Drag up or down to reorder. Hide is at the top.' : undefined}
         onPress={() => {
           if (motion.dragging) return;
@@ -69,10 +69,13 @@ export function GroupCard({ id, name, members, recent, editing, selected, onPres
             {editing ? <Text accessibilityElementsHidden importantForAccessibility="no" style={{ color: colors.muted, fontSize: 18, lineHeight: 20 }}>≡</Text> : null}
             <View style={{ flex: 1, gap: 4, minWidth: 0 }}>
               <Text style={styles.heading} numberOfLines={1}>{name}</Text>
-              {recent ? <Text style={styles.small} numberOfLines={1}>{recent}</Text> : null}
+              {recent ? <Text style={styles.small} numberOfLines={1}>Last bill: {recent}</Text> : null}
             </View>
           </View>
-          <AvatarStack people={members} />
+          <View style={{ alignItems: 'flex-end', gap: 4 }}>
+            <AvatarStack people={members} />
+            <Text style={styles.small}>{members.length} {members.length === 1 ? 'member' : 'members'}</Text>
+          </View>
         </View>
       </Pressable>
     </View>
