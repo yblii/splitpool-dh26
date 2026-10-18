@@ -64,8 +64,10 @@ export function ConfirmationDialog({
     <Text style={styles.small}>
       After collection starts, changing the split would mean canceling and handling refunds. This demo does not charge cards or pay a restaurant.
     </Text>
-    <Button title="Go back" secondary onPress={onBack} />
-    <Button title="Confirm & collect" onPress={onConfirm} />
+    <View style={{ flexDirection: 'row', gap: 10 }}>
+      <View style={{ flex: 1 }}><Button title="Go back" secondary onPress={onBack} /></View>
+      <View style={{ flex: 1.35 }}><Button title="Confirm & collect" onPress={onConfirm} /></View>
+    </View>
   </CenterDialog>;
 }
 
