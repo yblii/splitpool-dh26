@@ -15,9 +15,9 @@ Scope: USD, one receipt and one active bill per group, and one merchant payment 
 | Receipt images | Supabase private Storage |
 | Shared bill updates | Authenticated API polling for the MVP; server remains authoritative |
 | Receipt parsing | Server-side OCR/vision provider behind a replaceable adapter |
-| Payments | Stripe React Native SDK for linking/collection; issuer adapter or simulator for merchant payment |
+| Payments | Card authorization through the Stripe React Native SDK; per-bill spend-instrument simulator or issuer adapter |
 
-All APIs below use `/api/v1` and authenticated access except signed provider webhooks. The API validates identity, group membership, and host permissions. Monetary values are integer cents, calculated on the server. Provider secrets stay on the backend.
+All APIs below use `/api/v1` and authenticated access except signed provider webhooks. The API validates identity, group membership, host permissions, and spender permissions. Monetary values are integer cents, calculated on the server. Provider secrets stay on the backend.
 
 Tiger Data stores application profiles, groups, memberships, bills, claims, receipt metadata, and payment state. Fastify verifies Supabase access tokens and maps their user IDs to application profiles. Supabase Auth identities live separately from Tiger Data, so identity linkage is validated by the API rather than a cross-database foreign key. All application reads and writes go through authorized API routes; clients never receive database credentials. Receipt image access uses short-lived URLs issued after the API checks group membership and host permissions for uploads.
 
@@ -119,45 +119,52 @@ Example claim body: `{ "fraction": { "numerator": 1, "denominator": 3 }, "expect
 
 ## 4. Final payment
 
+The lifecycle, budget, clocks, and API are specified in [virtual-card.md](virtual-card.md). This section is the product summary. Shared payment rules live in `@splitpool/contracts`.
+
 **User stories**
 
-- As a participant, I can approve my exact amount before being charged.
-- As a host, I can confirm a complete bill and pay only after everyone's contribution succeeds.
-- As a participant, I can see collection, merchant payment, or refund status.
+- As a participant, I can approve my exact amount before my card is authorized.
+- As a host, I can confirm a complete bill. The merchant card stays locked until every required authorization is approved.
+- As the designated spender, I can open checkout and pay the merchant from this bill's budget.
+- As a participant, I can see collection, merchant payment, and refund status.
+
+**Products**
+
+| Product | What it does |
+| --- | --- |
+| Hackathon ledger | Simulates one ledger and one card for this bill. `ensureSpendable()` returns ready, pending, or unavailable. The demo must show pending at least once. |
+| Spender reimbursement | Live path to investigate first. The spender pays the restaurant with their own card. Everyone else authorizes a reimbursement to that person. SplitPool does not hold a pool and does not issue a card. |
+| Sponsored advance | Live card path, only with a sponsor bank and a written loss policy. The platform may advance this bill up to its authorized total. The advance is repaid when those authorizations capture. |
+
+A successful charge on a friend's card is not spendable issuing cash. The hackathon does not paper over that by reserving one platform balance across bills. Adapters are `Collections` and `SpendInstrument`. Moving funds into an issuing balance stays inside `SpendInstrument`.
 
 **Flow**
 
-1. Host freezes a verified, fully allocated bill for review. Each payer accepts their exact total and selects a linked payment method.
-2. Host taps **Confirm and collect**. The backend rechecks the frozen version, acceptances, allocations, and totals before creating one logical contribution per payer.
-3. Collect each share through a separate provider payment. The native SDK handles any required authentication. Only a verified provider result establishes success.
-4. Keep the merchant card locked while any contribution is failed or pending. Retry only failed contributions; successful ones are not charged again.
-5. After all contributions succeed and spendable issuing funds are reserved, enable one short-lived virtual card for this bill's approved amount.
-6. Merchant authorization places the bill in payment pending. Merchant capture records the bill as paid and prevents further card spending.
+1. The host freezes a verified bill. The snapshot names the spender, the fee schedule version, each seat's principal and disclosed fee, and the item shares that produced those seats.
+2. Each payer accepts the frozen seat and amount. The spender's processing fee is waived and recorded as a platform subsidy. Other payers are charged a grossed-up total so the card budget remains the merchant principal.
+3. The host confirms. The server rechecks the snapshot, then starts a 15-minute collection deadline and authorizes each required seat. It does not capture those authorizations yet.
+4. One declined or incomplete seat keeps checkout closed. Retry only that seat. At the deadline, if checkout is still closed and the merchant has no exposure, void every authorization.
+5. When every required authorization is approved, `ensureSpendable()` asks this bill's ledger whether it can spend. Pending or unavailable leaves the phase at funding pending and does not open a card.
+6. The spender taps **Pay the check**. The server creates one card for that user's long-lived cardholder, sets the spend deadline to two hours from that tap, and allows purchases inside the consented budget.
+7. A merchant authorization or same-merchant increase is approved only inside that budget. Participant authorizations are captured when the merchant authorization is approved. A capture at or under the budget marks the bill paid and refunds leftover principal in proportion to merchant shares. A capture above the budget opens a case and does not mark the bill paid.
+8. If the spend deadline passes with no merchant hold and no capture, void the participant authorizations and refund anything already captured. An open merchant hold blocks new purchases and stays reserved.
 
-State path: `EDITING → REVIEW → COLLECTING → READY_TO_PAY → PAYMENT_PENDING → PAID`.
+The host may reopen review before collection, which clears acceptances. After collection starts, edits require cancellation and a new session. Cancel intent is a timestamp. The UI phase is derived from obligations, funding, the card, merchant holds, and open cases. A later refund or dispute does not replace a paid result.
 
-The host may reopen review before collection, clearing acceptances. Once collection starts, edits require cancellation/refund and a new bill session. Canceling stops new charges and refunds successful contributions, including late successes. Keep refunds pending until confirmed, and resolve any merchant authorization before releasing funds. Unexpected merchant capture amounts require reconciliation, never an automatic extra participant charge.
-
-**Payment constraints**
-
-Collecting participant payments and funding a spendable card are separate steps. A successful charge does not imply immediately available issuing funds; the live service needs a supported funding path and liquidity. See [Stripe Issuing balance](https://docs.stripe.com/issuing/funding/balance).
-
-For the hackathon, simulate the merchant card and checkout with a visible demo label. Real issuance and Apple/Google Wallet provisioning depend on the selected provider's program and access. Displaying a virtual card alone does not enable restaurant tap-to-pay.
-
-**Data:** immutable `bill_snapshots`, `acceptances(bill_version, user_id, accepted_cents)`, `contributions(user_id, amount_cents, provider_id, status)`, and `merchant_payments(bill_id, card_reference, reserved_cents, status)`. Keep unique webhook event IDs and durable payment/refund jobs for recovery.
+**Data:** immutable `bill_snapshots` (spender, fee schedule, seats, item shares), `acceptances`, seat `obligations` unique per active seat, `cardholders` unique per user, `virtual_cards` created at checkout, merchant holds and captures, and exception cases. Inbound provider events and outbound provider jobs are separate tables.
 
 | API | Purpose |
 | --- | --- |
 | `POST /bills/:id/review` | Host freezes a complete bill |
 | `POST /bills/:id/reopen` | Host reopens review before collection |
 | `POST /bills/:id/acceptances` | Payer accepts the frozen version and exact total |
-| `POST /bills/:id/confirm` | Host starts collection |
-| `POST /bills/:id/contributions/me/retry` | Resume own failed/authentication-required payment |
-| `GET /bills/:id/card` | Host reads card availability and masked details |
-| `POST /bills/:id/cancel` | Start cancellation/refunds |
-| `POST /webhooks/payments` | Receive signed contribution/refund events |
-| `POST /webhooks/issuing` | Receive signed merchant authorization/capture events |
+| `POST /bills/:id/confirm` | Host starts authorization of the required seats |
+| `POST /payment-sessions/:id/contributions/me/retry` | Resume the caller's own failed or action-required seat |
+| `POST /payment-sessions/:id/checkout` | Spender opens checkout and starts the spend window |
+| `GET /payment-sessions/:id/card` | Spender reads masked card details and readiness |
+| `POST /payment-sessions/:id/cancel` | Host records cancel intent and starts the unwind |
+| `POST /webhooks/collections` | Verify collection, void, and refund events |
 
-Require idempotency keys for payment mutations, deduplicate signed webhooks, and persist jobs before calling providers. Reserve issuing capacity transactionally across bills. The server continues work when the app closes; returning to the app refetches payment state rather than creating another charge.
+Require idempotency keys for payment mutations, deduplicate signed webhooks, and persist outbound jobs before calling providers. The server continues work when the app closes. Returning to the app refetches payment state.
 
-**Done when:** an incomplete bill cannot be confirmed; one failed contribution keeps the card locked; retry never charges successful participants twice; duplicate webhooks are harmless; and a completed simulated merchant payment reconciles with collected shares. Also demonstrate cancellation/refund and recovery after closing the app during collection.
+**Done when:** an incomplete bill cannot be confirmed; one failed authorization keeps checkout closed; a pending funding result does not unlock the card; retry never captures a successful seat twice; an under-budget capture refunds the residual; an unused collection deadline voids the holds; and closing the app during collection recovers the same session.

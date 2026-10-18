@@ -17,8 +17,8 @@ it('serves health and a read-only demo bill without exposing write operations', 
     expect(health.json()).toHaveProperty('envFileFound');
     const bill = await app.inject({ method: 'GET', url: '/api/v1/demo/bill' });
     expect(bill.json().items).toHaveLength(3);
-    const write = await app.inject({ method: 'POST', url: '/api/v1/bills/example/confirm' });
-    expect(write.statusCode).toBe(404);
+    const groups = await app.inject({ method: 'POST', url: '/api/v1/groups' });
+    expect(groups.statusCode).toBe(404);
   } finally { await app.close(); }
 }, 15000);
 

@@ -8,7 +8,7 @@ export const colors = {
   success: '#326B60', warning: '#8A5C28', disabled: '#E9EEF2',
 };
 
-export function Screen({ children, footer }: PropsWithChildren<{ footer?: ReactNode }>) {
+export function Screen({ children, footer, overlay }: PropsWithChildren<{ footer?: ReactNode; overlay?: ReactNode }>) {
   const insets = useSafeAreaInsets();
   return <View style={styles.screen}>
     <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 28 + (footer ? 0 : insets.bottom) }]}
@@ -18,6 +18,7 @@ export function Screen({ children, footer }: PropsWithChildren<{ footer?: ReactN
     {footer && <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
       <View style={styles.footerContent}>{footer}</View>
     </View>}
+    {overlay}
   </View>;
 }
 
