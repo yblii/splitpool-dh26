@@ -16,7 +16,7 @@
     "api": "npm run dev --workspace @splitpool/api",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "npm run lint --workspace @splitpool/mobile",
-    "test": "vitest run",
+    "test": "vitest run && npm run test:backend --workspace @splitpool/api",
     "check": "npm run typecheck && npm run lint && npm test"
   },
   "devDependencies": {

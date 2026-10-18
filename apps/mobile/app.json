@@ -28,7 +28,7 @@
       "expo-router",
       "expo-secure-store",
       ["expo-image-picker", {
-        "photosPermission": "Choose a receipt photo to split your bill.",
+        "photosPermission": "Choose a receipt or profile photo in SplitPool.",
         "cameraPermission": "Take a receipt photo to split your bill.",
         "microphonePermission": false
       }]

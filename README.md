@@ -1,6 +1,6 @@
 # SplitPool
 
-An Expo / React Native mobile starter for iOS and Android, with a TypeScript/Fastify API and shared bill types. See the [core design](docs/design.md) and the [virtual card lifecycle](docs/virtual-card.md).
+An Expo / React Native mobile starter for iOS and Android, with a TypeScript/Fastify API and shared bill types. See the [core design](docs/design.md) and [backend setup/API guide](docs/backend.md).
 
 ## Run it on your phone
 
@@ -57,14 +57,15 @@ The preview profile produces an installable Android APK. For iOS, use `--platfor
 - Native navigation between the group, receipt, profile, and payment screens.
 - Local group renaming, demo display name, and whole/half item claims across three switchable demo participants.
 - Exact-cent totals with equal or proportional tax/tip splitting; incomplete claims block demo payment.
-- Native camera/photo selection and an explicitly labeled sample receipt preview.
-- A simulated payment that collects each person's share and pools it onto one virtual card.
-- Optional real Supabase email/password sign-up/sign-in, once configured.
+- Native camera/photo selection, Gemini receipt parsing via the local API (sample fallback without a key), and a host review screen that writes verified items into the local demo bill.
+- A demo card toggle and simulated contribution/merchant payment states.
+- Auth-first launch: sign-in → app profile setup (`GET/PATCH /me`) → groups landing. **New group** creates a Tiger Data group + active bill; group/bill screens load from the API. Invites by username or link token are supported for hosts.
+- A profile icon supports photo and profile edits. Receipt OCR and concurrent claims UI are next.
 - A read-only Fastify health endpoint and demo bill endpoint, with an in-app connection check.
 
-The bill lives in memory and resets on reload. Participant switching simulates collaboration on one device. Live group creation/invites, persistent profiles, concurrent multi-device edits, receipt upload/OCR, real card linking, issuing, and collection/refunds are next implementation steps. Supabase sign-in alone does not connect the demo bill to a database. No real money moves.
+After profile setup, the home screen lists your groups from PostgreSQL. Creating a group also creates an active bill with you as the first payer. Receipt items and live multi-device claims are not wired on mobile yet (Phases C/D). Legacy local demo receipt/payment screens remain in the app but are off the main path. No real money moves.
 
-Try the demo: claim the salad, open **Review split**, and add a demo card for each person from Profile. You, Alex, and Sam can each choose a different method. Use **Reset local demo** in Profile to start again.
+Try the live path: sign in → choose a username → **New group** → open the bill. Use group **Invite** to add another signed-in user by username or invite token.
 
 ## Optional API
 
@@ -78,6 +79,9 @@ The API listens on port 3001:
 
 - `GET /api/v1/health`
 - `GET /api/v1/demo/bill`
+- `POST /api/v1/demo/receipt-extractions` — multipart field `image`; returns draft receipt JSON (Gemini when `GEMINI_API_KEY` is set on the API, otherwise the labeled sample fixture)
+
+Copy `apps/api/.env.example` to `apps/api/.env` and set `GEMINI_API_KEY` for live parsing. The key stays on the API only — never put it in `EXPO_PUBLIC_*` variables.
 
 To check it from the app, copy `apps/mobile/.env.example` to `apps/mobile/.env`, set `EXPO_PUBLIC_API_URL`, and restart Expo:
 
@@ -89,7 +93,7 @@ To check it from the app, copy `apps/mobile/.env.example` to `apps/mobile/.env`,
 
 Use `ipconfig` on Windows to find the active Wi-Fi adapter's IPv4 address. The phone's `localhost` is the phone itself. Allow port 3001 on your private network if needed. For remote devices, deploy the API with HTTPS or expose it through a separate secure tunnel. Standalone native builds should use HTTPS; plain HTTP behavior depends on platform network policy.
 
-The API currently exposes only public demo data. Add server-side token verification, authorization, database transactions, and private data policies before implementing real group/payment endpoints.
+Without backend configuration, the API exposes only public demo data. To enable authenticated collaboration routes, configure `apps/api/.env` and apply the database migration using the [backend setup/API guide](docs/backend.md). The connected API verifies Supabase access tokens, checks group/host permissions, and uses PostgreSQL transactions with bill versions. Payment endpoints remain a separate integration.
 
 ## Optional Supabase
 
@@ -100,7 +104,11 @@ EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 ```
 
-Profile shows real sign-up/sign-in controls when both variables are present. Confirm signup by email if enabled in your project, then sign in. Native session storage uses Expo SecureStore; the browser uses the SDK's browser storage. Display names and bills remain local demo state until database tables and policies are implemented.
+Expo only exposes variables prefixed with `EXPO_PUBLIC_` to the app. Names like `SUPABASE_URL` without that prefix will not work. After editing `.env`, fully restart Expo.
+
+The app opens on **Sign in**. Create an account from there; after sign-up you are sent to a verify-email screen with a button back to login. A signed-in session is required. With `EXPO_PUBLIC_API_URL` and a migrated Tiger Data database, the first login also creates an app profile (`PATCH /me` username + display name) before you reach the main screens. Sign-up stores first name, last name, and phone in Supabase user metadata. Native session storage uses Expo SecureStore; the browser uses the SDK's browser storage.
+
+For profile photos, create a public Storage bucket named `avatars` and allow authenticated users to upload to a folder matching their user id. The demo bill on the main screen is still local until groups/bills are wired (Phase B).
 
 Only public configuration belongs in `EXPO_PUBLIC_*` variables: these values ship in the app. Never put Stripe secret keys or Supabase service-role keys there. Do not commit `.env` files.
 
@@ -111,10 +119,14 @@ apps/mobile/src/app/          Expo Router screens
 apps/mobile/src/components/  Shared native UI
 apps/mobile/src/state/       In-memory demo state
 apps/mobile/src/lib/         API and optional Supabase clients
-apps/api/src/                Fastify server and read-only demo routes
-packages/contracts/src/     Shared types, sample bill, exact-cent and payment rules
+apps/api/src/                Fastify server, auth, collaboration routes, and calculations
+apps/api/migrations/         Versioned Tiger Data/PostgreSQL schema
+apps/api/test/               Backend unit/HTTP and optional PostgreSQL integration tests
+packages/contracts/src/     Shared types, sample bill, exact-cent demo calculations
 docs/design.md              Four-component product/technical design
-docs/virtual-card.md        Payment products, budget, clocks, and derived phase
+docs/backend.md             Collaboration API already on main
+docs/groups-bills-implementation-plan.md  Plan to wire groups/bills on mobile
+docs/backend.md             Backend setup, endpoint contracts, and teammate integration
 ```
 
 ## Checks
@@ -123,7 +135,7 @@ docs/virtual-card.md        Payment products, budget, clocks, and derived phase
 npm run check
 ```
 
-This runs workspace typechecks, Expo ESLint, and Vitest tests for allocation and API behavior. Use Expo's installer for SDK-compatible mobile packages, for example from `apps/mobile`:
+This runs workspace typechecks, Expo ESLint, Vitest checks, and Node backend tests. Database integration tests require `TEST_DATABASE_URL`; otherwise they are explicitly skipped. Use Expo's installer for SDK-compatible mobile packages, for example from `apps/mobile`:
 
 ```sh
 npx expo install expo-image-picker
