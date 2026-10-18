@@ -7,7 +7,7 @@ import { BottomSheet } from '../components/sheets';
 import { ReceiptPaper } from '../components/split-ui';
 import { monoFamily } from '../fonts';
 import { AppHeader, Button, ErrorBanner, Screen, colors, moneyMark, styles } from '../components/ui';
-import { billStatusLabel, useDemo } from '../state/demo';
+import { useDemo } from '../state/demo';
 
 export default function GroupDetailsScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
@@ -58,10 +58,9 @@ export default function GroupDetailsScreen() {
         <Text style={[styles.small, { width: 72, textAlign: 'right' }]}>Total</Text>
         <Text style={[styles.small, { width: 72, textAlign: 'right' }]}>You pay</Text>
       </View>
-      {bill && bill.phase !== 'paid' && <Pressable accessibilityRole="button" accessibilityLabel={`Continue ${bill.merchant}, ${billStatusLabel(bill.phase)}`} onPress={openBill} style={splitRow}>
-        <View style={{ flex: 1 }}>
+      {bill && bill.phase !== 'paid' && <Pressable accessibilityRole="button" accessibilityLabel={`Continue ${bill.merchant}`} onPress={openBill} style={splitRow}>
+        <View style={{ flex: 1, justifyContent: 'center' }}>
           <Text style={[styles.text, { fontWeight: '700' }]} numberOfLines={1}>{bill.merchant}</Text>
-          <Text style={styles.small}>{billStatusLabel(bill.phase)}</Text>
         </View>
         <Text {...moneyMark} style={money}>{formatMoney(bill.printedTotalCents)}</Text>
         <Text style={[money, { color: colors.primary }]}>Open</Text>
