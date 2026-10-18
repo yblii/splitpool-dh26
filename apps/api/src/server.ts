@@ -9,11 +9,11 @@ const app = await buildApp();
 app.log.info({
   envFile: env.path,
   envFileFound: env.found,
-  openAiKeyPresent: env.openAiKeyPresent,
+  geminiKeyPresent: env.geminiKeyPresent,
   receiptParser: parser.name,
-}, env.openAiKeyPresent
-  ? 'API ready with OpenAI receipt parsing'
-  : 'API ready with sample receipt fallback — set OPENAI_API_KEY in apps/api/.env and restart (or retry extract after saving the file)');
+}, env.geminiKeyPresent
+  ? 'API ready with Gemini receipt parsing'
+  : 'API ready with sample receipt fallback — set GEMINI_API_KEY in apps/api/.env and restart (or retry extract after saving the file)');
 
 try {
   await app.listen({ host: '0.0.0.0', port: Number(process.env.PORT ?? 3001) });

@@ -75,10 +75,10 @@ export default function ReceiptScreen() {
       const { draft, usedFallback, reason, errorDetail } = await extractReceiptFromImage(picked);
       if (usedFallback) {
         const detail = reason === 'provider_unavailable'
-          ? 'OPENAI_API_KEY missing on the API. Set it in apps/api/.env and restart npm run api. Check GET /api/v1/health for openAiKeyPresent.'
+          ? 'GEMINI_API_KEY missing on the API. Set it in apps/api/.env and restart npm run api. Check GET /api/v1/health for geminiKeyPresent.'
           : (errorDetail
-            ? `OpenAI error: ${errorDetail}`
-            : 'OpenAI parsing failed. Check the API terminal logs for status/message.');
+            ? `Gemini error: ${errorDetail}`
+            : 'Gemini parsing failed. Check the API terminal logs for status/message.');
         Alert.alert(
           'Using sample parse',
           `Live parsing was unavailable, so labeled sample items were loaded for review.\n\n${detail}`,
@@ -123,7 +123,7 @@ export default function ReceiptScreen() {
       {Platform.OS !== 'web' && <Button title="Choose from photos" secondary disabled={busy} onPress={() => void pick(false)} />}
       {picked && Platform.OS === 'web' && <Button title="Choose another photo" secondary disabled={busy} onPress={() => void pick(false)} />}
       <Text style={styles.small}>
-        Photos upload to your local API for GPT-4o parsing. Without an API key the server returns a labeled sample draft.
+        Photos upload to your local API for Gemini parsing. Without an API key the server returns a labeled sample draft.
       </Text>
     </Card>
     <Button title="Use sample receipt" secondary disabled={busy} onPress={() => openReview()} />

@@ -38,7 +38,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
       service: 'splitpool-api',
       mode: 'demo',
       receiptParser: parser.name,
-      openAiKeyPresent: env.openAiKeyPresent,
+      geminiKeyPresent: env.geminiKeyPresent,
       envFileFound: env.found,
     };
   });
@@ -61,12 +61,12 @@ export async function buildApp(options: BuildAppOptions = {}) {
       return reply.code(400).send({ error: 'Receipt image was empty.' });
     }
 
-    // Reload .env each request so filling OPENAI_API_KEY after boot is picked up without a mystery state.
+    // Reload .env each request so filling GEMINI_API_KEY after boot is picked up without a mystery state.
     const env = loadApiEnv();
     const parser = options.parser ?? createReceiptParser();
     request.log.info({
       parser: parser.name,
-      openAiKeyPresent: env.openAiKeyPresent,
+      geminiKeyPresent: env.geminiKeyPresent,
       envFileFound: env.found,
       mimeType,
       bytes: bytes.length,

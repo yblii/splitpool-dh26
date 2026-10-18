@@ -13,7 +13,7 @@ it('serves health and a read-only demo bill without exposing write operations', 
       mode: 'demo',
       receiptParser: 'sample-fallback',
     });
-    expect(health.json()).toHaveProperty('openAiKeyPresent');
+    expect(health.json()).toHaveProperty('geminiKeyPresent');
     expect(health.json()).toHaveProperty('envFileFound');
     const bill = await app.inject({ method: 'GET', url: '/api/v1/demo/bill' });
     expect(bill.json().items).toHaveLength(3);

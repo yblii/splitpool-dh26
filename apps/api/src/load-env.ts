@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 export type LoadedEnvInfo = {
   path: string;
   found: boolean;
-  openAiKeyPresent: boolean;
+  geminiKeyPresent: boolean;
 };
 
 export function apiEnvPath(): string {
@@ -14,7 +14,7 @@ export function apiEnvPath(): string {
 
 /**
  * Load apps/api/.env into process.env.
- * Empty existing values are treated as unset so filling in OPENAI_API_KEY later works
+ * Empty existing values are treated as unset so filling in GEMINI_API_KEY later works
  * without a shell that already exported a blank key.
  */
 export function loadApiEnv(envPath = apiEnvPath()): LoadedEnvInfo {
@@ -22,7 +22,7 @@ export function loadApiEnv(envPath = apiEnvPath()): LoadedEnvInfo {
     return {
       path: envPath,
       found: false,
-      openAiKeyPresent: Boolean(process.env.OPENAI_API_KEY?.trim()),
+      geminiKeyPresent: Boolean(process.env.GEMINI_API_KEY?.trim()),
     };
   }
 
@@ -48,6 +48,6 @@ export function loadApiEnv(envPath = apiEnvPath()): LoadedEnvInfo {
   return {
     path: envPath,
     found: true,
-    openAiKeyPresent: Boolean(process.env.OPENAI_API_KEY?.trim()),
+    geminiKeyPresent: Boolean(process.env.GEMINI_API_KEY?.trim()),
   };
 }

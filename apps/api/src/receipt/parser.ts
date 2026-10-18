@@ -4,7 +4,7 @@ import {
   type ExtractedReceiptItem,
   type ReceiptWarning,
 } from '@splitpool/contracts';
-import OpenAI, { APIError } from 'openai';
+import { ApiError, GoogleGenAI, Type } from '@google/genai';
 
 export type ReceiptParseInput = {
   bytes: Buffer;
@@ -32,9 +32,40 @@ type ParseLogger = {
   info: (obj: unknown, msg?: string) => void;
 };
 
+/** Multimodal model used for live receipt extraction. */
+export const GEMINI_RECEIPT_MODEL = 'gemini-2.5-flash';
+
 const extractedReceiptSchema = {
-  type: 'object',
-  additionalProperties: false,
+  type: Type.OBJECT,
+  properties: {
+    merchant: { type: Type.STRING },
+    items: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          clientId: { type: Type.STRING },
+          name: { type: Type.STRING },
+          quantity: { type: Type.INTEGER },
+          netLineTotalCents: { type: Type.INTEGER },
+          confidence: { type: Type.NUMBER },
+        },
+        required: ['clientId', 'name', 'quantity', 'netLineTotalCents', 'confidence'],
+      },
+    },
+    taxCents: { type: Type.INTEGER },
+    tipCents: { type: Type.INTEGER },
+    serviceChargeCents: { type: Type.INTEGER },
+    discountCents: { type: Type.INTEGER },
+    printedTotalCents: { type: Type.INTEGER },
+    warnings: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.STRING,
+        enum: ['tip_ambiguous', 'total_mismatch', 'missing_items', 'provider_unavailable', 'parse_failed'],
+      },
+    },
+  },
   required: [
     'merchant',
     'items',
@@ -45,37 +76,7 @@ const extractedReceiptSchema = {
     'printedTotalCents',
     'warnings',
   ],
-  properties: {
-    merchant: { type: 'string' },
-    items: {
-      type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['clientId', 'name', 'quantity', 'netLineTotalCents', 'confidence'],
-        properties: {
-          clientId: { type: 'string' },
-          name: { type: 'string' },
-          quantity: { type: 'integer' },
-          netLineTotalCents: { type: 'integer' },
-          confidence: { type: 'number' },
-        },
-      },
-    },
-    taxCents: { type: 'integer' },
-    tipCents: { type: 'integer' },
-    serviceChargeCents: { type: 'integer' },
-    discountCents: { type: 'integer' },
-    printedTotalCents: { type: 'integer' },
-    warnings: {
-      type: 'array',
-      items: {
-        type: 'string',
-        enum: ['tip_ambiguous', 'total_mismatch', 'missing_items', 'provider_unavailable', 'parse_failed'],
-      },
-    },
-  },
-} as const;
+};
 
 const systemPrompt = `You extract US restaurant receipt data for a bill-splitting app.
 Return only structured fields. Money must be integer USD cents (e.g. $12.34 → 1234).
@@ -164,18 +165,10 @@ export function createSampleFallbackParser(reason: ReceiptWarning = 'provider_un
   };
 }
 
-export function formatOpenAIError(error: unknown): string {
-  if (error instanceof APIError) {
-    const code = typeof error.error === 'object' && error.error && 'code' in error.error
-      ? String((error.error as { code?: unknown }).code)
-      : undefined;
-    const type = typeof error.error === 'object' && error.error && 'type' in error.error
-      ? String((error.error as { type?: unknown }).type)
-      : undefined;
+export function formatGeminiError(error: unknown): string {
+  if (error instanceof ApiError) {
     const parts = [
       error.status ? `status=${error.status}` : undefined,
-      type ? `type=${type}` : undefined,
-      code ? `code=${code}` : undefined,
       error.message,
     ].filter(Boolean);
     return parts.join(' | ');
@@ -184,48 +177,42 @@ export function formatOpenAIError(error: unknown): string {
   return String(error);
 }
 
-export function createOpenAIReceiptParser(apiKey: string): ReceiptParser {
-  const client = new OpenAI({ apiKey });
+export function createGeminiReceiptParser(apiKey: string): ReceiptParser {
+  const ai = new GoogleGenAI({ apiKey });
   return {
-    name: 'openai-gpt-4o',
+    name: 'gemini-2.5-flash',
     async parseReceiptImage(input) {
       const mimeType = input.mimeType === 'image/jpg' ? 'image/jpeg' : input.mimeType;
-      const dataUrl = `data:${mimeType};base64,${input.bytes.toString('base64')}`;
-      const response = await client.chat.completions.create({
-        model: 'gpt-4o',
-        temperature: 0,
-        messages: [
-          { role: 'system', content: systemPrompt },
+      const response = await ai.models.generateContent({
+        model: GEMINI_RECEIPT_MODEL,
+        contents: [
           {
-            role: 'user',
-            content: [
-              { type: 'text', text: 'Extract the itemized receipt from this image.' },
-              { type: 'image_url', image_url: { url: dataUrl } },
-            ],
+            inlineData: {
+              mimeType,
+              data: input.bytes.toString('base64'),
+            },
           },
+          `${systemPrompt}\n\nExtract the itemized receipt from this image.`,
         ],
-        response_format: {
-          type: 'json_schema',
-          json_schema: {
-            name: 'extracted_receipt',
-            strict: true,
-            schema: extractedReceiptSchema,
-          },
+        config: {
+          temperature: 0,
+          responseMimeType: 'application/json',
+          responseSchema: extractedReceiptSchema,
         },
       });
 
-      const content = response.choices[0]?.message?.content;
-      if (!content) throw new Error('OpenAI returned an empty receipt extraction.');
-      return normalizeExtractedReceipt(JSON.parse(content), 'openai-gpt-4o');
+      const content = response.text?.trim();
+      if (!content) throw new Error('Gemini returned an empty receipt extraction.');
+      return normalizeExtractedReceipt(JSON.parse(content), 'gemini-2.5-flash');
     },
   };
 }
 
-/** Prefer OpenAI when keyed; otherwise the labeled sample fixture. */
+/** Prefer Gemini when keyed; otherwise the labeled sample fixture. */
 export function createReceiptParser(env: NodeJS.ProcessEnv = process.env): ReceiptParser {
-  const apiKey = env.OPENAI_API_KEY?.trim();
+  const apiKey = env.GEMINI_API_KEY?.trim();
   if (!apiKey) return createSampleFallbackParser('provider_unavailable');
-  return createOpenAIReceiptParser(apiKey);
+  return createGeminiReceiptParser(apiKey);
 }
 
 export async function parseWithFallback(
@@ -236,7 +223,7 @@ export async function parseWithFallback(
   if (parser.name === 'sample-fallback') {
     log?.warn(
       { parser: parser.name },
-      'Receipt extraction using sample fallback (OPENAI_API_KEY missing/empty). Set apps/api/.env OPENAI_API_KEY and restart the API.',
+      'Receipt extraction using sample fallback (GEMINI_API_KEY missing/empty). Set apps/api/.env GEMINI_API_KEY and restart the API.',
     );
     return {
       draft: await parser.parseReceiptImage(input),
@@ -247,13 +234,13 @@ export async function parseWithFallback(
 
   try {
     const draft = await parser.parseReceiptImage(input);
-    log?.info({ parser: parser.name, items: draft.items.length }, 'OpenAI receipt extraction succeeded');
+    log?.info({ parser: parser.name, items: draft.items.length }, 'Gemini receipt extraction succeeded');
     return { draft, usedFallback: false };
   } catch (error) {
-    const errorDetail = formatOpenAIError(error);
+    const errorDetail = formatGeminiError(error);
     log?.error(
       { parser: parser.name, err: error, errorDetail, bytes: input.bytes.length, mimeType: input.mimeType },
-      'OpenAI receipt extraction failed; using sample fallback',
+      'Gemini receipt extraction failed; using sample fallback',
     );
     const fallback = createSampleFallbackParser('parse_failed');
     return {
