@@ -160,6 +160,7 @@ type DemoContextValue = {
   addFriend: (username: string) => { ok: true; person: DemoPerson } | { ok: false; message: string };
   claimItem: (itemId: string) => void;
   assignItem: (itemId: string, personId: string) => string | null;
+  hintItem: (itemId: string, personId: string) => string | null;
   unclaimItem: (itemId: string) => void;
   customizeItem: (itemId: string, basisPoints: number) => string | null;
   resetItem: (itemId: string) => void;
@@ -343,6 +344,20 @@ export function DemoProvider({ children }: PropsWithChildren) {
         message: `${item.name} was added to your items.`,
       }]);
     }
+    return null;
+  }
+
+  function hintItem(itemId: string, personIdToHint: string) {
+    if (!currentBill || currentBill.phase !== 'editing') return 'This bill is locked.';
+    if (personIdToHint === activePersonId) return 'Hint someone else. You can claim it yourself.';
+    if (!viewingGroup.memberIds.includes(personIdToHint)) return 'That person is not in this group.';
+    const item = currentBill.items.find((entry) => entry.id === itemId);
+    if (!item) return 'That item is no longer on the bill.';
+    setNotices((current) => [...current, {
+      id: `hint-${itemId}-${personIdToHint}-${Date.now().toString(36)}`,
+      personId: personIdToHint,
+      message: `${item.name} was hinted for you. You can still claim it yourself.`,
+    }]);
     return null;
   }
 
@@ -568,7 +583,7 @@ export function DemoProvider({ children }: PropsWithChildren) {
     selectCard: setSelectedCardId, addPayment, setPendingReceipt, lookup, activityLabel,
     billFor: (groupId) => bills[groupId] ?? null,
     createGroup, renameGroup, addGroupMember, removeGroupMember, addFriend,
-    claimItem, assignItem, unclaimItem, customizeItem, resetItem, setSplitMode, applyVerifiedReceipt,
+    claimItem, assignItem, hintItem, unclaimItem, customizeItem, resetItem, setSplitMode, applyVerifiedReceipt,
     startReview, reopenReview, approveShare, confirmCollect,
     simulateCollectionSuccess, simulateCollectionFailure, retryFailed, simulateMerchant, completeMerchant, cancelCollection,
     inWallet: walletBillId !== null && walletBillId === currentBill?.id,

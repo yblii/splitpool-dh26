@@ -29,6 +29,7 @@ export default function OverviewScreen() {
   const bill = demo.currentBill;
   const summary = demo.summary;
   const [message, setMessage] = useState<string | null>(null);
+  const [hintFor, setHintFor] = useState<string | null>(null);
   const viewer = summary?.people.find((person) => person.id === demo.personId);
   const host = demo.personId === 'you';
 
@@ -92,17 +93,35 @@ export default function OverviewScreen() {
               <Text style={styles.link}>Claim</Text>
             </Pressable>}
           </View>
-          {unclaimed && bill.phase === 'editing' && <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-            {demo.members.filter((person) => person.id !== demo.personId).map((person) => <Pressable
-              key={person.id}
-              accessibilityRole="button"
-              accessibilityLabel={`Assign ${blocker.itemName} to ${person.name}`}
-              onPress={() => demo.assignItem(blocker.itemId, person.id)}
-              style={{ minHeight: 36, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 18, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.border }}
-            >
-              <Text style={{ color: person.color, fontWeight: '700' }}>{person.name}</Text>
-            </Pressable>)}
-            <Text style={[styles.small, { marginLeft: 'auto' }]}>Assign</Text>
+          {unclaimed && bill.phase === 'editing' && itemId && <View style={{ gap: 8 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ expanded: hintFor === itemId }}
+                accessibilityLabel={hintFor === itemId ? `Close hints for ${blocker.itemName}` : `Hint someone about ${blocker.itemName}`}
+                onPress={() => setHintFor(hintFor === itemId ? null : itemId)}
+                hitSlop={8}
+                style={{ minHeight: 36, justifyContent: 'center' }}
+              >
+                <Text style={styles.link}>{hintFor === itemId ? 'Close' : 'Hint'}</Text>
+              </Pressable>
+            </View>
+            {hintFor === itemId && <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 16, backgroundColor: colors.paper, overflow: 'hidden' }}>
+              <Text style={[styles.small, { paddingHorizontal: 14, paddingTop: 10 }]}>Pick who to hint. They still choose whether to claim it.</Text>
+              {demo.members.filter((person) => person.id !== demo.personId).map((person) => <Pressable
+                key={person.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Hint ${person.name} about ${blocker.itemName}`}
+                onPress={() => {
+                  const error = demo.hintItem(itemId, person.id);
+                  setMessage(error ?? `Hinted ${person.name} about ${blocker.itemName}. They can still claim it.`);
+                  if (!error) setHintFor(null);
+                }}
+                style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, borderTopWidth: 1, borderTopColor: colors.border }}
+              >
+                <Text style={{ color: person.color, fontWeight: '700' }}>{person.name}</Text>
+              </Pressable>)}
+            </View>}
           </View>}
         </View>;
       })}
