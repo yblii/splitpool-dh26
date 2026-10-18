@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
-import { Link, router } from 'expo-router';
+import { Link, router, useLocalSearchParams, type Href } from 'expo-router';
 import { Button, Card, Screen, styles } from '../components/ui';
 import { getSupabaseEnvStatus } from '../lib/supabase';
 import { useAuth } from '../state/auth';
@@ -9,10 +9,17 @@ import { useAppProfile } from '../state/appProfile';
 export default function LoginScreen() {
   const { configured, signIn, session } = useAuth();
   const { status } = useAppProfile();
+  const params = useLocalSearchParams<{ next?: string | string[] }>();
+  const nextRaw = Array.isArray(params.next) ? params.next[0] : params.next;
+  const nextPath = nextRaw && nextRaw.startsWith('/') ? nextRaw : null;
   useEffect(() => {
     if (!session || status === 'loading') return;
-    router.replace(status === 'ready' ? '/connected' : '/profile-setup');
-  }, [session, status]);
+    if (status === 'ready') {
+      router.replace((nextPath || '/connected') as Href);
+      return;
+    }
+    router.replace('/profile-setup');
+  }, [session, status, nextPath]);
   const envStatus = getSupabaseEnvStatus();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

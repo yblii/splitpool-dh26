@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import * as Linking from 'expo-linking';
 import { router, useFocusEffect, useLocalSearchParams, type Href } from 'expo-router';
 import { formatMoney, type GroupDetail } from '@splitpool/contracts';
 import { MemberAvatar } from '../../components/people';
@@ -18,8 +17,15 @@ import {
 import { avatarFromProfile } from '../../lib/peopleUi';
 import { useAppProfile } from '../../state/appProfile';
 
+/** Pasteable browser URL — prefer the current web origin, else localhost Expo. */
 function inviteUrlForToken(token: string) {
-  return Linking.createURL(`/invite/${token}`);
+  const path = `/invite/${encodeURIComponent(token)}`;
+  const configured = process.env.EXPO_PUBLIC_WEB_ORIGIN?.trim().replace(/\/$/, '');
+  if (configured) return `${configured}${path}`;
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin) {
+    return `${window.location.origin}${path}`;
+  }
+  return `http://localhost:8081${path}`;
 }
 
 /** Live group home — demo layout, collaboration API underneath. */
