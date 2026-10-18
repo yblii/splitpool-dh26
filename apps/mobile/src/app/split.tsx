@@ -3,7 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AvatarStack, PersonSwitcher } from '../components/people';
 import { BillSummary, ReceiptItemCard, ReceiptPaper } from '../components/split-ui';
-import { AppHeader, EmptyState, ErrorBanner, FadingNotice, Screen, styles } from '../components/ui';
+import { AppHeader, EmptyState, ErrorBanner, FadingNotice, ReadyReviewNote, Screen, styles } from '../components/ui';
 import { billStatusLabel, useDemo } from '../state/demo';
 
 export default function SplitScreen() {
@@ -54,6 +54,7 @@ export default function SplitScreen() {
     />}
     footer={<View style={{ gap: 10 }}>
       {demo.quietNotices.map((notice) => <FadingNotice key={notice.id} id={notice.id} message={notice.message} onDismiss={demo.dismissNotice} />)}
+      {summary.itemsComplete && <ReadyReviewNote />}
       <BillSummary
         yourLabel={summary.itemsComplete ? 'Your total' : 'Your items'}
         yourCents={yourCents}

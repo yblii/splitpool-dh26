@@ -5,7 +5,7 @@ import { formatBasisPoints, formatMoney, itemVisualState, type SplitBlocker } fr
 import { PersonSwitcher } from '../components/people';
 import { ProgressMeter } from '../components/split-ui';
 import { monoFamily } from '../fonts';
-import { AppHeader, Button, Card, ErrorBanner, FadingNotice, Screen, SegmentedControl, colors, moneyMark, styles } from '../components/ui';
+import { AppHeader, Button, Card, ErrorBanner, FadingNotice, ReadyReviewNote, Screen, SegmentedControl, colors, moneyMark, styles } from '../components/ui';
 import { useDemo } from '../state/demo';
 
 const STATE_LABEL = {
@@ -70,7 +70,7 @@ export default function OverviewScreen() {
         </View>
       </View>
       <ProgressMeter value={summary.fullyAllocated} total={summary.itemCount} />
-      {summary.readyToFinalize && <ErrorBanner tone="success" title="Ready" message="Every item is fully allocated and the totals match." />}
+      {summary.itemsComplete && <ReadyReviewNote />}
     </Card>
     {summary.blockers.length > 0 && <View style={{ gap: 8 }}>
       {summary.blockers.map((blocker, index) => {

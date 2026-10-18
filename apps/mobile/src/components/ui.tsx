@@ -164,6 +164,15 @@ export function FadingNotice({ id, message, onDismiss }: { id: string; message: 
   </Animated.View>;
 }
 
+export function ReadyReviewNote() {
+  return <View accessibilityRole="text" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+    <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: colors.success, alignItems: 'center', justifyContent: 'center' }}>
+      <Text style={{ color: '#FFFFFF', fontSize: 13, lineHeight: 16, fontWeight: '800' }}>✓</Text>
+    </View>
+    <Text style={[styles.text, { flex: 1, fontSize: 15, lineHeight: 20 }]}>All items are claimed. Ready for review.</Text>
+  </View>;
+}
+
 export function ErrorBanner({ title, message, tone = 'warning' }: {
   title?: string; message: string; tone?: 'warning' | 'danger' | 'success';
 }) {
