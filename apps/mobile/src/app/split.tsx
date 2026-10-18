@@ -38,7 +38,10 @@ export default function SplitScreen() {
   return <Screen
     header={<AppHeader
       title={demo.viewingGroup.name}
-      onBack={() => router.back()}
+      onBack={() => {
+        if (router.canGoBack()) router.back();
+        else router.replace({ pathname: '/group', params: { id: demo.viewingGroup.id } });
+      }}
       right={<AvatarStack people={demo.members} />}
     />}
     footer={<BillSummary
@@ -73,7 +76,7 @@ export default function SplitScreen() {
           expanded={openId === item.id && percentId !== item.id}
           onClaim={() => {
             demo.claimItem(item.id);
-            setOpenId(item.id);
+            setOpenId(null);
           }}
           onOpen={() => setOpenId(openId === item.id ? null : item.id)}
           onEditPercent={() => {

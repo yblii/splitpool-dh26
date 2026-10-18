@@ -14,7 +14,7 @@ import {
 } from '@splitpool/contracts';
 import { MemberAvatar, type AvatarPerson } from './people';
 import { BottomSheet } from './sheets';
-import { Button, RippedEdge, colors, styles, useReduceMotion } from './ui';
+import { Button, colors, styles, useReduceMotion } from './ui';
 
 const STATE_LABEL: Record<ItemVisualState, string> = {
   unclaimed: 'Unclaimed',
@@ -142,19 +142,22 @@ export function ReceiptPaper({ title, dimTitle, alert, children }: {
   alert?: string | null;
   children: ReactNode;
 }) {
-  return <View style={{ flexDirection: 'row', alignItems: 'stretch' }}>
-    <RippedEdge color={RECEIPT_PAPER} side="left" />
-    <View style={[paperStyles.body, { flex: 1 }]}>
-      {title ? <Text style={[paperStyles.title, dimTitle && paperStyles.dimmed]}>{title}</Text> : null}
-      {title ? <View style={paperStyles.rule} /> : null}
-      {children}
-      {alert ? <View accessibilityLiveRegion="polite" style={paperStyles.alert}>
-        <Text style={paperStyles.alertMark}>!</Text>
-        <Text style={paperStyles.alertText}>{alert}</Text>
-      </View> : null}
-    </View>
-    <RippedEdge color={RECEIPT_PAPER} side="right" />
+  return <View style={paperStyles.body}>
+    {title ? <Text style={[paperStyles.title, dimTitle && paperStyles.dimmed]}>{title}</Text> : null}
+    {title ? <View style={paperStyles.rule} /> : null}
+    {children}
+    {alert ? <View accessibilityLiveRegion="polite" style={paperStyles.alert}>
+      <Text style={paperStyles.alertMark}>!</Text>
+      <Text style={paperStyles.alertText}>{alert}</Text>
+    </View> : null}
   </View>;
+}
+
+function shareMark(count: number, custom: boolean, basisPoints: number) {
+  if (count <= 0) return '';
+  if (custom) return formatBasisPoints(basisPoints);
+  if (count === 1) return '1';
+  return `1/${count}`;
 }
 
 export function ReceiptItemCard({
@@ -295,13 +298,12 @@ export function ReceiptItemCard({
             accessibilityLabel={mine
               ? `${item.name}, ${formatMoney(item.cents)}. Paying: ${payers}. Your share ${formatMoney(mine.cents)}.`
               : `${item.name}, ${formatMoney(item.cents)}, unclaimed. Tap to claim.`}
-            accessibilityHint={editable ? 'Swipe left to enter your percent. Tap to see who is paying.' : undefined}
-            accessibilityState={{ expanded }}
+            accessibilityHint={editable ? 'Tap to claim. Swipe left to enter your percent.' : undefined}
             disabled={!editable}
             onPress={() => {
               if (motion.dragging) return;
               if (!mine) onClaim();
-              else onOpen();
+              else if (expanded) onOpen();
             }}
             style={cardStyles.lineMain}
           >
@@ -321,17 +323,26 @@ export function ReceiptItemCard({
                   <AppearingAvatar person={person} />
                 </View> : null;
               })}
-            </View> : <Text style={cardStyles.meta}>Open</Text>}
+            </View> : null}
           </Pressable>
-          {mine ? <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Edit your percent, currently ${formatBasisPoints(mine.basisPoints)}`}
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: !!mine, disabled: !editable }}
+            accessibilityLabel={resolution.portions.length === 0
+              ? `Claim ${item.name}`
+              : `${item.name} split ${shareMark(resolution.portions.length, mine?.mode === 'custom', mine?.basisPoints ?? 0)}. ${mine ? 'Tap to remove your claim.' : 'Tap to claim your share.'}`}
+            disabled={!editable}
             hitSlop={6}
-            onPress={onEditPercent}
-            style={cardStyles.percentChip}
+            onPress={() => {
+              if (mine) onLeave();
+              else onClaim();
+            }}
+            style={[cardStyles.claimCircle, mine && { backgroundColor: colors.primary, borderColor: colors.primary }]}
           >
-            <Text style={cardStyles.percentText}>{formatBasisPoints(mine.basisPoints)}</Text>
-          </Pressable> : null}
+            <Text style={[cardStyles.claimMark, mine && { color: '#FFFFFF' }]}>
+              {mine ? shareMark(resolution.portions.length, mine.mode === 'custom', mine.basisPoints) : ''}
+            </Text>
+          </Pressable>
         </View>}
         {expanded && !percentOpen && <View style={cardStyles.opened}>
           <SplitProgressBar segments={segments} />
@@ -612,6 +623,12 @@ const cardStyles = StyleSheet.create({
   meta: { color: colors.muted, fontSize: 12, lineHeight: 16 },
   price: { fontFamily: 'Inter', color: colors.ink, fontSize: 15, lineHeight: 20, fontWeight: '700', fontVariant: ['tabular-nums'] },
   avatars: { flexDirection: 'row', marginLeft: 2 },
+  claimCircle: {
+    minWidth: 36, height: 36, paddingHorizontal: 6, borderRadius: 18, marginRight: 8,
+    borderWidth: 2, borderColor: colors.ink, backgroundColor: 'transparent',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  claimMark: { fontFamily: 'Inter', color: colors.ink, fontSize: 11, lineHeight: 14, fontWeight: '800' },
   percentChip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
   percentText: { color: colors.primary, fontSize: 12, lineHeight: 16, fontWeight: '800' },
   editRow: {

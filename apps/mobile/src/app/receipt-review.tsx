@@ -109,11 +109,11 @@ function ReviewEditor({ seed, onCancel, onSave }: {
               <TextInput accessibilityLabel={`Item ${index + 1} quantity`} keyboardType="number-pad" value={money.itemQuantities[index] ?? '1'} onChangeText={(value) => {
                 setMoney((current) => ({ ...current, itemQuantities: current.itemQuantities.map((entry, itemIndex) => itemIndex === index ? value : entry) }));
                 patchItem(index, { quantity: inputToQuantity(value) });
-              }} style={[styles.input, { flex: 1 }]} />
+              }} style={[styles.input, quantityInput]} />
               <TextInput accessibilityLabel={`Item ${index + 1} price`} keyboardType="decimal-pad" value={money.itemTotals[index] ?? '0.00'} onChangeText={(value) => {
                 setMoney((current) => ({ ...current, itemTotals: current.itemTotals.map((entry, itemIndex) => itemIndex === index ? value : entry) }));
                 patchItem(index, { netLineTotalCents: inputToCents(value) });
-              }} style={[styles.input, { flex: 1.4 }]} />
+              }} style={[styles.input, { flex: 1 }]} />
             </View>
             <Pressable accessibilityRole="button" onPress={() => removeItem(index)} hitSlop={8}><Text style={[styles.link, { color: colors.danger }]}>Delete</Text></Pressable>
           </View>}
@@ -160,6 +160,7 @@ function ReviewEditor({ seed, onCancel, onSave }: {
 
 const line = { borderTopWidth: 1, borderStyle: 'dashed' as const, borderColor: '#E4D5C2', paddingTop: 8 };
 const price = { color: colors.ink, fontWeight: '700' as const, fontSize: 16 };
+const quantityInput = { width: 64, minHeight: 40, paddingHorizontal: 8, textAlign: 'center' as const, flexGrow: 0 };
 
 function LabeledMoney({ label, value, onChange, accessibilityLabel }: { label: string; value: string; onChange: (value: string) => void; accessibilityLabel: string }) {
   return <View style={{ gap: 6 }}>
