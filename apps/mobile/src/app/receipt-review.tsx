@@ -150,7 +150,7 @@ function ReviewEditor({ seed, onCancel, onSave }: {
       }} />
     </View>}
     <CenterDialog visible={confirming} title="Once confirmed" onClose={() => setConfirming(false)}>
-      <Text style={styles.text}>These prices lock. People in the group can start selecting items, and the receipt can’t be edited after that.</Text>
+      <Text style={styles.text}>Prices lock. The group can claim items.</Text>
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <View style={{ flex: 1 }}><Button title="Go back" secondary onPress={() => setConfirming(false)} /></View>
         <View style={{ flex: 1 }}><Button title="Confirm" onPress={() => { setConfirming(false); onSave(draft); }} /></View>
