@@ -110,38 +110,38 @@ export function MoneyText({ cents, style }: { cents: number; style?: object }) {
 
 const RECEIPT_PAPER = '#FFFDF8';
 
-const cardMotion = new Map<string, { editable: boolean; reduceMotion: boolean; dragging: boolean; openPercent: () => void }>();
+const cardMotion = new Map<string, { editable: boolean; reduceMotion: boolean; swiped: boolean; openPercent: () => void }>();
 
 function motionFor(id: string) {
   const existing = cardMotion.get(id);
   if (existing) return existing;
-  const created = { editable: true, reduceMotion: false, dragging: false, openPercent: () => {} };
+  const created = { editable: true, reduceMotion: false, swiped: false, openPercent: () => {} };
   cardMotion.set(id, created);
   return created;
 }
 
 function createItemPan(
-  motion: { editable: boolean; reduceMotion: boolean; dragging: boolean; openPercent: () => void },
+  motion: { editable: boolean; reduceMotion: boolean; swiped: boolean; openPercent: () => void },
   translateX: Animated.Value,
 ) {
   return PanResponder.create({
-    onMoveShouldSetPanResponder: (_, gesture) => motion.editable && gesture.dx < -10 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
-    onPanResponderTerminationRequest: () => false,
-    onPanResponderGrant: () => { motion.dragging = false; },
+    onMoveShouldSetPanResponder: (_, gesture) => motion.editable && gesture.dx < -12 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
+    onPanResponderTerminationRequest: () => true,
     onPanResponderMove: (_, gesture) => {
-      if (gesture.dx < -8) motion.dragging = true;
-      translateX.setValue(Math.min(0, Math.max(-132, gesture.dx)));
+      if (gesture.dx < 0) translateX.setValue(Math.max(-132, gesture.dx));
     },
     onPanResponderRelease: (_, gesture) => {
       const open = gesture.dx < -56 || gesture.vx < -0.4;
-      motion.dragging = Math.abs(gesture.dx) > 8;
       Animated.timing(translateX, {
         toValue: 0,
         duration: motion.reduceMotion ? 0 : 160,
         useNativeDriver: true,
       }).start();
-      if (open && motion.editable) motion.openPercent();
-      if (motion.dragging) setTimeout(() => { motion.dragging = false; }, 120);
+      if (open && motion.editable) {
+        motion.swiped = true;
+        motion.openPercent();
+        setTimeout(() => { motion.swiped = false; }, 250);
+      }
     },
   });
 }
@@ -320,7 +320,7 @@ export function ReceiptItemCard({
               : `${item.name}, ${formatMoney(item.cents)}, unclaimed.`}
             accessibilityHint="Tap the line to open it. Tap the circle to claim."
             onPress={() => {
-              if (motion.dragging) return;
+              if (motion.swiped) return;
               onOpen();
             }}
             style={cardStyles.lineMain}
@@ -366,13 +366,14 @@ export function ReceiptItemCard({
         </View>}
         {expanded && !percentOpen && <View style={cardStyles.opened}>
           <SplitProgressBar segments={segments} />
-          {resolution.portions.length === 0 ? <Text style={cardStyles.meta}>No one is paying for this yet.</Text> : resolution.portions.map((portion) => {
+          {resolution.portions.length === 0 ? <Text style={cardStyles.meta}>No one is paying for this yet.</Text> : [...resolution.portions].sort((a, b) => Number(b.personId === viewerId) - Number(a.personId === viewerId)).map((portion) => {
             const person = people.find((entry) => entry.id === portion.personId);
-            return <View key={portion.personId} style={cardStyles.payer}>
+            const yours = portion.personId === viewerId;
+            return <View key={portion.personId} style={[cardStyles.payer, yours && cardStyles.payerYours]}>
               {person && <MemberAvatar person={person} size={28} />}
-              <Text style={[cardStyles.portionName, { color: person?.color ?? colors.ink }]}>{person?.name ?? 'Someone'}</Text>
-              <Text style={cardStyles.portionMeta}>{formatBasisPoints(portion.basisPoints)} · {portion.mode === 'custom' ? 'Custom' : 'Auto'}</Text>
-              <Text {...moneyMark} style={cardStyles.portionMoney}>{formatMoney(portion.cents)}</Text>
+              <Text style={[cardStyles.portionName, { color: person?.color ?? colors.ink }, yours && cardStyles.portionYours]}>{person?.name ?? 'Someone'}</Text>
+              <Text style={[cardStyles.portionMeta, yours && cardStyles.portionYours]}>{formatBasisPoints(portion.basisPoints)}</Text>
+              <Text {...moneyMark} style={[cardStyles.portionMoney, yours && cardStyles.portionMoneyYours]}>{formatMoney(portion.cents)}</Text>
             </View>;
           })}
           {resolution.remainderBasisPoints > 0 && <Text style={cardStyles.warn}>
@@ -684,10 +685,13 @@ const cardStyles = StyleSheet.create({
   },
   alertText: { flex: 1, color: colors.danger, fontSize: 13, lineHeight: 18 },
   opened: { gap: 8, paddingLeft: 24, paddingRight: 4, paddingBottom: 10, backgroundColor: RECEIPT_PAPER },
-  payer: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 36 },
-  portionName: { flex: 1, fontSize: 14, lineHeight: 18, fontWeight: '700' },
-  portionMeta: { color: colors.muted, fontSize: 12, lineHeight: 16 },
-  portionMoney: { fontFamily: monoFamily, width: 76, textAlign: 'right', color: colors.ink, fontSize: 15, fontWeight: '700' },
+  payer: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 36, borderRadius: 8, paddingHorizontal: 4 },
+  payerYours: { backgroundColor: '#E7F0F6' },
+  portionName: { flex: 1, fontSize: 14, lineHeight: 18, fontWeight: '500' },
+  portionYours: { fontWeight: '800' },
+  portionMeta: { color: colors.muted, fontSize: 13, lineHeight: 18, fontWeight: '500' },
+  portionMoney: { fontFamily: monoFamily, width: 76, textAlign: 'right', color: colors.ink, fontSize: 15, fontWeight: '400' },
+  portionMoneyYours: { fontWeight: '800' },
   warn: { color: colors.warning, fontSize: 13, lineHeight: 18 },
 });
 
