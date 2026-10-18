@@ -101,7 +101,7 @@ export default function ConfirmScreen() {
         <Text style={styles.heading}>Payment method</Text>
         <Text style={styles.text}>{demo.selectedCard ? `${demo.selectedCard.brand}${demo.selectedCard.last4 ? ` ···· ${demo.selectedCard.last4}` : ''}` : 'No demo card selected'}</Text>
         <Text style={styles.small}>Demo cards are labels only. SplitPool does not collect a real card number here.</Text>
-        <Text style={styles.link}>Change</Text>
+        <Text style={styles.link}>Select</Text>
       </Card>
     </Pressable>
     <BottomSheet visible={pickingCard} title="Payment method" onClose={closeCards}>
