@@ -66,16 +66,27 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     throw new ApiClientError(401, 'AUTH_REQUIRED', 'Sign in again to continue.');
   }
 
-  const response = await fetch(`${apiUrl}/api/v1${path}`, {
-    method: options.method ?? 'GET',
-    signal: options.signal,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-      ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-    },
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-  });
+  const url = `${apiUrl}/api/v1${path}`;
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: options.method ?? 'GET',
+      signal: options.signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+        ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      },
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'Network request failed';
+    throw new ApiClientError(
+      503,
+      'NETWORK_ERROR',
+      `Could not reach ${url} (${detail}). curl on the PC is not enough — open that health URL in the phone’s browser. If it fails, allow inbound TCP 3001 on the PC firewall or use the same Wi‑Fi without client isolation.`,
+    );
+  }
 
   if (!response.ok) throw await parseFailure(response);
   if (response.status === 204) return undefined as T;
