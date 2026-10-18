@@ -137,4 +137,7 @@ export async function collaborationRoutes(
   app.put<{ Params: { id: string }; Body: SetTipRequest }>('/bills/:id/tip', {
     schema: { params, body: object({ expectedVersion, tipCents: cents }) },
   }, request => service.setTip(user(request), request.params.id, request.body));
+  app.post<{ Params: { id: string }; Body: { state: 'PAID' | 'CANCELLED' } }>('/bills/:id/close', {
+    schema: { params, body: object({ state: { type: 'string', enum: ['PAID', 'CANCELLED'] } }) },
+  }, request => service.closeBill(user(request), request.params.id, request.body.state));
 }

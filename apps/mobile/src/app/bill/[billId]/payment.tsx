@@ -8,7 +8,7 @@ import {
 } from '@splitpool/contracts';
 import { Button, Card, DemoNote, Screen, colors, styles } from '../../../components/ui';
 import { CardUnlock, VirtualCard } from '../../../components/VirtualCard';
-import { formatApiError, getBill, getGroup } from '../../../lib/apiClient';
+import { closeBill, formatApiError, getBill, getGroup } from '../../../lib/apiClient';
 import {
   acceptBillShare,
   authorizeMyContribution,
@@ -102,6 +102,24 @@ export default function BillPaymentScreen() {
     const timer = setTimeout(() => { void refresh(); }, 1600);
     return () => clearTimeout(timer);
   }, [paymentPhase, paymentSessionId, refresh]);
+
+  // Collaboration listings key off bills.state. Close the Postgres row when the ledger finishes
+  // so landing/group pages drop activeBillId even if the payment-route mirror missed.
+  useEffect(() => {
+    if (!billId || !bill) return;
+    if (paymentPhase !== 'paid' && paymentPhase !== 'canceled') return;
+    if (bill.state === 'PAID' || bill.state === 'CANCELLED') return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const next = await closeBill(billId, paymentPhase === 'paid' ? 'PAID' : 'CANCELLED');
+        if (!cancelled) setBill(next);
+      } catch {
+        // refresh() retries; avoid blocking the settled UI on a transient close failure
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [billId, bill, paymentPhase]);
 
   async function run(action: () => Promise<unknown>) {
     if (!userId) return;

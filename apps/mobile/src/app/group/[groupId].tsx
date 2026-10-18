@@ -112,6 +112,9 @@ export default function GroupScreen() {
         disabled={busy || !group}
         onPress={() => void openOrCreateBill()}
       />
+      {group && !group.activeBillId && (
+        <Text style={styles.small}>No open bill. Paid bills stay closed here — start a new one when you need it.</Text>
+      )}
 
       <Card>
         <Text style={styles.heading}>Members</Text>

@@ -125,11 +125,31 @@ export class CollaborationService {
    * Unknown bill ids are ignored so in-memory payment demos stay usable without Postgres rows.
    */
   async syncPaymentState(billId: string, state: Bill['state']) {
-    await this.db.query(
+    const result = await this.db.query(
       `UPDATE bills SET state = $1, version = version + 1
        WHERE id = $2 AND state IS DISTINCT FROM $1`,
       [state, billId],
     );
+    return result.rowCount ?? 0;
+  }
+
+  /** Authenticated close after the payment ledger reaches a terminal phase. */
+  async closeBill(userId: string, billId: string, state: 'PAID' | 'CANCELLED') {
+    return this.db.transaction(async tx => {
+      await this.billAccess(tx, userId, billId);
+      const locked = (await tx.query<{ state: Bill['state'] }>(
+        'SELECT state FROM bills WHERE id = $1 FOR UPDATE',
+        [billId],
+      )).rows[0];
+      requireThat(locked, 404, 'BILL_NOT_FOUND', 'Bill not found.');
+      if (locked.state !== state) {
+        await tx.query(
+          'UPDATE bills SET state = $1, version = version + 1 WHERE id = $2',
+          [state, billId],
+        );
+      }
+      return this.readBill(tx, billId);
+    });
   }
 
   async getBill(userId: string, billId: string) {

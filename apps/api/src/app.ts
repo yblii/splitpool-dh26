@@ -154,7 +154,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     : undefined;
   const syncBillState = options.syncBillState
     ?? (collaboration
-      ? (billId, state) => collaboration.syncPaymentState(billId, state)
+      ? async (billId, state) => { await collaboration.syncPaymentState(billId, state); }
       : undefined);
   await registerPaymentRoutes(
     app,

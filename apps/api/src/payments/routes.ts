@@ -43,9 +43,12 @@ export async function registerPaymentRoutes(
     done(null, body);
   });
 
-  app.get('/api/v1/bills/:id/payment', async (request, reply) => run(reply, () => {
+  app.get('/api/v1/bills/:id/payment', async (request, reply) => run(reply, async () => {
     try {
-      return ledger.billView(actor(request), id(request), now(request, simulation));
+      const projection = ledger.billView(actor(request), id(request), now(request, simulation));
+      // Self-heal: polling after a paid/canceled session still closes the collaboration row.
+      await mirrorBill(syncBillState, projection);
+      return projection;
     } catch (error) {
       if (error instanceof LedgerError && error.statusCode === 404) return null;
       throw error;
@@ -266,8 +269,10 @@ async function tracked(
   const clock = now(request, simulation);
   const before = stripe ? ledger.session(userId, sessionId, clock) : undefined;
   const after = apply(userId, sessionId, operationKey(request), clock);
-  if (stripe && before) await stripe.follow(collectionChanges(before, after));
+  // Close/progress the collaboration bill before Stripe follow-ups so a provider error
+  // cannot leave groups stuck on an active bill after the ledger already moved.
   await mirrorSession(syncBillState, after);
+  if (stripe && before) await stripe.follow(collectionChanges(before, after));
   return after;
 }
 
