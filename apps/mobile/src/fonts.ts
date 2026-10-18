@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Platform } from 'react-native';
+import { Platform, type TextStyle } from 'react-native';
 import { Asset } from 'expo-asset';
 import * as Font from 'expo-font';
 import {
@@ -36,6 +36,19 @@ export const inter = { fontFamily: 'Inter' } as const;
 export const interItalic = 'Inter_400Regular_Italic';
 export const monoFamily = 'IBM Plex Mono';
 export const mono = { fontFamily: monoFamily } as const;
+
+const NATIVE_INTER = {
+  400: 'Inter',
+  500: 'Inter_500Medium',
+  600: 'Inter_600SemiBold',
+  700: 'Inter_700Bold',
+} as const;
+
+/** Inter at a real weight. Amounts stay on IBM Plex Mono. */
+export function interFace(weight: keyof typeof NATIVE_INTER): TextStyle {
+  if (Platform.OS === 'web') return { fontFamily: 'Inter', fontWeight: String(weight) as TextStyle['fontWeight'] };
+  return { fontFamily: NATIVE_INTER[weight], fontWeight: 'normal' };
+}
 
 export function useInter() {
   const [ready, setReady] = useState(false);

@@ -15,7 +15,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { inter, monoFamily } from '../fonts';
+import { inter, interFace, monoFamily } from '../fonts';
 
 export const colors = {
   background: '#F3F6F8',
@@ -34,6 +34,20 @@ export const colors = {
   dangerSoft: '#FDEEEE',
   disabled: '#E6ECF1',
   shadow: 'rgba(22, 50, 74, 0.08)',
+};
+
+export const typeScale = {
+  pageTitle: { ...interFace(700), fontSize: 30, lineHeight: 36, color: colors.ink },
+  section: { ...interFace(600), fontSize: 21, lineHeight: 26, color: colors.ink },
+  itemName: { ...interFace(600), fontSize: 18, lineHeight: 23, color: colors.ink },
+  itemPrice: { fontFamily: monoFamily, fontSize: 18, lineHeight: 23, fontWeight: '700' as const, color: colors.ink },
+  person: { ...interFace(600), fontSize: 16, lineHeight: 21, color: colors.ink },
+  percent: { ...interFace(600), fontSize: 17, lineHeight: 22, color: colors.ink },
+  description: { ...interFace(400), fontSize: 14, lineHeight: 19, color: colors.muted },
+  amount: { fontFamily: monoFamily, fontSize: 16, lineHeight: 21, fontWeight: '600' as const, color: colors.ink },
+  status: { ...interFace(500), fontSize: 12, lineHeight: 16, color: colors.muted },
+  button: { ...interFace(600), fontSize: 16, lineHeight: 21 },
+  helper: { ...interFace(400), fontSize: 13, lineHeight: 18, color: colors.muted },
 };
 
 export function useReduceMotion() {
@@ -197,18 +211,18 @@ export function EmptyState({ title, body }: { title: string; body: string }) {
 export const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   fill: { flexGrow: 1 },
-  content: { paddingHorizontal: 20, paddingTop: 8, gap: 16, width: '100%', minWidth: 0 },
+  content: { paddingHorizontal: 16, paddingTop: 4, gap: 12, width: '100%', minWidth: 0 },
   header: {
     paddingHorizontal: 12, paddingBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: colors.background,
   },
   headerSide: { width: 76, minHeight: 44, justifyContent: 'center' },
   headerRight: { alignItems: 'flex-end' },
-  headerTitle: { ...inter, flex: 1, textAlign: 'center', color: colors.ink, fontSize: 17, lineHeight: 22, fontWeight: '700' },
-  headerAction: { ...inter, color: colors.primary, fontSize: 16, lineHeight: 22, fontWeight: '600', paddingHorizontal: 8 },
+  headerTitle: { ...interFace(600), flex: 1, textAlign: 'center', color: colors.ink, fontSize: 17, lineHeight: 22 },
+  headerAction: { ...typeScale.button, color: colors.primary, paddingHorizontal: 8 },
   card: {
-    backgroundColor: colors.paper, borderRadius: 20, padding: 16, gap: 12,
-    borderWidth: 1, borderColor: colors.border,
+    backgroundColor: colors.paper, borderRadius: 16, padding: 12, gap: 8,
+    borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
     ...Platform.select({
       web: { boxShadow: '0 8px 24px rgba(22, 50, 74, 0.06)' },
       default: {
@@ -216,52 +230,51 @@ export const styles = StyleSheet.create({
       },
     }),
   },
-  title: { ...inter, fontSize: 30, lineHeight: 36, fontWeight: '700', color: colors.ink, letterSpacing: -0.4 },
-  subtitle: { ...inter, fontSize: 15, lineHeight: 22, color: colors.muted },
-  heading: { ...inter, fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.ink },
-  text: { ...inter, fontSize: 16, lineHeight: 23, color: colors.ink },
-  small: { ...inter, fontSize: 13, lineHeight: 18, color: colors.muted },
-  label: { ...inter, fontSize: 12, lineHeight: 16, letterSpacing: 0.4, fontWeight: '700', color: colors.muted },
+  title: typeScale.pageTitle,
+  subtitle: typeScale.description,
+  heading: typeScale.section,
+  text: { ...interFace(400), fontSize: 16, lineHeight: 22, color: colors.ink },
+  small: typeScale.helper,
+  label: typeScale.status,
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   button: {
-    minHeight: 52, paddingVertical: 14, paddingHorizontal: 18, borderRadius: 16,
+    minHeight: 48, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 14,
     backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: colors.primary,
   },
-  buttonCompact: { minHeight: 44, paddingVertical: 10 },
-  secondary: { backgroundColor: colors.paper, borderColor: colors.border },
-  buttonDisabled: { backgroundColor: colors.disabled, borderColor: colors.disabled },
-  buttonText: { ...inter, fontSize: 16, lineHeight: 21, textAlign: 'center', fontWeight: '700', color: '#FFFFFF' },
-  secondaryText: { ...inter, color: colors.primary },
-  disabledText: { ...inter, color: colors.muted },
+  buttonCompact: { minHeight: 40, paddingVertical: 8 },
+  secondary: { backgroundColor: colors.paper, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  buttonDisabled: { backgroundColor: colors.disabled },
+  buttonText: { ...typeScale.button, textAlign: 'center', color: '#FFFFFF' },
+  secondaryText: { color: colors.primary },
+  disabledText: { color: colors.muted },
   pressed: { opacity: 0.82 },
   dimmed: { opacity: 0.55 },
   segments: { flexDirection: 'row', backgroundColor: colors.subtle, borderRadius: 14, padding: 4, gap: 4 },
   segment: { flex: 1, minHeight: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
   segmentSelected: { backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.border },
-  segmentText: { ...inter, color: colors.muted, fontSize: 13, lineHeight: 18, fontWeight: '700', textAlign: 'center' },
-  segmentTextSelected: { ...inter, color: colors.ink },
+  segmentText: { ...typeScale.status, fontSize: 13, lineHeight: 18, textAlign: 'center' },
+  segmentTextSelected: { ...interFace(600), color: colors.ink },
   notice: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingTop: 2 },
   noticeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.warning },
-  noticeText: { ...inter, color: colors.muted, fontSize: 12, lineHeight: 16, fontWeight: '600' },
+  noticeText: typeScale.helper,
   input: {
     borderWidth: 1, borderColor: colors.border, backgroundColor: colors.paper, borderRadius: 14,
     paddingHorizontal: 14, paddingVertical: 12, ...inter, fontSize: 16, color: colors.ink, minHeight: 48,
   },
   field: { gap: 6 },
   divider: { height: 1, backgroundColor: colors.border },
-  link: { ...inter, color: colors.primary, fontSize: 15, lineHeight: 20, fontWeight: '700' },
+  link: { ...typeScale.button, color: colors.primary },
   footer: {
-    backgroundColor: colors.background, borderTopWidth: 1, borderColor: colors.border,
-    paddingTop: 12, paddingHorizontal: 20, gap: 10,
+    backgroundColor: colors.background, borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
+    paddingTop: 8, paddingHorizontal: 16, gap: 8,
   },
-  banner: { borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, gap: 4 },
-  bannerTitle: { ...inter, fontSize: 14, lineHeight: 18, fontWeight: '700' },
-  bannerBody: { ...inter, fontSize: 14, lineHeight: 20 },
+  banner: { borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, gap: 2 },
+  bannerTitle: { ...interFace(600), fontSize: 14, lineHeight: 18 },
+  bannerBody: typeScale.description,
   empty: {
-    backgroundColor: colors.paper, borderRadius: 20, borderWidth: 1, borderColor: colors.border,
-    padding: 20, gap: 6,
+    backgroundColor: colors.paper, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
+    padding: 16, gap: 6,
   },
 });
 

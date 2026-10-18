@@ -15,26 +15,25 @@ import {
 import { interItalic, monoFamily } from '../fonts';
 import { MemberAvatar, type AvatarPerson } from './people';
 import { BottomSheet } from './sheets';
-import { Button, colors, moneyMark, styles, useReduceMotion } from './ui';
+import { Button, colors, moneyMark, styles, typeScale, useReduceMotion } from './ui';
 
 const INCOMPLETE = '#C45C28';
 
-const STATE_LABEL: Record<ItemVisualState, string> = {
-  unclaimed: 'Unclaimed',
-  single: 'Claimed',
-  equal: 'Split equally',
-  custom: 'Custom',
-  incomplete: 'Incomplete',
-  error: 'Needs a fix',
-};
+function itemDescription(visual: ItemVisualState, resolution: ItemResolution, quantity: number) {
+  const qty = quantity > 1 ? `Qty ${quantity}` : '';
+  const sharing = resolution.portions.length;
+  if (visual === 'unclaimed' || sharing === 0) return qty ? `Unclaimed · ${qty}` : 'Unclaimed';
+  if (visual === 'error') return 'Needs a fix';
+  if (visual === 'incomplete') return [`${formatBasisPoints(resolution.remainderBasisPoints)} still open`, qty].filter(Boolean).join(' · ');
+  if (visual === 'single') return qty ? `Just you · ${qty}` : 'Just you';
+  if (visual === 'equal') return [`${sharing} ${sharing === 1 ? 'person' : 'people'} sharing`, qty].filter(Boolean).join(' · ');
+  return ['Fixed shares', qty].filter(Boolean).join(' · ');
+}
 
-function claimStatus(visual: ItemVisualState, resolution: ItemResolution, viewerId: string, quantity: number) {
-  const qty = quantity > 1 ? ` · Qty ${quantity}` : '';
-  if (visual === 'unclaimed' || resolution.portions.length === 0) return { lead: `Unclaimed${qty}`, money: '', tail: '' };
-  const portion = resolution.portions.find((entry) => entry.personId === viewerId) ?? resolution.portions[0];
-  const name = visual === 'single' ? 'Claimed' : STATE_LABEL[visual];
-  if (!portion) return { lead: `${name}${qty}`, money: '', tail: '' };
-  return { lead: `${name}, ${formatBasisPoints(portion.basisPoints)}, `, money: formatMoney(portion.cents), tail: qty };
+function sideStatus(visual: ItemVisualState) {
+  if (visual === 'single' || visual === 'equal' || visual === 'custom') return { color: colors.success, label: 'Done' };
+  if (visual === 'incomplete') return { color: colors.primary, label: 'In progress' };
+  return { color: colors.danger, label: 'Not ready' };
 }
 
 function personColor(people: AvatarPerson[], id: string) {
@@ -152,20 +151,28 @@ function createItemPan(
   });
 }
 
-export function ReceiptPaper({ title, dimTitle, alert, children }: {
+export function ReceiptPaper({ title, dimTitle, alert, onFix, children }: {
   title: string;
   dimTitle?: boolean;
   alert?: string | null;
+  onFix?: () => void;
   children: ReactNode;
 }) {
   return <View style={paperStyles.body}>
     {title ? <Text style={[paperStyles.title, dimTitle && paperStyles.dimmed]}>{title}</Text> : null}
     {title ? <View style={paperStyles.rule} /> : null}
     {children}
-    {alert ? <View accessibilityLiveRegion="polite" style={paperStyles.alert}>
+    {alert ? <Pressable
+      accessibilityRole={onFix ? 'button' : 'text'}
+      accessibilityLabel={onFix ? `${alert} Fix it.` : alert}
+      disabled={!onFix}
+      onPress={onFix}
+      style={paperStyles.alert}
+    >
       <Text style={paperStyles.alertMark}>!</Text>
       <Text style={paperStyles.alertText}>{alert}</Text>
-    </View> : null}
+      {onFix ? <Text style={paperStyles.fix}>Fix</Text> : null}
+    </Pressable> : null}
   </View>;
 }
 
@@ -254,9 +261,9 @@ export function ReceiptItemCard({
       label: 'Incomplete',
     }] : []),
   ];
-  const hatch = segments.length > 0 ? segments : [{ key: 'empty', basisPoints: 1, color: '#E4D8C8', label: 'Unclaimed' }];
   const payers = resolution.portions.map((portion) => personName(people, portion.personId)).join(', ');
-  const status = claimStatus(visual, resolution, viewerId, item.quantity);
+  const description = itemDescription(visual, resolution, item.quantity);
+  const side = sideStatus(visual);
 
   function commitPercent() {
     const next = percentInputToBasisPoints(text);
@@ -301,8 +308,8 @@ export function ReceiptItemCard({
           </View> : null}
           <Pressable accessibilityRole="button" hitSlop={8} onPress={onCancelPercent}><Text style={styles.link}>Cancel</Text></Pressable>
         </View> : <View style={[cardStyles.line, visual === 'error' && cardStyles.errorLine, visual !== 'unclaimed' && visual !== 'error' && cardStyles.claimedLine]}>
-          <View style={cardStyles.hatch}>
-            {hatch.map((part) => <View key={part.key} style={{ flex: part.basisPoints, backgroundColor: part.color }} />)}
+          <View accessibilityLabel={side.label} style={cardStyles.hatch}>
+            <View style={{ flex: 1, backgroundColor: side.color }} />
           </View>
           <Pressable
             accessibilityRole="button"
@@ -332,12 +339,8 @@ export function ReceiptItemCard({
             style={cardStyles.lineMain}
           >
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={[cardStyles.name, visual !== 'unclaimed' && visual !== 'error' && cardStyles.claimedName]} numberOfLines={1}>{expanded && visual !== 'unclaimed' ? `✓ ${item.name}` : item.name}</Text>
-              <Text style={cardStyles.meta}>
-                {status.lead}
-                {status.money ? <Text {...moneyMark} style={cardStyles.metaMoney}>{status.money}</Text> : null}
-                {status.tail}
-              </Text>
+              <Text style={[cardStyles.name, visual !== 'unclaimed' && visual !== 'error' && cardStyles.claimedName]} numberOfLines={1}>{item.name}</Text>
+              <Text style={cardStyles.meta}>{description}</Text>
             </View>
             {resolution.portions.length > 0 ? <View style={cardStyles.avatars}>
               {resolution.portions.map((portion, index) => {
@@ -618,10 +621,7 @@ const paperStyles = StyleSheet.create({
       },
     }),
   },
-  title: {
-    color: colors.ink, fontSize: 22, lineHeight: 28, fontWeight: '700', textAlign: 'center', paddingTop: 4, paddingBottom: 8,
-    fontFamily: 'Inter',
-  },
+  title: { ...typeScale.pageTitle, textAlign: 'center', paddingTop: 2, paddingBottom: 6 },
   dimmed: { opacity: 0.25 },
   rule: { borderBottomWidth: 1, borderStyle: 'dashed', borderColor: '#D9CBB8', marginBottom: 4 },
   alert: {
@@ -632,7 +632,8 @@ const paperStyles = StyleSheet.create({
     width: 22, height: 22, borderRadius: 4, textAlign: 'center', lineHeight: 22,
     backgroundColor: colors.warning, color: '#FFFFFF', fontWeight: '800', overflow: 'hidden',
   },
-  alertText: { flex: 1, color: colors.warning, fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  alertText: { ...typeScale.helper, flex: 1, color: colors.warning },
+  fix: { ...typeScale.button, color: colors.warning },
 });
 
 const cardStyles = StyleSheet.create({
@@ -657,10 +658,9 @@ const cardStyles = StyleSheet.create({
   hatch: { width: 10, alignSelf: 'stretch', borderRadius: 2, overflow: 'hidden' },
   chevronHit: { minWidth: 32, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   chevron: { color: colors.muted, fontSize: 18, lineHeight: 22, width: 14, textAlign: 'center' },
-  name: { fontFamily: 'Inter', color: colors.ink, fontSize: 16, lineHeight: 21, fontWeight: '700' },
-  meta: { color: colors.muted, fontSize: 12, lineHeight: 16 },
-  metaMoney: { fontFamily: monoFamily, color: colors.muted, fontSize: 12, lineHeight: 16, fontWeight: '700' },
-  price: { fontFamily: monoFamily, color: colors.ink, fontSize: 15, lineHeight: 20, fontWeight: '700', marginRight: 8, textAlign: 'right' },
+  name: typeScale.itemName,
+  meta: typeScale.description,
+  price: { ...typeScale.itemPrice, marginRight: 8, textAlign: 'right' },
   avatars: { flexDirection: 'row', marginLeft: 2 },
   percentChip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
   percentText: { color: colors.primary, fontSize: 12, lineHeight: 16, fontWeight: '800' },
@@ -693,7 +693,7 @@ const cardStyles = StyleSheet.create({
   },
   removeMark: { color: colors.danger, fontSize: 22, lineHeight: 24, fontWeight: '700', marginTop: -2 },
   payerYours: { backgroundColor: '#E7F0F6' },
-  portionName: { flex: 1, fontSize: 14, lineHeight: 18, fontWeight: '500' },
+  portionName: { ...typeScale.person, flex: 1 },
   portionYours: { fontWeight: '800' },
   portionMeta: { color: colors.muted, fontSize: 13, lineHeight: 18, fontWeight: '500' },
   percentEdit: {
@@ -701,7 +701,7 @@ const cardStyles = StyleSheet.create({
     borderWidth: 1.5, borderColor: colors.primary, backgroundColor: '#FFFFFF',
     alignItems: 'center', justifyContent: 'center',
   },
-  portionMoney: { fontFamily: monoFamily, width: 76, textAlign: 'right', color: colors.ink, fontSize: 15, fontWeight: '400' },
+  portionMoney: { ...typeScale.amount, width: 76, textAlign: 'right' },
   portionMoneyYours: { fontWeight: '800' },
   warn: { color: colors.warning, fontSize: 13, lineHeight: 18 },
 });
