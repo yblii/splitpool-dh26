@@ -26,6 +26,15 @@ const STATE_LABEL: Record<ItemVisualState, string> = {
   error: 'Needs a fix',
 };
 
+function claimStatus(visual: ItemVisualState, resolution: ItemResolution, viewerId: string, quantity: number) {
+  const qty = quantity > 1 ? ` · Qty ${quantity}` : '';
+  if (visual === 'unclaimed' || resolution.portions.length === 0) return { lead: `Unclaimed${qty}`, money: '', tail: '' };
+  const portion = resolution.portions.find((entry) => entry.personId === viewerId) ?? resolution.portions[0];
+  const name = visual === 'single' ? 'Claimed' : STATE_LABEL[visual];
+  if (!portion) return { lead: `${name}${qty}`, money: '', tail: '' };
+  return { lead: `${name}, ${formatBasisPoints(portion.basisPoints)}, `, money: formatMoney(portion.cents), tail: qty };
+}
+
 function personColor(people: AvatarPerson[], id: string) {
   return people.find((person) => person.id === id)?.color ?? colors.muted;
 }
@@ -259,6 +268,7 @@ export function ReceiptItemCard({
     ? resolution.portions.map((portion) => personColor(people, portion.personId))
     : ['#E4D8C8'];
   const payers = resolution.portions.map((portion) => personName(people, portion.personId)).join(', ');
+  const status = claimStatus(visual, resolution, viewerId, item.quantity);
 
   function commitPercent() {
     const next = percentInputToBasisPoints(text);
@@ -321,7 +331,11 @@ export function ReceiptItemCard({
             <Text style={cardStyles.chevron}>{expanded ? '⌄' : '›'}</Text>
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={cardStyles.name} numberOfLines={1}>{expanded && visual !== 'unclaimed' ? `✓ ${item.name}` : item.name}</Text>
-              <Text style={cardStyles.meta}>{STATE_LABEL[visual]}{item.quantity > 1 ? ` · Qty ${item.quantity}` : ''}</Text>
+              <Text style={cardStyles.meta}>
+                {status.lead}
+                {status.money ? <Text {...moneyMark} style={cardStyles.metaMoney}>{status.money}</Text> : null}
+                {status.tail}
+              </Text>
             </View>
             <Text {...moneyMark} style={cardStyles.price}>{formatMoney(item.cents)}</Text>
             {resolution.portions.length > 0 ? <View style={cardStyles.avatars}>
@@ -633,6 +647,7 @@ const cardStyles = StyleSheet.create({
   chevron: { color: colors.muted, fontSize: 18, lineHeight: 22, width: 14 },
   name: { fontFamily: 'Inter', color: colors.ink, fontSize: 16, lineHeight: 21, fontWeight: '700' },
   meta: { color: colors.muted, fontSize: 12, lineHeight: 16 },
+  metaMoney: { fontFamily: monoFamily, color: colors.muted, fontSize: 12, lineHeight: 16, fontWeight: '700' },
   price: { fontFamily: monoFamily, color: colors.ink, fontSize: 15, lineHeight: 20, fontWeight: '700' },
   avatars: { flexDirection: 'row', marginLeft: 2 },
   claimCircle: {
