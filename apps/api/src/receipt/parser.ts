@@ -33,7 +33,7 @@ type ParseLogger = {
 };
 
 /** Multimodal model used for live receipt extraction. */
-export const GEMINI_RECEIPT_MODEL = 'gemini-2.5-flash';
+export const GEMINI_RECEIPT_MODEL = 'gemini-3.8-flash';
 
 const extractedReceiptSchema = {
   type: Type.OBJECT,
@@ -180,7 +180,7 @@ export function formatGeminiError(error: unknown): string {
 export function createGeminiReceiptParser(apiKey: string): ReceiptParser {
   const ai = new GoogleGenAI({ apiKey });
   return {
-    name: 'gemini-2.5-flash',
+    name: 'gemini-3.8-flash',
     async parseReceiptImage(input) {
       const mimeType = input.mimeType === 'image/jpg' ? 'image/jpeg' : input.mimeType;
       const response = await ai.models.generateContent({
