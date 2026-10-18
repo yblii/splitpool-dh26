@@ -1,10 +1,12 @@
 import type {
   ApiFailure,
   BillResponse,
+  Fraction,
   Group,
   GroupDetail,
   Profile,
   SaveItemsRequest,
+  UpdateSettingsRequest,
   VerifiedReceipt,
 } from '@splitpool/contracts';
 import { apiUrl } from './api';
@@ -232,6 +234,43 @@ export async function saveBillItems(
   return apiRequest<BillResponse>(`/bills/${billId}/items`, {
     method: 'PUT',
     body,
+    signal,
+  });
+}
+
+export async function setItemClaim(
+  billId: string,
+  itemId: string,
+  input: { expectedVersion: number; fraction: Fraction },
+  { signal }: { signal?: AbortSignal } = {},
+) {
+  return apiRequest<BillResponse>(`/bills/${billId}/items/${itemId}/claim`, {
+    method: 'PUT',
+    body: input,
+    signal,
+  });
+}
+
+export async function setBillTip(
+  billId: string,
+  input: { expectedVersion: number; tipCents: number },
+  { signal }: { signal?: AbortSignal } = {},
+) {
+  return apiRequest<BillResponse>(`/bills/${billId}/tip`, {
+    method: 'PUT',
+    body: input,
+    signal,
+  });
+}
+
+export async function updateBillSettings(
+  billId: string,
+  input: UpdateSettingsRequest,
+  { signal }: { signal?: AbortSignal } = {},
+) {
+  return apiRequest<BillResponse>(`/bills/${billId}/settings`, {
+    method: 'PATCH',
+    body: input,
     signal,
   });
 }

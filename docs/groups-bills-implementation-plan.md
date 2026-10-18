@@ -139,9 +139,9 @@ flowchart TD
 
 - Bill screen reads authoritative `BillResponse`.
 - Claims: `PUT /bills/:id/items/:itemId/claim` with exact fractions (not demo halves).
-- Polling hook: 2s interval, pause in background, refetch on focus/mutation/409.
+- Polling hook (`useBillPoll`): 2s interval, pause in background, refetch on focus/mutation/409.
 - Show version conflicts with “Someone else updated — retry.”
-- Host-only controls for receipt edit / roster; payers claim only their shares.
+- Host-only controls for receipt edit / roster; payers claim only their shares (+ personal tip).
 
 ### Phase E — Cleanup / demo debt
 
