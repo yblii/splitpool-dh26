@@ -8,7 +8,7 @@ import { colors } from '../components/ui';
 import { ProfileIconButton } from '../components/ProfileIcon';
 import { AuthProvider, useAuth } from '../state/auth';
 import { DemoProvider } from '../state/demo';
-import { getSupabase } from '../lib/supabase';
+import { getSupabase, logSupabaseEnvStatus } from '../lib/supabase';
 
 function RootNavigator() {
   const { session, profile } = useAuth();
@@ -52,6 +52,7 @@ function RootNavigator() {
 export default function RootLayout() {
   const [queryClient] = useState(() => new QueryClient());
   useEffect(() => {
+    logSupabaseEnvStatus('[SplitPool] Supabase env (root layout)');
     const client = getSupabase();
     if (!client || Platform.OS === 'web') return;
     if (AppState.currentState === 'active') client.auth.startAutoRefresh();

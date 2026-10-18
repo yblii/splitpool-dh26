@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { Link, router } from 'expo-router';
 import { Button, Card, DemoNote, Screen, styles } from '../components/ui';
+import { getSupabaseEnvStatus } from '../lib/supabase';
 import { useAuth } from '../state/auth';
 
 export default function SignUpScreen() {
   const { configured, signUp } = useAuth();
+  const envStatus = getSupabaseEnvStatus();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
@@ -49,7 +51,10 @@ export default function SignUpScreen() {
       <Card>
         {!configured && (
           <Text style={styles.small}>
-            Add your Supabase URL and publishable key to apps/mobile/.env, then restart Expo.
+            Supabase is not configured in this build.
+            {'\n'}URL: {envStatus.hasUrl ? envStatus.urlPreview : 'missing'}
+            {'\n'}Key: {envStatus.hasKey ? envStatus.keyPreview : 'missing'}
+            {'\n'}Put EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or EXPO_PUBLIC_SUPABASE_ANON_KEY) in apps/mobile/.env, then fully restart Expo.
           </Text>
         )}
         <Text style={styles.label}>First name</Text>
