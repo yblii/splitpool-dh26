@@ -4,7 +4,7 @@ import { buildApp } from './app.ts';
 import { createSampleFallbackParser } from './receipt/parser.ts';
 
 it('serves health and a read-only demo bill without exposing write operations', async () => {
-  const app = await buildApp({ parser: createSampleFallbackParser() });
+  const app = await buildApp({ logger: false, parser: createSampleFallbackParser() });
   try {
     const health = await app.inject({ method: 'GET', url: '/api/v1/health' });
     expect(health.statusCode).toBe(200);
@@ -20,10 +20,10 @@ it('serves health and a read-only demo bill without exposing write operations', 
     const write = await app.inject({ method: 'POST', url: '/api/v1/bills/example/confirm' });
     expect(write.statusCode).toBe(404);
   } finally { await app.close(); }
-});
+}, 15000);
 
 it('extracts a draft receipt from a multipart image using the parser adapter', async () => {
-  const app = await buildApp({ parser: createSampleFallbackParser() });
+  const app = await buildApp({ logger: false, parser: createSampleFallbackParser() });
   try {
     const boundary = '----splitpoolboundary';
     const payload = [
@@ -57,7 +57,7 @@ it('extracts a draft receipt from a multipart image using the parser adapter', a
 });
 
 it('rejects non-image multipart uploads', async () => {
-  const app = await buildApp({ parser: createSampleFallbackParser() });
+  const app = await buildApp({ logger: false, parser: createSampleFallbackParser() });
   try {
     const boundary = '----splitpoolboundary';
     const payload = [

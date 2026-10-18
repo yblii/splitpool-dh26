@@ -1,3 +1,5 @@
+export type * from './api.ts';
+
 export type PersonId = 'you' | 'alex' | 'sam';
 export type SplitMode = 'proportional' | 'equal';
 

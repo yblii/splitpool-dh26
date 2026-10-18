@@ -2,6 +2,9 @@ import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import Fastify from 'fastify';
 import { makeDemoBill, type ExtractedReceipt } from '@splitpool/contracts';
+import type { VerifyToken } from './auth.ts';
+import type { Database } from './db.ts';
+import { ApiError } from './errors.ts';
 import { loadApiEnv } from './load-env.ts';
 import {
   createReceiptParser,
@@ -9,11 +12,17 @@ import {
   type ReceiptFallbackReason,
   type ReceiptParser,
 } from './receipt/parser.ts';
+import { collaborationRoutes } from './routes.ts';
+import { CollaborationService } from './service.ts';
 
 const MAX_RECEIPT_BYTES = 8 * 1024 * 1024;
 
 export type BuildAppOptions = {
   parser?: ReceiptParser;
+  db?: Database;
+  verifyToken?: VerifyToken;
+  origins?: string[];
+  logger?: boolean;
 };
 
 function normalizeImageMimeType(mimeType: string): string {
@@ -22,12 +31,34 @@ function normalizeImageMimeType(mimeType: string): string {
 }
 
 export async function buildApp(options: BuildAppOptions = {}) {
-  const app = Fastify({ logger: true });
+  if (Boolean(options.db) !== Boolean(options.verifyToken)) {
+    throw new Error('Database and authentication must be configured together.');
+  }
 
-  // Read-only demo routes plus receipt extraction. Add authentication before exposing private data.
-  await app.register(cors, { origin: true });
+  const app = Fastify({
+    logger: options.logger === false ? false : { redact: ['req.headers.authorization', 'req.url'] },
+    // Receipt images are larger than the JSON collaboration payloads.
+    bodyLimit: MAX_RECEIPT_BYTES,
+    ajv: { customOptions: { removeAdditional: false, coerceTypes: false } },
+  });
+
+  await app.register(cors, { origin: options.origins ?? false });
   await app.register(multipart, {
     limits: { files: 1, fileSize: MAX_RECEIPT_BYTES },
+  });
+
+  app.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Route not found.' } }));
+  app.setErrorHandler((error, request, reply) => {
+    if (error instanceof ApiError) return reply.code(error.statusCode).send({ error: { code: error.code, message: error.message, details: error.details } });
+    const failure = error as { code?: string; statusCode?: number; validation?: unknown };
+    if (failure.validation || failure.statusCode === 400)
+      return reply.code(400).send({ error: { code: 'INVALID_REQUEST', message: 'Request does not match the API schema.' } });
+    if (failure.code === '23505') return reply.code(409).send({ error: { code: 'CONFLICT', message: 'Username, membership, or active bill already exists.' } });
+    if (failure.statusCode && failure.statusCode >= 400 && failure.statusCode < 500)
+      return reply.code(failure.statusCode).send({ error: { code: 'INVALID_REQUEST', message: 'Request could not be accepted.' } });
+    // Avoid logging SQL parameters, receipt contents, invitation tokens, or auth tokens.
+    request.log.error({ code: failure.code, requestId: request.id }, 'Backend operation failed');
+    return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: 'The request could not be completed.' } });
   });
 
   app.get('/api/v1/health', () => {
@@ -36,7 +67,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     return {
       status: 'ok',
       service: 'splitpool-api',
-      mode: 'demo',
+      mode: options.db ? 'connected' : 'demo',
       receiptParser: parser.name,
       geminiKeyPresent: env.geminiKeyPresent,
       envFileFound: env.found,
@@ -89,6 +120,21 @@ export async function buildApp(options: BuildAppOptions = {}) {
     if (errorDetail) body.errorDetail = errorDetail;
     return reply.code(200).send(body);
   });
+
+  if (options.db && options.verifyToken) {
+    const db = options.db;
+    const verify = options.verifyToken;
+    app.get('/api/v1/ready', async (_request, reply) => {
+      try {
+        const result = await db.query('SELECT version FROM schema_migrations WHERE version=1');
+        if (!result.rows.length) return reply.code(503).send({ status: 'unavailable' });
+        return { status: 'ok' };
+      }
+      catch { return reply.code(503).send({ status: 'unavailable' }); }
+    });
+    await app.register(async privateApp => collaborationRoutes(privateApp, new CollaborationService(db), verify), { prefix: '/api/v1' });
+    app.addHook('onClose', () => db.close());
+  }
 
   return app;
 }
