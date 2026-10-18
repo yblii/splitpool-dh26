@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { formatMoney } from '@splitpool/contracts';
+import { formatMoney, summarizeSplitBill } from '@splitpool/contracts';
 import { AvatarStack, MemberAvatar } from '../components/people';
 import { BottomSheet } from '../components/sheets';
 import { ReceiptPaper } from '../components/split-ui';
@@ -26,6 +26,16 @@ export default function GroupDetailsScreen() {
   const groupName = name ?? group.name;
   const members = group.memberIds.map((id) => demo.lookup(id));
   const bill = demo.billFor(group.id);
+  const yourShareCents = bill
+    ? summarizeSplitBill({
+      items: bill.items,
+      taxCents: bill.taxCents,
+      tipCents: bill.tipCents,
+      serviceChargeCents: bill.serviceChargeCents,
+      discountCents: bill.discountCents,
+      printedTotalCents: bill.printedTotalCents,
+    }, group.memberIds, bill.splitMode).people.find((person) => person.id === 'you')?.totalCents ?? 0
+    : 0;
   const past = demo.pastBills.filter((entry) => entry.groupId === group.id);
   const availableFriends = demo.friends.filter((friend) => !group.memberIds.includes(friend.id));
 
@@ -58,12 +68,12 @@ export default function GroupDetailsScreen() {
         <Text style={[styles.small, { width: 72, textAlign: 'right' }]}>Total</Text>
         <Text style={[styles.small, { width: 72, textAlign: 'right' }]}>You pay</Text>
       </View>
-      {bill && bill.phase !== 'paid' && <Pressable accessibilityRole="button" accessibilityLabel={`Continue ${bill.merchant}`} onPress={openBill} style={splitRow}>
+      {bill && bill.phase !== 'paid' && <Pressable accessibilityRole="button" accessibilityLabel={`Continue ${bill.merchant}, total ${formatMoney(bill.printedTotalCents)}, you pay ${formatMoney(yourShareCents)}`} onPress={openBill} style={splitRow}>
         <View style={{ flex: 1, justifyContent: 'center' }}>
           <Text style={[styles.text, { fontWeight: '700' }]} numberOfLines={1}>{bill.merchant}</Text>
         </View>
         <Text {...moneyMark} style={money}>{formatMoney(bill.printedTotalCents)}</Text>
-        <Text style={[money, { color: colors.primary }]}>Open</Text>
+        <Text {...moneyMark} style={money}>{formatMoney(yourShareCents)}</Text>
       </Pressable>}
       {past.length === 0 && !bill && <Text style={styles.small}>No earlier bills yet.</Text>}
       {past.map((entry) => <Pressable
