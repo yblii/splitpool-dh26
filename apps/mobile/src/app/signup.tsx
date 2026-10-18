@@ -107,7 +107,7 @@ export default function SignUpScreen() {
           disabled={busy || !canSubmit}
           onPress={() => void onSubmit()}
         />
-        <Text style={styles.small}>Password must be at least 8 characters. No MFA for this demo.</Text>
+        <Text style={styles.small}>Password must be at least 8 characters.</Text>
         {!!message && <Text style={styles.small}>{message}</Text>}
       </Card>
       <View style={styles.row}>

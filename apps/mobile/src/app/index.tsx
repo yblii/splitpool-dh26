@@ -76,7 +76,7 @@ export default function GroupsScreen() {
     }
     setFriendName('');
     setFriendError(null);
-    setFriendMessage(`${result.person.name} was added. This stays on this device.`);
+    setFriendMessage(`${result.person.name} was added.`);
   }
 
   const byId = new Map(demo.groups.map((group) => [group.id, group]));
@@ -129,7 +129,6 @@ export default function GroupsScreen() {
     <Pressable accessibilityRole="button" accessibilityLabel={`Your title, ${demo.you.title}`} onPress={() => router.push('/profile')} style={{ alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center' }}>
       <Text style={yourTitle}>{demo.you.title ? `“${demo.you.title}”` : 'Your next meal has a title'}</Text>
     </Pressable>
-    <Text style={styles.small}>Local demo groups stay on this device. Shared groups use your signed-in account.</Text>
     <View style={styles.row}>
       <Text style={groupsHeading}>Groups</Text>
       {editing ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
@@ -175,7 +174,6 @@ export default function GroupsScreen() {
     </View>}
 
     <BottomSheet visible={creating} title="New group" onClose={() => setCreating(false)} footer={<Button title="Create group" onPress={createGroup} />}>
-      <Text style={styles.small}>The group stays on this device.</Text>
       <Text style={styles.label}>Group name</Text>
       <TextInput accessibilityLabel="Group name" value={groupName} onChangeText={setGroupName} placeholder="Friday dinner" placeholderTextColor={colors.muted} style={styles.input} maxLength={40} />
       <Text style={styles.label}>Friends</Text>
@@ -202,7 +200,7 @@ export default function GroupsScreen() {
     </BottomSheet>
 
     <BottomSheet visible={friendsOpen} title="Friends" onClose={() => setFriendsOpen(false)}>
-      <Text style={styles.small}>Add a demo friend by username or phone number. Try @riley, @morgan, or 555-0148.</Text>
+      <Text style={styles.small}>Add a friend by username or phone number.</Text>
       <TextInput
         accessibilityLabel="Friend username or phone number"
         autoCapitalize="none"

@@ -26,7 +26,7 @@ export default function AcceptInviteScreen() {
     <Screen>
       <View style={{ gap: 10 }}>
         <Text style={styles.title}>Join group.</Text>
-        <Text style={styles.subtitle}>Accept this invite to join the group. You become a payer on the active bill automatically.</Text>
+        <Text style={styles.subtitle}>Accept this invite to join the group.</Text>
       </View>
       <Card>
         <Text style={styles.label}>Invite token</Text>

@@ -146,9 +146,6 @@ export default function BillReceiptScreen() {
         {picked && Platform.OS === 'web' && (
           <Button title="Choose another photo" secondary disabled={busy} onPress={() => void pick(false)} />
         )}
-        <Text style={styles.small}>
-          Photos upload to your API for Gemini parsing and are stored with this bill. Without an API key the server returns a labeled sample draft.
-        </Text>
       </Card>
       <Button
         title="Use sample receipt"

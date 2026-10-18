@@ -158,10 +158,8 @@ export default function BillScreen() {
               note={bill.summary.complete
                 ? undefined
                 : bill.items.length === 0
-                  ? (canScan
-                    ? 'Scan a receipt to load items for the group.'
-                    : 'Waiting for the host to scan a receipt.')
-                  : 'Tax and tip join your total once every item is fully claimed.'}
+                  ? (canScan ? 'Scan a receipt to add items.' : 'Waiting for the host to scan a receipt.')
+                  : undefined}
             />
           )}
           <Button title="Return to groups" secondary onPress={() => router.replace('/connected')} />
@@ -179,14 +177,14 @@ export default function BillScreen() {
       {conflict && (
         <ErrorBanner
           title="Someone else updated — retry"
-          message="Pull the latest bill state, then try your claim again."
+          message="Refresh, then try your claim again."
         />
       )}
 
       {!canEdit && bill && bill.state !== 'PAID' && bill.state !== 'CANCELLED' && (
         <ErrorBanner
           title="Claims are locked"
-          message="This bill is past editing. Reopen review before collection if you still need to change shares."
+          message="This bill can’t be edited right now."
         />
       )}
 
@@ -194,9 +192,7 @@ export default function BillScreen() {
         <ReceiptPaper title={bill.merchant || 'New bill'} alert={alert ?? overflowMessage}>
           {bill.items.length === 0 ? (
             <Text style={[styles.small, { paddingVertical: 12 }]}>
-              {canScan
-                ? 'No items yet. Scan a receipt to load a draft for host review.'
-                : 'No items yet. The group host scans and confirms the receipt first.'}
+              {canScan ? 'No items yet. Scan a receipt.' : 'No items yet. Waiting for the host.'}
             </Text>
           ) : bill.items.map((item) => {
             const line = billItemToSplitLine(bill, item);
@@ -264,12 +260,9 @@ export default function BillScreen() {
       )}
 
       {!!message && <ErrorBanner message={message} />}
-      {bill?.state === 'PAID' && (
-        <Text style={styles.small}>This bill is paid. It stays in the group’s history.</Text>
-      )}
       {bill && bill.state !== 'PAID' && bill.state !== 'CANCELLED' && !bill.summary.complete && bill.items.length > 0 && (
         <Text style={[styles.small, { color: colors.warning }]}>
-          Claim every item before the host can confirm payment.
+          Claim every item before payment.
         </Text>
       )}
       {canScan && bill && bill.items.length > 0 && !bill.summary.complete && (

@@ -23,7 +23,6 @@ export default function HistoryScreen() {
         <View style={styles.row}><Text style={styles.text}>Group total</Text><Text {...moneyMark} style={[styles.heading, { fontFamily: monoFamily }]}>{formatMoney(bill.totalCents)}</Text></View>
         <View style={styles.row}><Text style={styles.text}>You paid</Text><Text {...moneyMark} style={[styles.heading, { fontFamily: monoFamily }]}>{formatMoney(bill.yourShareCents)}</Text></View>
         <Text style={{ color: colors.success, fontWeight: '700' }}>Paid</Text>
-        <Text style={styles.small}>This is demo history. It cannot be edited, and it was not a real charge.</Text>
       </Card>
       {bill.titles && <MealTitles result={bill.titles} />}
     </>}

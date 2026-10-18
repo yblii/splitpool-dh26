@@ -46,7 +46,7 @@ export default function PaymentScreen() {
           : bill.phase === 'collecting'
             ? 'Collecting payments'
             : bill.phase === 'funding_pending' ? 'Funding pending' : 'Waiting for approval';
-  const cardDetail = 'Simulated card and merchant. No real money moves.';
+  const cardDetail = 'Virtual card ready for the restaurant.';
 
   return <Screen header={<AppHeader title="Payment" onBack={() => router.back()} />}>
     <View style={{ gap: 4 }}>

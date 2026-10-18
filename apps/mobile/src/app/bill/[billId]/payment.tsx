@@ -362,7 +362,6 @@ export default function BillPaymentScreen() {
           <Text style={styles.subheading}>
             {bill?.merchant || 'Bill'}
             {session ? ` · ${session.phase.replace(/_/g, ' ')}` : payment?.snapshotId ? ' · frozen' : ''}
-            {' · SIMULATED'}
           </Text>
         </View>
 

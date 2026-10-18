@@ -197,7 +197,6 @@ export default function ConnectedGroupScreen() {
       {message && <ErrorBanner message={message} />}
 
       <BottomSheet visible={editing} title="Edit group" onClose={() => setEditing(false)} footer={<Button title="Done" onPress={() => setEditing(false)} />}>
-        <Text style={styles.small}>Invite friends with a link. They join this group and any open bill as payers.</Text>
         <Button title={busy ? 'Creating…' : 'Copy invite link'} disabled={busy || !isHost} onPress={() => void copyInvite()} />
         {inviteUrl && (
           <View style={{ gap: 8 }}>

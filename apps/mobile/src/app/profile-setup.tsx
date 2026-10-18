@@ -82,7 +82,7 @@ export default function ProfileSetupScreen() {
           style={styles.input}
           maxLength={30}
         />
-        <Text style={styles.small}>3–30 characters: letters, numbers, underscore. Stored in PostgreSQL, not Supabase Auth.</Text>
+        <Text style={styles.small}>3–30 characters: letters, numbers, underscore.</Text>
         <Text style={styles.label}>Display name</Text>
         <TextInput
           accessibilityLabel="Display name"

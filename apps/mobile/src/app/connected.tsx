@@ -105,14 +105,11 @@ export default function ConnectedGroupsScreen() {
           <Text style={styles.link}>{loading ? 'Loading…' : 'Refresh'}</Text>
         </Pressable>
       </View>
-      <Text style={styles.small}>
-        Shared bills stay with the group. Close one, start another — history is preserved.
-      </Text>
 
       {message && <ErrorBanner message={message} />}
 
       {!loading && groups.length === 0 && (
-        <Text style={styles.small}>No groups yet. Tap + New to create one and open a bill.</Text>
+        <Text style={styles.small}>No groups yet.</Text>
       )}
 
       <View style={{ gap: 18 }}>
@@ -134,7 +131,6 @@ export default function ConnectedGroupsScreen() {
         onClose={() => setCreating(false)}
         footer={<Button title={busy ? 'Creating…' : 'Create group'} disabled={busy} onPress={() => void onCreateGroup()} />}
       >
-        <Text style={styles.small}>Creates a shared group and its first open bill on the server.</Text>
         <Text style={styles.label}>Group name</Text>
         <TextInput
           accessibilityLabel="Group name"
