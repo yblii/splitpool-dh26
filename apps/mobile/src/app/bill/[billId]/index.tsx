@@ -311,7 +311,7 @@ export default function BillScreen() {
           onPress={() => router.push({ pathname: '/group/[groupId]', params: { groupId: bill.groupId } })}
         />
       )}
-      <Button title="Back to groups" secondary onPress={() => router.replace('/')} />
+      <Button title="Back to groups" secondary onPress={() => router.replace('/connected')} />
       <DemoNote />
     </Screen>
   );

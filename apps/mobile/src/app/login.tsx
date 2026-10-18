@@ -1,12 +1,18 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { Link, router } from 'expo-router';
 import { Button, Card, DemoNote, Screen, styles } from '../components/ui';
 import { getSupabaseEnvStatus } from '../lib/supabase';
 import { useAuth } from '../state/auth';
+import { useAppProfile } from '../state/appProfile';
 
 export default function LoginScreen() {
-  const { configured, signIn } = useAuth();
+  const { configured, signIn, session } = useAuth();
+  const { status } = useAppProfile();
+  useEffect(() => {
+    if (!session || status === 'loading') return;
+    router.replace(status === 'ready' ? '/connected' : '/profile-setup');
+  }, [session, status]);
   const envStatus = getSupabaseEnvStatus();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,7 +28,6 @@ export default function LoginScreen() {
       setMessage(error);
       return;
     }
-    router.replace('/');
   }
 
   return (
@@ -78,6 +83,7 @@ export default function LoginScreen() {
         </Link>
       </View>
       <DemoNote />
+      <Button title="Explore the local demo" secondary onPress={() => router.replace('/')} />
     </Screen>
   );
 }

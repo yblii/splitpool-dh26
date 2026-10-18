@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@expo-google-fonts/ibm-plex-mono": "^0.4.1",
+    "@expo-google-fonts/inter": "^0.4.2",
     "@splitpool/contracts": "0.1.0",
     "@stripe/react-stripe-js": "^7.0.0",
     "@stripe/stripe-js": "^10.1.0",

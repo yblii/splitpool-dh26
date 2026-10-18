@@ -54,18 +54,13 @@ The preview profile produces an installable Android APK. For iOS, use `--platfor
 
 ## What works now
 
-- Native navigation between the group, receipt, profile, and payment screens.
-- Local group renaming, demo display name, and whole/half item claims across three switchable demo participants.
-- Exact-cent totals with equal or proportional tax/tip splitting; incomplete claims block demo payment.
-- Native camera/photo selection, Gemini receipt parsing via the local API (sample fallback without a key), and a host review screen that writes verified items into the local demo bill.
-- A demo card toggle and simulated contribution/merchant payment states.
-- Auth-first launch: sign-in → app profile setup (`GET/PATCH /me`) → groups landing. **New group** creates a Tiger Data group + active bill; group/bill screens load from the API. Invites by username or link token are supported for hosts.
-- A profile icon supports photo and profile edits. Receipt OCR and concurrent claims UI are next.
-- A read-only Fastify health endpoint and demo bill endpoint, with an in-app connection check.
+The app opens into a local, labeled hackathon demo. Open **Fam** to scan/review a receipt, claim or split items with the participant switcher, review exact-cent totals and personal tips, choose individual demo cards, approve and authorize shares, confirm simulated funding, and finish simulated restaurant checkout. The card stays locked until all required contributions and funding are ready. No real money moves.
 
-After profile setup, the home screen lists your groups from PostgreSQL. Creating a group also creates an active bill with you as the first payer. Receipt items and live multi-device claims are not wired on mobile yet (Phases C/D). Legacy local demo receipt/payment screens remain in the app but are off the main path. No real money moves.
+After checkout, the API can generate food-inspired titles with Gemini. Missing keys, provider errors, or filtered output use labeled keyword titles. The host can skip titles before collection. Requests use opaque diner labels and claimed food portions, excluding account and payment details. Latest titles persist locally until the next settled meal or a reset; groups, bill progress, and history are session-only.
 
-Try the live path: sign in → choose a username → **New group** → open the bill. Use group **Invite** to add another signed-in user by username or invite token.
+Real collaboration remains available through **Profile ? Sign in for shared bills / Open connected groups**. After app profile setup, `/connected` lists database-backed groups. Hosts can create groups, invite members, scan/review receipts, and save items. Two separately authenticated sessions can claim items and set personal tips, with foreground polling and conflict handling. The connected bill and the local payment prototype are separate flows.
+
+See the [three-minute video and recording runbook](docs/judging-video.md) for the exact recording sequence and simulation disclosures. The previous Face ID animation and Stripe adapters remain separate from the current local demo; selecting a demo card does not invoke a payment provider.
 
 ## Optional API
 
@@ -79,6 +74,7 @@ The API listens on port 3001:
 
 - `GET /api/v1/health`
 - `GET /api/v1/demo/bill`
+- `POST /api/v1/demo/meal-titles` ? food-only diner inputs; returns titles, source, and `usedFallback`
 - `POST /api/v1/demo/receipt-extractions` — multipart field `image`; returns draft receipt JSON (Gemini when `GEMINI_API_KEY` is set on the API, otherwise the labeled sample fixture)
 
 Copy `apps/api/.env.example` to `apps/api/.env` and set `GEMINI_API_KEY` for live parsing. The key stays on the API only — never put it in `EXPO_PUBLIC_*` variables.
@@ -106,9 +102,9 @@ EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 
 Expo only exposes variables prefixed with `EXPO_PUBLIC_` to the app. Names like `SUPABASE_URL` without that prefix will not work. After editing `.env`, fully restart Expo.
 
-The app opens on **Sign in**. Create an account from there; after sign-up you are sent to a verify-email screen with a button back to login. A signed-in session is required. With `EXPO_PUBLIC_API_URL` and a migrated Tiger Data database, the first login also creates an app profile (`PATCH /me` username + display name) before you reach the main screens. Sign-up stores first name, last name, and phone in Supabase user metadata. Native session storage uses Expo SecureStore; the browser uses the SDK's browser storage.
+Open **Profile ? Sign in for shared bills** to access the connected app. Create an account from there; after sign-up you are sent to a verify-email screen with a button back to login. A signed-in session is required. With `EXPO_PUBLIC_API_URL` and a migrated Tiger Data database, the first login also creates an app profile (`PATCH /me` username + display name) before you reach the main screens. Sign-up stores first name, last name, and phone in Supabase user metadata. Native session storage uses Expo SecureStore; the browser uses the SDK's browser storage.
 
-For profile photos, create a public Storage bucket named `avatars` and allow authenticated users to upload to a folder matching their user id. The demo bill on the main screen is still local until groups/bills are wired (Phase B).
+For profile photos, create a public Storage bucket named `avatars` and allow authenticated users to upload to a folder matching their user id. The home screen is the local demo; `/connected` contains the API-backed collaboration screens.
 
 Only public configuration belongs in `EXPO_PUBLIC_*` variables: these values ship in the app. Never put Stripe secret keys or Supabase service-role keys there. Do not commit `.env` files.
 
@@ -133,9 +129,10 @@ docs/backend.md             Backend setup, endpoint contracts, and teammate inte
 
 ```sh
 npm run check
+npm run test:e2e
 ```
 
-This runs workspace typechecks, Expo ESLint, Vitest checks, and Node backend tests. Database integration tests require `TEST_DATABASE_URL`; otherwise they are explicitly skipped. Use Expo's installer for SDK-compatible mobile packages, for example from `apps/mobile`:
+The first command runs workspace typechecks, Expo ESLint, Vitest checks, and Node backend tests. The second runs the browser demo with isolated sample services and headless Edge (or set `PLAYWRIGHT_CHANNEL=chrome`). Database integration tests require `TEST_DATABASE_URL`; otherwise they are explicitly skipped. Use Expo's installer for SDK-compatible mobile packages, for example from `apps/mobile`:
 
 ```sh
 npx expo install expo-image-picker

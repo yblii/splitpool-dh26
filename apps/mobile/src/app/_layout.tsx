@@ -1,89 +1,40 @@
 import { useEffect, useState } from 'react';
-import { AppState, Platform, Text, View } from 'react-native';
+import { AppState, Platform, View } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Stack, router } from 'expo-router';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useInter } from '../fonts';
 import { colors } from '../components/ui';
-import { ProfileIconButton } from '../components/ProfileIcon';
+import { DemoProvider } from '../state/demo';
 import { AuthProvider, useAuth } from '../state/auth';
 import { AppProfileProvider, useAppProfile } from '../state/appProfile';
-import { DemoProvider } from '../state/demo';
 import { ReceiptSessionProvider } from '../state/receiptSession';
-import { getSupabase, logSupabaseEnvStatus } from '../lib/supabase';
+import { getSupabase } from '../lib/supabase';
 
-function RootNavigator() {
-  const { session, profile, isLoading: authLoading } = useAuth();
-  const { status: appProfileStatus } = useAppProfile();
-  const signedIn = Boolean(session);
-  const profileReady = signedIn && appProfileStatus === 'ready';
-  const needsProfileSetup = signedIn && (appProfileStatus === 'needsSetup' || appProfileStatus === 'unavailable');
-
-  if (authLoading || (signedIn && appProfileStatus === 'loading')) {
-    return <View style={{ flex: 1, backgroundColor: colors.background }} />;
-  }
-
-  return (
-    <Stack screenOptions={{
-      headerStyle: { backgroundColor: colors.background },
-      headerTintColor: colors.ink,
-      headerTitleAlign: 'center',
-      headerTitle: ({ children }) => (
-        <Text numberOfLines={1} style={{ color: colors.ink, fontSize: 14, fontWeight: '800', letterSpacing: 1.8 }}>
-          {children}
-        </Text>
-      ),
-      headerShadowVisible: false,
-      contentStyle: { backgroundColor: colors.background },
-      headerBackTitle: 'Back',
-    }}>
-      <Stack.Protected guard={profileReady}>
-        <Stack.Screen
-          name="index"
-          options={{
-            title: 'SPLITPOOL',
-            headerRight: () => (
-              <ProfileIconButton
-                avatarUrl={profile?.avatarUrl}
-                onPress={() => router.push('/profile')}
-              />
-            ),
-          }}
-        />
-        <Stack.Screen name="group/[groupId]" options={{ title: 'GROUP' }} />
-        <Stack.Screen name="bill/[billId]/index" options={{ title: 'BILL' }} />
-        <Stack.Screen name="bill/[billId]/receipt" options={{ title: 'RECEIPT' }} />
-        <Stack.Screen name="bill/[billId]/receipt-review" options={{ title: 'REVIEW' }} />
-        <Stack.Screen name="bill/[billId]/payment" options={{ title: 'PAYMENT' }} />
-        <Stack.Screen name="invite/[token]" options={{ title: 'JOIN GROUP' }} />
-        <Stack.Screen name="receipt" options={{ title: 'RECEIPT' }} />
-        <Stack.Screen name="receipt-review" options={{ title: 'REVIEW' }} />
-        <Stack.Screen name="profile" options={{ title: 'PROFILE' }} />
-        <Stack.Screen name="history" options={{ title: 'HISTORY' }} />
-        <Stack.Screen name="payment" options={{ title: 'PAYMENT' }} />
-      </Stack.Protected>
-      <Stack.Protected guard={needsProfileSetup}>
-        <Stack.Screen
-          name="profile-setup"
-          options={{
-            title: appProfileStatus === 'unavailable' ? 'API SETUP' : 'PROFILE SETUP',
-            headerBackVisible: false,
-          }}
-        />
-      </Stack.Protected>
-      <Stack.Protected guard={!signedIn}>
-        <Stack.Screen name="login" options={{ title: 'SIGN IN', headerBackVisible: false }} />
-        <Stack.Screen name="signup" options={{ title: 'SIGN UP' }} />
-        <Stack.Screen name="verify-email" options={{ title: 'VERIFY EMAIL', headerBackVisible: false }} />
-      </Stack.Protected>
-    </Stack>
-  );
+function Navigator() {
+  const { session, isLoading } = useAuth();
+  const { status } = useAppProfile();
+  const connected = Boolean(session) && status === 'ready';
+  return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+    <Stack.Screen name="index" />
+    <Stack.Protected guard={!isLoading && connected}>
+      <Stack.Screen name="connected" />
+      <Stack.Screen name="group/[groupId]" />
+      <Stack.Screen name="bill/[billId]/index" />
+      <Stack.Screen name="bill/[billId]/receipt" />
+      <Stack.Screen name="bill/[billId]/receipt-review" />
+      <Stack.Screen name="bill/[billId]/payment" />
+      <Stack.Screen name="invite/[token]" />
+      <Stack.Screen name="account" />
+    </Stack.Protected>
+  </Stack>;
 }
 
 export default function RootLayout() {
   const [queryClient] = useState(() => new QueryClient());
+  const fontsReady = useInter();
   useEffect(() => {
-    logSupabaseEnvStatus('[SplitPool] Supabase env (root layout)');
     const client = getSupabase();
     if (!client || Platform.OS === 'web') return;
     if (AppState.currentState === 'active') client.auth.startAutoRefresh();
@@ -91,26 +42,25 @@ export default function RootLayout() {
       if (state === 'active') client.auth.startAutoRefresh();
       else client.auth.stopAutoRefresh();
     });
-    return () => {
-      subscription.remove();
-      client.auth.stopAutoRefresh();
-    };
+    return () => { subscription.remove(); client.auth.stopAutoRefresh(); };
   }, []);
-
-  return (
-    <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <AppProfileProvider>
-            <DemoProvider>
-              <ReceiptSessionProvider>
-                <StatusBar style="dark" />
-                <RootNavigator />
-              </ReceiptSessionProvider>
-            </DemoProvider>
-          </AppProfileProvider>
-        </AuthProvider>
-      </QueryClientProvider>
-    </SafeAreaProvider>
-  );
+  if (!fontsReady) return null;
+  return <SafeAreaProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <AppProfileProvider>
+          <DemoProvider>
+            <ReceiptSessionProvider>
+              <StatusBar style="dark" />
+              <View style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? '#D5DEE6' : colors.background, alignItems: 'center' }}>
+                <View style={{ flex: 1, width: '100%', maxWidth: Platform.OS === 'web' ? 430 : undefined, backgroundColor: colors.background }}>
+                  <Navigator />
+                </View>
+              </View>
+            </ReceiptSessionProvider>
+          </DemoProvider>
+        </AppProfileProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  </SafeAreaProvider>;
 }

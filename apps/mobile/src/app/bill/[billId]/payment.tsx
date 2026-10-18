@@ -5,17 +5,13 @@ import {
   formatMoney,
   type BillProjection,
   type BillResponse,
-  type MealTitleAssignment,
+  type MealTitlesResponse,
 } from '@splitpool/contracts';
-import { MealTitlesSummary } from '../../../components/MealTitlesSummary';
-import { Button, Card, DemoNote, Screen, colors, styles } from '../../../components/ui';
+import { MealTitles } from '../../../components/MealTitles';
+import { AppHeader, Button, Card, ErrorBanner, Screen, styles } from '../../../components/ui';
 import { CardUnlock, VirtualCard } from '../../../components/VirtualCard';
 import { closeBill, formatApiError, getBill, getGroup } from '../../../lib/apiClient';
-import {
-  generateMealTitles,
-  makeHistoryEntry,
-  membersFromBill,
-} from '../../../lib/mealTitles';
+import { generateMealTitles, membersFromBill } from '../../../lib/mealTitles';
 import {
   acceptBillShare,
   authorizeMyContribution,
@@ -31,7 +27,6 @@ import {
 } from '../../../lib/paymentApi';
 import { reviewDraftFromBill } from '../../../lib/reviewDraft';
 import { useAppProfile } from '../../../state/appProfile';
-import { useDemo } from '../../../state/demo';
 
 const phaseCopy: Record<string, string> = {
   collecting: 'Each person authorizes their own share. The card stays locked until every share is in.',
@@ -46,7 +41,6 @@ const phaseCopy: Record<string, string> = {
 export default function BillPaymentScreen() {
   const { billId } = useLocalSearchParams<{ billId: string }>();
   const { appProfile } = useAppProfile();
-  const { appendMealHistory } = useDemo();
   const userId = appProfile?.userId;
   const [bill, setBill] = useState<BillResponse | null>(null);
   const [hostId, setHostId] = useState<string | null>(null);
@@ -56,9 +50,8 @@ export default function BillPaymentScreen() {
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [biometric, setBiometric] = useState<'idle' | 'scanning' | 'done'>('idle');
-  const [mealTitles, setMealTitles] = useState<MealTitleAssignment[] | null>(null);
+  const [mealTitles, setMealTitles] = useState<MealTitlesResponse | undefined>(undefined);
   const [mealTitlesLoading, setMealTitlesLoading] = useState(false);
-  const [mealTitlesSource, setMealTitlesSource] = useState<string | null>(null);
   const titlesForKeyRef = useRef<string | null>(null);
   const settledRef = useRef(false);
 
@@ -87,7 +80,6 @@ export default function BillPaymentScreen() {
       setBill(nextBill);
       const billClosed = nextBill.state === 'PAID' || nextBill.state === 'CANCELLED';
       // Closed groups drop out of open listings; still readable with activeBillId null.
-      // Skip after settle so the summary does not poll a retired group for host metadata.
       if (!billClosed) {
         const group = await getGroup(nextBill.groupId);
         setHostId(group.hostId);
@@ -116,7 +108,6 @@ export default function BillPaymentScreen() {
       void refresh();
       const timer = setInterval(() => {
         if (AppState.currentState !== 'active') return;
-        // Once paid, the summary is stable — stop the 2s refresh that was flashing GROUP_CLOSED.
         if (settledRef.current) return;
         void refresh();
       }, 2000);
@@ -140,7 +131,6 @@ export default function BillPaymentScreen() {
   }
 
   const billState = bill?.state;
-  // Collaboration listings key off bills.state. Retry close while the settled screen is open.
   useEffect(() => {
     if (!billId) return;
     if (paymentPhase !== 'paid' && paymentPhase !== 'canceled') return;
@@ -173,18 +163,11 @@ export default function BillPaymentScreen() {
       });
       if (cancelled) return;
       titlesForKeyRef.current = key;
-      setMealTitles(result.titles);
-      setMealTitlesSource(result.source);
+      setMealTitles(result);
       setMealTitlesLoading(false);
-      appendMealHistory(makeHistoryEntry({
-        groupName: groupName || 'Group',
-        merchant: bill.merchant,
-        titles: result.titles,
-        source: result.source,
-      }));
     })();
     return () => { cancelled = true; };
-  }, [appendMealHistory, bill, groupName, paymentSessionId, settled]);
+  }, [bill, groupName, paymentSessionId, settled]);
 
   async function run(action: () => Promise<unknown>) {
     if (!userId) return;
@@ -322,7 +305,7 @@ export default function BillPaymentScreen() {
 
   if (!billId || !userId) {
     return (
-      <Screen>
+      <Screen header={<AppHeader title="Payment" onBack={() => router.replace('/')} />}>
         <Text style={styles.subtitle}>Sign in and open a bill to continue payment.</Text>
       </Screen>
     );
@@ -330,110 +313,118 @@ export default function BillPaymentScreen() {
 
   if (settled) {
     return (
-      <Screen footer={<DemoNote />}>
-        <MealTitlesSummary
-          titles={mealTitles}
-          loading={mealTitlesLoading}
-          source={mealTitlesSource}
-          groupName={groupName}
-          merchant={bill?.merchant}
-          onReturnToGroups={() => router.replace('/')}
-          onViewHistory={() => router.push('/history')}
+      <Screen
+        header={<AppHeader title="Complete" onBack={() => router.replace('/')} />}
+        footer={<Button title="Return to groups" onPress={() => router.replace('/')} />}
+      >
+        <View style={{ gap: 6 }}>
+          <Text style={styles.title}>Settled together.</Text>
+          <Text style={styles.subheading}>
+            {[groupName, bill?.merchant].filter(Boolean).join(' · ') || 'Your group'}
+          </Text>
+        </View>
+        <ErrorBanner
+          tone="success"
+          title="Payment complete"
+          message="This bill is closed. Meal titles are for fun and never delay checkout."
         />
-        {!!message && <Text style={[styles.small, { color: colors.warning }]}>{message}</Text>}
+        <MealTitles result={mealTitles} loading={mealTitlesLoading} />
+        {!!message && <ErrorBanner message={message} />}
       </Screen>
     );
   }
 
   return (
-    <Screen footer={<>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text style={styles.label}>You pay</Text>
-        <Text style={[styles.heading, { fontVariant: ['tabular-nums'] }]}>
-          {formatMoney(myShare?.totalCents ?? 0)}
-        </Text>
-      </View>
-      <Button title={busy ? 'Working…' : title} disabled={disabled} onPress={onPress} />
-      {payment?.snapshotId && !session && isHost && (
-        <Button title="Reopen bill" secondary disabled={busy} onPress={() => void onReopen()} />
-      )}
-      {session && isHost && session.phase !== 'paid' && session.phase !== 'canceled' && (
-        <Button title="Cancel collection" secondary disabled={busy} onPress={() => void onCancel()} />
-      )}
-      <Button
-        title="Back to bill"
-        secondary
-        onPress={() => router.replace({ pathname: '/bill/[billId]', params: { billId } } as Href)}
-      />
-      <DemoNote />
-    </>}>
-      <View style={{ gap: 10 }}>
-        <Text style={styles.title}>Confirm payment.</Text>
-        <Text style={styles.subtitle}>
-          {bill?.merchant || 'Bill'}
-          {session ? ` · ${session.phase.replace(/_/g, ' ')}` : payment?.snapshotId ? ' · frozen' : ''}
-          {' · SIMULATED'}
-        </Text>
-      </View>
-
-      <Card>
-        <Text style={styles.heading}>Your share</Text>
-        <View style={styles.row}>
-          <Text style={styles.text}>Items + tax + tip</Text>
-          <Text style={styles.text}>{formatMoney(myShare?.totalCents ?? 0)}</Text>
-        </View>
-        {payment?.snapshotId && (
-          <Text style={styles.small}>
-            {accepted ? 'You accepted this frozen share.' : 'Accept your share before the host collects.'}
-          </Text>
-        )}
-      </Card>
-
-      {payment?.snapshotId && (
-        <Card>
-          <Text style={styles.heading}>Group progress</Text>
-          {payers.map((share) => {
-            const seat = session?.seats.find((entry) => entry.userId === share.userId);
-            const didAccept = payment.acceptedUserIds.includes(share.userId);
-            const label = seat?.status.replace(/_/g, ' ')
-              ?? (didAccept ? 'accepted' : 'waiting');
-            return (
-              <View key={share.userId} style={styles.row}>
-                <Text style={[styles.text, { flex: 1 }]}>
-                  {bill?.participants.find((participant) => participant.userId === share.userId)?.displayName
-                    ?? share.userId}
-                  {share.userId === userId ? ' · you' : ''}
-                </Text>
-                <Text style={styles.small}>{label}</Text>
-              </View>
-            );
-          })}
-        </Card>
-      )}
-
-      {session && (
-        <>
-          <VirtualCard
-            seats={session.seats}
-            budgetCents={session.cardBudgetCents}
-            unlocked={session.checkoutOpen}
-            last4={isSpender ? cardLast4 : null}
+    <View style={{ flex: 1 }}>
+      <Screen
+        header={<AppHeader title="Payment" onBack={() => router.replace({ pathname: '/bill/[billId]', params: { billId } } as Href)} />}
+        footer={<>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={styles.label}>You pay</Text>
+            <Text style={styles.heading}>{formatMoney(myShare?.totalCents ?? 0)}</Text>
+          </View>
+          <Button title={busy ? 'Working…' : title} disabled={disabled} onPress={onPress} />
+          {payment?.snapshotId && !session && isHost && (
+            <Button title="Reopen bill" secondary disabled={busy} onPress={() => void onReopen()} />
+          )}
+          {session && isHost && session.phase !== 'paid' && session.phase !== 'canceled' && (
+            <Button title="Cancel collection" secondary disabled={busy} onPress={() => void onCancel()} />
+          )}
+          <Button
+            title="Back to bill"
+            secondary
+            onPress={() => router.replace({ pathname: '/bill/[billId]', params: { billId } } as Href)}
           />
-          <Text style={styles.text}>{phaseCopy[session.phase] ?? session.phase}</Text>
-          {session.spendDeadlineMs && (
-            <Text style={styles.small}>
-              New purchases close at {new Date(session.spendDeadlineMs).toLocaleTimeString()}.
-            </Text>
-          )}
-          {session.pendingRefundCents > 0 && (
-            <Text style={styles.small}>
-              {formatMoney(session.pendingRefundCents)} of principal is waiting to be refunded by share.
-            </Text>
-          )}
-        </>
-      )}
+        </>}
+      >
+        <View style={{ gap: 6 }}>
+          <Text style={styles.title}>Confirm payment.</Text>
+          <Text style={styles.subheading}>
+            {bill?.merchant || 'Bill'}
+            {session ? ` · ${session.phase.replace(/_/g, ' ')}` : payment?.snapshotId ? ' · frozen' : ''}
+            {' · SIMULATED'}
+          </Text>
+        </View>
 
-      {!!message && <Text style={[styles.small, { color: colors.warning }]}>{message}</Text>}
+        <Card>
+          <Text style={styles.heading}>Your share</Text>
+          <View style={styles.row}>
+            <Text style={styles.text}>Items + tax + tip</Text>
+            <Text style={styles.text}>{formatMoney(myShare?.totalCents ?? 0)}</Text>
+          </View>
+          {payment?.snapshotId && (
+            <Text style={styles.small}>
+              {accepted ? 'You accepted this frozen share.' : 'Accept your share before the host collects.'}
+            </Text>
+          )}
+        </Card>
+
+        {payment?.snapshotId && (
+          <Card>
+            <Text style={styles.heading}>Group progress</Text>
+            {payers.map((share) => {
+              const seat = session?.seats.find((entry) => entry.userId === share.userId);
+              const didAccept = payment.acceptedUserIds.includes(share.userId);
+              const label = seat?.status.replace(/_/g, ' ')
+                ?? (didAccept ? 'accepted' : 'waiting');
+              return (
+                <View key={share.userId} style={styles.row}>
+                  <Text style={[styles.text, { flex: 1 }]}>
+                    {bill?.participants.find((participant) => participant.userId === share.userId)?.displayName
+                      ?? share.userId}
+                    {share.userId === userId ? ' · you' : ''}
+                  </Text>
+                  <Text style={styles.small}>{label}</Text>
+                </View>
+              );
+            })}
+          </Card>
+        )}
+
+        {session && (
+          <>
+            <VirtualCard
+              seats={session.seats}
+              budgetCents={session.cardBudgetCents}
+              unlocked={session.checkoutOpen}
+              last4={isSpender ? cardLast4 : null}
+            />
+            <Text style={styles.text}>{phaseCopy[session.phase] ?? session.phase}</Text>
+            {session.spendDeadlineMs && (
+              <Text style={styles.small}>
+                New purchases close at {new Date(session.spendDeadlineMs).toLocaleTimeString()}.
+              </Text>
+            )}
+            {session.pendingRefundCents > 0 && (
+              <Text style={styles.small}>
+                {formatMoney(session.pendingRefundCents)} of principal is waiting to be refunded by share.
+              </Text>
+            )}
+          </>
+        )}
+
+        {!!message && <ErrorBanner message={message} />}
+      </Screen>
 
       {isSpender && session && (
         <CardUnlock
@@ -444,6 +435,6 @@ export default function BillPaymentScreen() {
           onDone={() => setBiometric('done')}
         />
       )}
-    </Screen>
+    </View>
   );
 }

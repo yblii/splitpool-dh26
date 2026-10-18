@@ -1,65 +1,31 @@
 import { Text, View } from 'react-native';
-import { router } from 'expo-router';
-import { Button, Card, DemoNote, Screen, styles } from '../components/ui';
+import { router, useLocalSearchParams } from 'expo-router';
+import { formatMoney } from '@splitpool/contracts';
+import { monoFamily } from '../fonts';
+import { AppHeader, Card, EmptyState, Screen, colors, moneyMark, styles } from '../components/ui';
 import { useDemo } from '../state/demo';
-
-function formatSettledAt(iso: string) {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
+import { MealTitles } from '../components/MealTitles';
 
 export default function HistoryScreen() {
-  const { mealHistory, profileName } = useDemo();
+  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const demo = useDemo();
+  const bill = demo.pastBills.find((entry) => entry.id === id);
+  const group = bill ? demo.groups.find((entry) => entry.id === bill.groupId) : null;
 
-  return (
-    <Screen>
-      <View style={{ gap: 10 }}>
-        <Text style={styles.title}>Meal history.</Text>
-        <Text style={styles.subtitle}>
-          Positive food titles from settled splits{profileName ? ` for ${profileName}` : ''}.
-        </Text>
+  return <Screen header={<AppHeader title="Bill" onBack={() => router.back()} />}>
+    {!bill ? <EmptyState title="Bill not found" body="That sample bill is no longer in this demo." /> : <>
+      <View style={{ gap: 4 }}>
+        <Text style={styles.title}>{bill.merchant}</Text>
+        <Text style={styles.subheading}>{group?.name ?? 'Group'} · {bill.dateLabel}</Text>
       </View>
-
-      {mealHistory.length === 0 ? (
-        <Card>
-          <Text style={styles.heading}>No meals yet</Text>
-          <Text style={styles.small}>
-            Finish a group payment and Gemini (or the local fallback) will invent titles for everyone based on what they ate.
-          </Text>
-          <Button title="Back to groups" secondary onPress={() => router.replace('/')} />
-        </Card>
-      ) : (
-        mealHistory.map((entry) => (
-          <Card key={entry.id}>
-            <Text style={styles.heading}>{entry.groupName}</Text>
-            <Text style={styles.small}>
-              {entry.merchant} · {formatSettledAt(entry.settledAt)}
-            </Text>
-            {entry.titles.map((title) => (
-              <View key={`${entry.id}-${title.id}`} style={{ gap: 2 }}>
-                <View style={styles.row}>
-                  <Text style={[styles.text, { flex: 1 }]}>{title.name}</Text>
-                  <Text style={[styles.text, { fontWeight: '800', color: '#326B60', maxWidth: '55%', textAlign: 'right' }]}>
-                    {title.title}
-                  </Text>
-                </View>
-                <Text style={styles.small}>
-                  {title.items.length ? title.items.join(' · ') : 'No items claimed'}
-                </Text>
-              </View>
-            ))}
-          </Card>
-        ))
-      )}
-
-      <Button title="Back to profile" secondary onPress={() => router.push('/profile')} />
-      <DemoNote />
-    </Screen>
-  );
+      <Card>
+        <View style={styles.row}><Text style={styles.text}>Group total</Text><Text {...moneyMark} style={[styles.heading, { fontFamily: monoFamily }]}>{formatMoney(bill.totalCents)}</Text></View>
+        <View style={styles.row}><Text style={styles.text}>You paid</Text><Text {...moneyMark} style={[styles.heading, { fontFamily: monoFamily }]}>{formatMoney(bill.yourShareCents)}</Text></View>
+        <Text style={{ color: colors.success, fontWeight: '700' }}>Paid</Text>
+        <Text style={styles.small}>This is demo history. It cannot be edited, and it was not a real charge.</Text>
+      </Card>
+      {bill.titles && <MealTitles result={bill.titles} />}
+    </>}
+  </Screen>;
 }

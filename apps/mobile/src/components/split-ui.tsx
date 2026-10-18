@@ -1,0 +1,743 @@
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Animated, Easing, PanResponder, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  formatBasisPoints,
+  formatMoney,
+  FULL_SPLIT_BASIS_POINTS,
+  itemVisualState,
+  percentInputToBasisPoints,
+  resolveItemSplit,
+  setCustomShare,
+  type ItemResolution,
+  type ItemVisualState,
+  type SplitLine,
+} from '@splitpool/contracts';
+import { interBoldItalic, interItalic, monoFamily } from '../fonts';
+import { MemberAvatar, type AvatarPerson } from './people';
+import { BottomSheet } from './sheets';
+import { Button, colors, moneyMark, styles, typeScale, useReduceMotion } from './ui';
+
+const INCOMPLETE = '#C45C28';
+
+function itemDescription(visual: ItemVisualState, resolution: ItemResolution, quantity: number) {
+  const qty = quantity > 1 ? `Qty ${quantity}` : '';
+  const sharing = resolution.portions.length;
+  if (visual === 'unclaimed' || sharing === 0) return qty ? `Unclaimed · ${qty}` : 'Unclaimed';
+  if (visual === 'error') return 'Needs a fix';
+  if (visual === 'incomplete') return [`${formatBasisPoints(resolution.remainderBasisPoints)} still open`, qty].filter(Boolean).join(' · ');
+  if (visual === 'single') return qty ? `Just you · ${qty}` : 'Just you';
+  if (visual === 'equal') return [`${sharing} ${sharing === 1 ? 'person' : 'people'} sharing`, qty].filter(Boolean).join(' · ');
+  return ['Fixed shares', qty].filter(Boolean).join(' · ');
+}
+
+function sideStatus(visual: ItemVisualState) {
+  if (visual === 'unclaimed') return null;
+  if (visual === 'single' || visual === 'equal' || visual === 'custom') return { color: colors.ink, label: 'Fully claimed' };
+  return { color: '#A9C6DC', label: 'In progress' };
+}
+
+function personColor(people: AvatarPerson[], id: string) {
+  return people.find((person) => person.id === id)?.color ?? colors.muted;
+}
+
+function personName(people: AvatarPerson[], id: string) {
+  return people.find((person) => person.id === id)?.name ?? 'Someone';
+}
+
+export function SplitProgressBar({ segments }: {
+  segments: { key: string; basisPoints: number; color: string; label: string }[];
+}) {
+  const reduceMotion = useReduceMotion();
+  const visible = segments.filter((segment) => segment.basisPoints > 0);
+  return <View
+    accessibilityLabel={visible.map((segment) => `${segment.label} ${formatBasisPoints(segment.basisPoints)}`).join(', ') || 'Nothing allocated'}
+    style={barStyles.track}
+  >
+    {visible.map((segment) => <BarSegment
+      key={segment.key}
+      percent={(segment.basisPoints / FULL_SPLIT_BASIS_POINTS) * 100}
+      color={segment.color}
+      reduceMotion={reduceMotion}
+    />)}
+  </View>;
+}
+
+function BarSegment({ percent, color, reduceMotion }: { percent: number; color: string; reduceMotion: boolean }) {
+  const [width] = useState(() => new Animated.Value(percent));
+  useEffect(() => {
+    if (reduceMotion) {
+      width.setValue(percent);
+      return;
+    }
+    Animated.timing(width, {
+      toValue: percent, duration: 280, easing: Easing.out(Easing.cubic), useNativeDriver: false,
+    }).start();
+  }, [percent, reduceMotion, width]);
+  return <Animated.View style={{
+    height: '100%',
+    backgroundColor: color,
+    width: width.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }),
+  }} />;
+}
+
+export function ProgressMeter({ value, total, partial = 0 }: { value: number; total: number; partial?: number }) {
+  const complete = total === 0 ? 0 : Math.min(100, (value / total) * 100);
+  const open = total === 0 ? 0 : Math.min(100 - complete, (partial / total) * 100);
+  const done = total > 0 && value === total;
+  return <View style={{ gap: 6 }}>
+    <View style={barStyles.meterTrack}>
+      <View style={barStyles.meterRow}>
+        <View style={[barStyles.meterFill, { width: `${complete}%`, backgroundColor: done ? colors.success : colors.primary }]} />
+        {open > 0 && <View style={[barStyles.meterFill, { width: `${open}%`, backgroundColor: INCOMPLETE }]} />}
+      </View>
+    </View>
+    <Text style={[styles.small, { color: done ? colors.success : colors.muted }]}>
+      {partial > 0 ? `${value} of ${total} fully allocated, ${partial} incomplete` : `${value} of ${total} items fully allocated`}
+    </Text>
+  </View>;
+}
+
+export function MoneyText({ cents, style }: { cents: number; style?: object }) {
+  const reduceMotion = useReduceMotion();
+  const [scale] = useState(() => new Animated.Value(1));
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    if (reduceMotion) return;
+    scale.setValue(1.08);
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 7, tension: 140 }).start();
+  }, [cents, reduceMotion, scale]);
+  return <Animated.Text {...moneyMark} style={[{ transform: [{ scale }] }, style]}>{formatMoney(cents)}</Animated.Text>;
+}
+
+const RECEIPT_PAPER = '#FFFDF8';
+
+const cardMotion = new Map<string, { editable: boolean; reduceMotion: boolean; swiped: boolean; openPercent: () => void }>();
+
+function motionFor(id: string) {
+  const existing = cardMotion.get(id);
+  if (existing) return existing;
+  const created = { editable: true, reduceMotion: false, swiped: false, openPercent: () => {} };
+  cardMotion.set(id, created);
+  return created;
+}
+
+function createItemPan(
+  motion: { editable: boolean; reduceMotion: boolean; swiped: boolean; openPercent: () => void },
+  translateX: Animated.Value,
+) {
+  return PanResponder.create({
+    onMoveShouldSetPanResponder: (_, gesture) => motion.editable && gesture.dx < -12 && Math.abs(gesture.dx) > Math.abs(gesture.dy),
+    onPanResponderTerminationRequest: () => true,
+    onPanResponderMove: (_, gesture) => {
+      if (gesture.dx < 0) translateX.setValue(Math.max(-132, gesture.dx));
+    },
+    onPanResponderRelease: (_, gesture) => {
+      const open = gesture.dx < -56 || gesture.vx < -0.4;
+      Animated.timing(translateX, {
+        toValue: 0,
+        duration: motion.reduceMotion ? 0 : 160,
+        useNativeDriver: true,
+      }).start();
+      if (open && motion.editable) {
+        motion.swiped = true;
+        motion.openPercent();
+        setTimeout(() => { motion.swiped = false; }, 250);
+      }
+    },
+  });
+}
+
+export function ReceiptPaper({ title, level = 'title', dimTitle, alert, onFix, onChangeTitle, children }: {
+  title: string;
+  level?: 'title' | 'subheading';
+  dimTitle?: boolean;
+  alert?: string | null;
+  onFix?: () => void;
+  onChangeTitle?: (title: string) => void;
+  children: ReactNode;
+}) {
+  const heading = level === 'subheading' ? paperStyles.subheading : paperStyles.title;
+  return <View style={paperStyles.body}>
+    {onChangeTitle ? <TextInput
+      accessibilityLabel="Restaurant"
+      value={title}
+      onChangeText={onChangeTitle}
+      placeholder="Restaurant"
+      placeholderTextColor={colors.muted}
+      style={[heading, paperStyles.titleField]}
+    /> : title ? <Text style={[heading, dimTitle && paperStyles.dimmed]}>{title}</Text> : null}
+    {title || onChangeTitle ? <View style={paperStyles.rule} /> : null}
+    {children}
+    {alert ? <Pressable
+      accessibilityRole={onFix ? 'button' : 'text'}
+      accessibilityLabel={onFix ? `${alert} Fix it.` : alert}
+      disabled={!onFix}
+      onPress={onFix}
+      style={paperStyles.alert}
+    >
+      <Text style={paperStyles.alertMark}>!</Text>
+      <Text style={paperStyles.alertText}>{alert}</Text>
+      {onFix ? <Text style={paperStyles.fix}>Fix</Text> : null}
+    </Pressable> : null}
+  </View>;
+}
+
+export function ReceiptItemCard({
+  item, resolution, people, roster, viewerId, editable, faded, percentOpen, expanded,
+  onClaim, onOpen, onEditPercent, onSavePercent, onCancelPercent, onLeave,
+}: {
+  item: SplitLine;
+  resolution: ItemResolution;
+  people: AvatarPerson[];
+  roster: readonly string[];
+  viewerId: string;
+  editable: boolean;
+  faded: boolean;
+  percentOpen: boolean;
+  expanded: boolean;
+  onClaim: () => void;
+  onOpen: () => void;
+  onEditPercent: () => void;
+  onSavePercent: (basisPoints: number) => string | null;
+  onCancelPercent: () => void;
+  onLeave: () => void;
+}) {
+  const reduceMotion = useReduceMotion();
+  const motion = motionFor(item.id);
+  motion.editable = editable && !percentOpen;
+  motion.reduceMotion = reduceMotion;
+  motion.openPercent = onEditPercent;
+  const [translateX] = useState(() => new Animated.Value(0));
+  const [fade] = useState(() => new Animated.Value(faded ? 0.22 : 1));
+  const visual = itemVisualState(resolution);
+  const mine = resolution.portions.find((portion) => portion.personId === viewerId);
+  const signature = `${visual}:${resolution.portions.map((portion) => `${portion.personId}:${portion.basisPoints}`).join('|')}`;
+  const [flash] = useState(() => new Animated.Value(0));
+  const seen = useRef(signature);
+  const draftKey = percentOpen ? `${item.id}:${viewerId}:${mine?.basisPoints ?? 'new'}` : '';
+  const [draft, setDraft] = useState({ key: '', text: '', error: '' });
+  if (percentOpen && draft.key !== draftKey) {
+    setDraft({
+      key: draftKey,
+      text: mine ? formatBasisPoints(mine.basisPoints).replace('%', '') : '',
+      error: '',
+    });
+  }
+
+  useEffect(() => {
+    if (seen.current === signature) return;
+    seen.current = signature;
+    if (reduceMotion) return;
+    flash.setValue(1);
+    Animated.timing(flash, { toValue: 0, duration: 420, useNativeDriver: false }).start();
+  }, [flash, reduceMotion, signature]);
+
+  useEffect(() => {
+    Animated.timing(fade, {
+      toValue: faded ? 0.22 : 1,
+      duration: reduceMotion ? 0 : 180,
+      useNativeDriver: true,
+    }).start();
+  }, [fade, faded, reduceMotion]);
+
+  const [pan] = useState(() => createItemPan(motionFor(item.id), translateX));
+  const text = draft.text;
+  const fieldError = draft.error;
+  const preview = useMemo(() => {
+    if (!percentOpen) return null;
+    const parsed = percentInputToBasisPoints(text);
+    if ('error' in parsed) return null;
+    const result = setCustomShare(item, viewerId, parsed.basisPoints);
+    if (result.error || !result.line) return null;
+    const next = resolveItemSplit(result.line, roster);
+    return next.portions.find((portion) => portion.personId === viewerId) ?? null;
+  }, [item, percentOpen, roster, text, viewerId]);
+
+  const segments = [
+    ...resolution.portions.filter((portion) => portion.basisPoints > 0).map((portion) => ({
+      key: portion.personId,
+      basisPoints: portion.basisPoints,
+      color: personColor(people, portion.personId),
+      label: personName(people, portion.personId),
+    })),
+    ...(resolution.remainderBasisPoints > 0 ? [{
+      key: 'open',
+      basisPoints: resolution.remainderBasisPoints,
+      color: INCOMPLETE,
+      label: 'Incomplete',
+    }] : []),
+  ];
+  const payers = resolution.portions.map((portion) => personName(people, portion.personId)).join(', ');
+  const description = itemDescription(visual, resolution, item.quantity);
+  const side = sideStatus(visual);
+
+  function commitPercent() {
+    const next = percentInputToBasisPoints(text);
+    if ('error' in next) {
+      setDraft((current) => ({ ...current, error: next.error }));
+      return;
+    }
+    const message = onSavePercent(next.basisPoints);
+    if (message) setDraft((current) => ({ ...current, error: message }));
+  }
+
+  return <View style={cardStyles.shell}>
+    {editable && !percentOpen && !faded && <View style={cardStyles.reveal}>
+      <Text style={cardStyles.revealText}>enter %</Text>
+    </View>}
+    <Animated.View style={{ transform: [{ translateX }], opacity: fade }} {...(editable && !percentOpen ? pan.panHandlers : {})}>
+      <Animated.View style={{ backgroundColor: flash.interpolate({
+        inputRange: [0, 1],
+        outputRange: [RECEIPT_PAPER, '#E7F6EE'],
+      }) }}>
+        {percentOpen ? <View style={cardStyles.editRow}>
+          <Text style={cardStyles.chevron}>›</Text>
+          <Text style={[cardStyles.name, cardStyles.editName]} numberOfLines={1}>{item.name}</Text>
+          <TextInput
+            accessibilityLabel={`Percentage for ${item.name}`}
+            autoFocus
+            keyboardType="decimal-pad"
+            placeholder="enter %"
+            placeholderTextColor={colors.muted}
+            value={text}
+            onChangeText={(value) => setDraft((current) => ({ ...current, text: value, error: '' }))}
+            onSubmitEditing={commitPercent}
+            style={cardStyles.percentInput}
+          />
+          <Text {...moneyMark} style={cardStyles.sharePrice}>{preview ? formatMoney(preview.cents) : formatMoney(item.cents)}</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Save percentage" onPress={commitPercent} style={cardStyles.setButton}>
+            <Text style={cardStyles.setText}>Set</Text>
+          </Pressable>
+          {fieldError ? <View style={cardStyles.inlineAlert}>
+            <Text style={cardStyles.alertMark}>!</Text>
+            <Text style={cardStyles.alertText} numberOfLines={1}>{fieldError}</Text>
+          </View> : null}
+          <Pressable accessibilityRole="button" hitSlop={8} onPress={onCancelPercent} style={cardStyles.cancelHit}><Text style={styles.link}>Cancel</Text></Pressable>
+        </View> : <View style={[cardStyles.line, visual === 'error' && cardStyles.errorLine, visual !== 'unclaimed' && visual !== 'error' && cardStyles.claimedLine]}>
+          {side ? <View accessibilityLabel={side.label} style={cardStyles.hatch}>
+            <View style={{ flex: 1, backgroundColor: side.color }} />
+          </View> : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={expanded ? `Close ${item.name}` : `Open ${item.name}`}
+            accessibilityHint="Shows who is paying. This does not claim the item."
+            hitSlop={6}
+            onPress={() => {
+              if (motion.swiped) return;
+              onOpen();
+            }}
+            style={cardStyles.chevronHit}
+          >
+            <Text style={cardStyles.chevron}>{expanded ? '⌄' : '›'}</Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={mine
+              ? `${item.name}, ${formatMoney(item.cents)}. Paying: ${payers}. Your share ${formatMoney(mine.cents)}.`
+              : `${item.name}, ${formatMoney(item.cents)}, unclaimed. Tap to claim.`}
+            accessibilityHint="Tap the line to claim it and see each share."
+            disabled={!editable && !mine}
+            onPress={() => {
+              if (motion.swiped) return;
+              if (editable && !mine) onClaim();
+              else onOpen();
+            }}
+            style={cardStyles.lineMain}
+          >
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text style={[cardStyles.name, visual !== 'unclaimed' && visual !== 'error' && cardStyles.claimedName]} numberOfLines={1}>{item.name}</Text>
+              <Text style={cardStyles.meta}>{description}</Text>
+            </View>
+            {resolution.portions.length > 0 ? <View style={cardStyles.avatars}>
+              {resolution.portions.map((portion, index) => {
+                const person = people.find((entry) => entry.id === portion.personId);
+                return person ? <View key={portion.personId} style={{ marginLeft: index === 0 ? 0 : -8 }}>
+                  <AppearingAvatar person={person} />
+                </View> : null;
+              })}
+            </View> : null}
+            <Text {...moneyMark} style={cardStyles.price}>{formatMoney(item.cents)}</Text>
+          </Pressable>
+        </View>}
+        {expanded && !percentOpen && <View style={cardStyles.opened}>
+          {resolution.portions.length > 0 && <SplitProgressBar segments={segments} />}
+          {resolution.portions.length === 0 ? <Text style={cardStyles.meta}>No one is paying for this yet.</Text> : [...resolution.portions].sort((a, b) => Number(b.personId === viewerId) - Number(a.personId === viewerId)).map((portion) => {
+            const person = people.find((entry) => entry.id === portion.personId);
+            const yours = portion.personId === viewerId;
+            return <View key={portion.personId} style={[cardStyles.payer, yours && cardStyles.payerYours]}>
+              {person && <MemberAvatar person={person} size={28} />}
+              <Text style={[cardStyles.portionName, { color: person?.color ?? colors.ink }, yours && cardStyles.portionYours]}>{person?.name ?? 'Someone'}</Text>
+              {yours && editable ? <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Your share is ${formatBasisPoints(portion.basisPoints)}. Change it.`}
+                hitSlop={8}
+                onPress={onEditPercent}
+                style={cardStyles.percentEdit}
+              >
+                <Text style={[cardStyles.portionMeta, cardStyles.portionYours]}>{formatBasisPoints(portion.basisPoints)}</Text>
+              </Pressable> : <Text style={cardStyles.portionMeta}>{formatBasisPoints(portion.basisPoints)}</Text>}
+              {yours && editable ? <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${person?.name ?? 'your'} claim`}
+                hitSlop={6}
+                onPress={onLeave}
+                style={cardStyles.removeClaim}
+              >
+                <Text style={cardStyles.removeMark}>−</Text>
+              </Pressable> : null}
+              <Text {...moneyMark} style={[cardStyles.portionMoney, yours && cardStyles.portionMoneyYours]}>{formatMoney(portion.cents)}</Text>
+            </View>;
+          })}
+          {resolution.portions.length > 0 && resolution.remainderBasisPoints > 0 && <Text style={cardStyles.warn}>
+            Overflow portion {formatBasisPoints(resolution.remainderBasisPoints)} · <Text {...moneyMark} style={{ fontFamily: monoFamily, color: colors.warning }}>{formatMoney(resolution.unallocatedCents)}</Text> still open
+          </Text>}
+          {resolution.message && visual !== 'equal' && visual !== 'single' && <Text style={cardStyles.warn}>{resolution.message}</Text>}
+        </View>}
+      </Animated.View>
+    </Animated.View>
+  </View>;
+}
+
+function AppearingAvatar({ person }: { person: AvatarPerson }) {
+  const reduceMotion = useReduceMotion();
+  const [opacity] = useState(() => new Animated.Value(reduceMotion ? 1 : 0));
+  const [scale] = useState(() => new Animated.Value(reduceMotion ? 1 : 0.7));
+  useEffect(() => {
+    if (reduceMotion) {
+      opacity.setValue(1);
+      scale.setValue(1);
+      return;
+    }
+    Animated.parallel([
+      Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 6 }),
+    ]).start();
+  }, [opacity, reduceMotion, scale]);
+  return <Animated.View style={{ opacity, transform: [{ scale }] }}>
+    <MemberAvatar person={person} size={26} />
+  </Animated.View>;
+}
+
+export function CustomSplitSheet({
+  item, people, roster, viewerId, visible, onClose, onSave, onReset, onLeave,
+}: {
+  item: SplitLine | null;
+  people: AvatarPerson[];
+  roster: readonly string[];
+  viewerId: string;
+  visible: boolean;
+  onClose: () => void;
+  onSave: (basisPoints: number) => string | null;
+  onReset: () => void;
+  onLeave: () => void;
+}) {
+  const shareKey = item?.shares.map((share) => `${share.personId}:${share.mode}:${share.basisPoints ?? ''}`).join('|') ?? '';
+  const openKey = visible && item ? `${item.id}:${shareKey}:${viewerId}:${roster.join(',')}` : '';
+  const [form, setForm] = useState({ openKey: '', text: '0', draftBp: 0, error: null as string | null });
+  if (visible && item && form.openKey !== openKey) {
+    const resolution = resolveItemSplit(item, roster);
+    const mine = resolution.portions.find((portion) => portion.personId === viewerId);
+    const basisPoints = mine?.basisPoints ?? 0;
+    setForm({ openKey, text: formatBasisPoints(basisPoints).replace('%', ''), draftBp: basisPoints, error: null });
+  }
+  const text = form.text;
+  const draftBp = form.draftBp;
+  const error = form.error;
+  function setText(value: string) { setForm((current) => ({ ...current, text: value })); }
+  function setDraftBp(value: number) { setForm((current) => ({ ...current, draftBp: value })); }
+  function setError(value: string | null) { setForm((current) => ({ ...current, error: value })); }
+
+  const otherCustom = item?.shares
+    .filter((share) => share.personId !== viewerId && share.mode === 'custom')
+    .reduce((sum, share) => sum + (share.basisPoints ?? 0), 0) ?? 0;
+  const maxBp = FULL_SPLIT_BASIS_POINTS - otherCustom;
+
+  const preview = useMemo(() => {
+    if (!item) return null;
+    const result = setCustomShare(item, viewerId, draftBp);
+    if (result.error || !result.line) return null;
+    return resolveItemSplit(result.line, roster);
+  }, [draftBp, item, roster, viewerId]);
+
+  function applyText(value: string) {
+    setText(value);
+    const parsed = percentInputToBasisPoints(value);
+    if ('error' in parsed) {
+      setError(parsed.error);
+      return;
+    }
+    if (parsed.basisPoints > maxBp) {
+      setError(`${formatBasisPoints(maxBp)} is still open after the other custom shares.`);
+      return;
+    }
+    setError(null);
+    setDraftBp(parsed.basisPoints);
+  }
+
+  function save() {
+    const parsed = percentInputToBasisPoints(text);
+    if ('error' in parsed) {
+      setError(parsed.error);
+      return;
+    }
+    const message = onSave(parsed.basisPoints);
+    if (message) setError(message);
+    else onClose();
+  }
+
+  const incomplete = preview?.status === 'incomplete';
+
+  return <BottomSheet
+    visible={visible && !!item}
+    title={item ? item.name : 'Customize'}
+    onClose={onClose}
+    footer={<View style={{ gap: 8 }}>
+      <Button title="Save" onPress={save} disabled={!!error} />
+      <Button title="Cancel" secondary onPress={onClose} />
+    </View>}
+  >
+    {item && <>
+      <Text style={styles.subtitle}><Text {...moneyMark} style={{ fontFamily: monoFamily, color: colors.muted }}>{formatMoney(item.cents)}</Text> total. Your percentage stays fixed. Everyone on Auto splits what is left.</Text>
+      {otherCustom > 0 && <Text style={styles.small}>Other custom shares already use {formatBasisPoints(otherCustom)}. You can take up to {formatBasisPoints(maxBp)}.</Text>}
+      <PercentSlider value={draftBp} max={maxBp} onChange={(basisPoints) => applyText(formatBasisPoints(basisPoints).replace('%', ''))} />
+      <View style={{ gap: 6 }}>
+        <Text style={styles.label}>Your percentage</Text>
+        <TextInput
+          accessibilityLabel="Your percentage"
+          keyboardType="decimal-pad"
+          value={text}
+          onChangeText={applyText}
+          style={styles.input}
+        />
+      </View>
+      {error && <Text accessibilityLiveRegion="polite" style={{ color: colors.danger, fontSize: 14, lineHeight: 20 }}>{error}</Text>}
+      {incomplete && preview?.message && !error && <Text style={{ color: colors.warning, fontSize: 14, lineHeight: 20 }}>{preview.message} You can save it, and the bill stays unfinished.</Text>}
+      <View style={{ gap: 8 }}>
+        {(preview?.portions ?? []).map((portion) => {
+          const person = people.find((entry) => entry.id === portion.personId);
+          const isViewer = portion.personId === viewerId;
+          return <View key={portion.personId} style={sheetRow.row}>
+            {person && <MemberAvatar person={person} size={32} />}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.text}>{person?.name ?? 'Someone'}{isViewer ? ' · you' : ''}</Text>
+              <Text style={styles.small}>{portion.mode === 'custom' ? 'Custom' : 'Auto'}{!isViewer && portion.mode === 'custom' ? ' · only they can change this' : ''}</Text>
+            </View>
+            <Text {...moneyMark} style={sheetRow.money}>{formatBasisPoints(portion.basisPoints)} · {formatMoney(portion.cents)}</Text>
+          </View>;
+        })}
+        {(preview?.remainderBasisPoints ?? 0) > 0 && <Text style={[styles.small, { color: colors.warning }]}>
+          Unallocated {formatBasisPoints(preview?.remainderBasisPoints ?? 0)} · <Text {...moneyMark} style={{ fontFamily: monoFamily, color: colors.warning }}>{formatMoney(preview?.unallocatedCents ?? 0)}</Text>
+        </Text>}
+      </View>
+      <View style={[styles.row, { justifyContent: 'flex-start', gap: 16 }]}>
+        <Pressable accessibilityRole="button" hitSlop={8} onPress={onReset}><Text style={styles.link}>Reset to equal split</Text></Pressable>
+        <Pressable accessibilityRole="button" hitSlop={8} onPress={() => { onLeave(); onClose(); }}><Text style={[styles.link, { color: colors.danger }]}>Remove my claim</Text></Pressable>
+      </View>
+    </>}
+  </BottomSheet>;
+}
+
+function PercentSlider({ value, max, onChange }: { value: number; max: number; onChange: (basisPoints: number) => void }) {
+  const width = useRef(1);
+  function fromX(locationX: number) {
+    const ratio = Math.min(1, Math.max(0, locationX / width.current));
+    const raw = Math.round((ratio * FULL_SPLIT_BASIS_POINTS) / 50) * 50;
+    onChange(Math.min(max, Math.max(0, raw)));
+  }
+  const shown = Math.min(value, max);
+  return <View
+    accessibilityRole="adjustable"
+    accessibilityLabel="Your percentage"
+    accessibilityValue={{ min: 0, max: Math.round(max / 100), now: Math.round(shown / 100), text: formatBasisPoints(shown) }}
+    accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+    onAccessibilityAction={(event) => {
+      if (event.nativeEvent.actionName === 'increment') onChange(Math.min(max, shown + 100));
+      if (event.nativeEvent.actionName === 'decrement') onChange(Math.max(0, shown - 100));
+    }}
+    onLayout={(event) => { width.current = event.nativeEvent.layout.width || 1; }}
+    onStartShouldSetResponder={() => true}
+    onMoveShouldSetResponder={() => true}
+    onResponderGrant={(event) => fromX(event.nativeEvent.locationX)}
+    onResponderMove={(event) => fromX(event.nativeEvent.locationX)}
+    style={barStyles.sliderHit}
+  >
+    <View style={barStyles.sliderTrack}>
+      <View style={[barStyles.sliderFill, { width: `${(shown / FULL_SPLIT_BASIS_POINTS) * 100}%` }]} />
+      <View style={[barStyles.sliderCap, { left: `${(max / FULL_SPLIT_BASIS_POINTS) * 100}%` }]} />
+    </View>
+  </View>;
+}
+
+export function BillSummary({
+  yourLabel, yourCents, totalCents, allocated, partial = 0, count, actionLabel, onAction, note,
+}: {
+  yourLabel: string;
+  yourCents: number;
+  totalCents: number;
+  allocated: number;
+  partial?: number;
+  count: number;
+  actionLabel: string;
+  onAction: () => void;
+  note?: string;
+}) {
+  return <View style={{ gap: 10 }}>
+    <View style={styles.row}>
+      <View style={{ gap: 2 }}>
+        <Text style={styles.label}>{yourLabel}</Text>
+        <MoneyText cents={yourCents} style={summaryStyles.yours} />
+      </View>
+      <View style={{ gap: 2, alignItems: 'flex-end' }}>
+        <Text style={styles.label}>Bill total</Text>
+        <Text {...moneyMark} style={summaryStyles.bill}>{formatMoney(totalCents)}</Text>
+      </View>
+    </View>
+    <ProgressMeter value={allocated} total={count} partial={partial} />
+    {note ? <Text style={styles.small}>{note}</Text> : null}
+    <Button title={actionLabel} onPress={onAction} />
+  </View>;
+}
+
+const barStyles = StyleSheet.create({
+  track: { height: 12, borderRadius: 999, overflow: 'hidden', backgroundColor: colors.border, flexDirection: 'row' },
+  meterTrack: { height: 8, borderRadius: 999, backgroundColor: colors.border, overflow: 'hidden' },
+  meterRow: { flexDirection: 'row', height: '100%', width: '100%' },
+  meterFill: { height: '100%' },
+  sliderHit: { minHeight: 44, justifyContent: 'center' },
+  sliderTrack: { height: 10, borderRadius: 999, backgroundColor: colors.border, overflow: 'hidden' },
+  sliderFill: { height: '100%', backgroundColor: colors.primary },
+  sliderCap: { position: 'absolute', top: 0, bottom: 0, width: 2, marginLeft: -1, backgroundColor: colors.warning },
+});
+
+const paperStyles = StyleSheet.create({
+  body: {
+    backgroundColor: RECEIPT_PAPER,
+    width: '100%',
+    maxWidth: '100%',
+    minWidth: 0,
+    alignSelf: 'stretch',
+    borderRadius: 20,
+    overflow: 'hidden',
+    paddingHorizontal: 14,
+    paddingBottom: 8,
+    ...Platform.select({
+      web: { boxShadow: '0 10px 24px rgba(22, 50, 74, 0.08)' },
+      default: {
+        shadowColor: '#16324A', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 8 }, elevation: 2,
+      },
+    }),
+  },
+  title: {
+    ...typeScale.pageTitle, fontSize: 24, lineHeight: 30, textAlign: 'center', paddingTop: 2, paddingBottom: 6,
+    ...Platform.select({
+      web: { fontStyle: 'italic' as const },
+      default: { fontFamily: interBoldItalic, fontWeight: 'normal' as const, fontStyle: 'normal' as const },
+    }),
+  },
+  titleField: {
+    backgroundColor: 'transparent', borderWidth: 0, margin: 0, minHeight: 0,
+    paddingHorizontal: 0, paddingVertical: 0,
+    ...Platform.select({ web: { outlineWidth: 0 } }),
+  },
+  subheading: { ...typeScale.subheading, fontSize: 16, lineHeight: 21, textAlign: 'center', paddingTop: 2, paddingBottom: 6 },
+  dimmed: { opacity: 0.25 },
+  rule: { borderBottomWidth: 1, borderStyle: 'dashed', borderColor: '#D9CBB8', marginBottom: 4 },
+  alert: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, marginBottom: 6,
+    backgroundColor: colors.warningSoft, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8,
+  },
+  alertMark: {
+    width: 22, height: 22, borderRadius: 4, textAlign: 'center', lineHeight: 22,
+    backgroundColor: colors.warning, color: '#FFFFFF', fontWeight: '800', overflow: 'hidden',
+  },
+  alertText: { ...typeScale.helper, flex: 1, color: colors.warning },
+  fix: { ...typeScale.button, color: colors.warning },
+});
+
+const cardStyles = StyleSheet.create({
+  shell: { overflow: 'hidden', backgroundColor: '#E7D7C3' },
+  reveal: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 118, alignItems: 'center', justifyContent: 'center' },
+  revealText: { color: colors.ink, fontWeight: '800', fontSize: 14 },
+  line: {
+    minHeight: 58, flexDirection: 'row', alignItems: 'center',
+    borderTopWidth: 0, borderLeftWidth: 0, borderRightWidth: 0,
+    borderBottomWidth: 1, borderStyle: 'dashed', borderBottomColor: '#E4D5C2',
+    backgroundColor: RECEIPT_PAPER,
+  },
+  lineMain: { flex: 1, minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
+  errorLine: { backgroundColor: '#FBF4EA' },
+  claimedLine: { backgroundColor: colors.light },
+  claimedName: {
+    ...Platform.select({
+      web: { fontStyle: 'italic' as const },
+      default: { fontFamily: interItalic, fontStyle: 'normal' as const },
+    }),
+  },
+  hatch: { width: 10, alignSelf: 'stretch', borderRadius: 2, overflow: 'hidden' },
+  chevronHit: { minWidth: 32, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  chevron: { color: colors.muted, fontSize: 18, lineHeight: 22, width: 14, textAlign: 'center' },
+  name: typeScale.itemName,
+  meta: typeScale.description,
+  price: { ...typeScale.itemPrice, marginRight: 8, textAlign: 'right' },
+  avatars: { flexDirection: 'row', marginLeft: 2 },
+  percentChip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
+  percentText: { color: colors.primary, fontSize: 12, lineHeight: 16, fontWeight: '800' },
+  editRow: {
+    minHeight: 58, gap: 6, paddingRight: 8,
+    borderBottomWidth: 1, borderColor: '#E4D5C2', backgroundColor: RECEIPT_PAPER,
+    flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center',
+  },
+  editName: { flexShrink: 1, minWidth: 0 },
+  percentInput: {
+    width: 72, maxWidth: 72, height: 36, minHeight: 36, flexGrow: 0, flexShrink: 0,
+    borderWidth: 1, borderColor: colors.ink, borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 0, fontSize: 16, lineHeight: 20, fontWeight: '600',
+    color: colors.ink, backgroundColor: '#FFFFFF',
+  },
+  sharePrice: { fontFamily: monoFamily, color: colors.ink, fontSize: 16, lineHeight: 22, fontWeight: '700', flexShrink: 0 },
+  setButton: {
+    minWidth: 44, height: 36, minHeight: 36, flexShrink: 0, borderRadius: 8, backgroundColor: colors.primary,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10,
+  },
+  setText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
+  cancelHit: { flexShrink: 0, minHeight: 36, justifyContent: 'center' },
+  inlineAlert: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1, minWidth: 0 },
+  alertMark: {
+    width: 22, height: 22, borderRadius: 4, textAlign: 'center', lineHeight: 22,
+    backgroundColor: colors.danger, color: '#FFFFFF', fontWeight: '800', overflow: 'hidden',
+  },
+  alertText: { flex: 1, color: colors.danger, fontSize: 13, lineHeight: 18 },
+  opened: { gap: 8, paddingLeft: 24, paddingRight: 4, paddingBottom: 10, backgroundColor: RECEIPT_PAPER },
+  payer: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 36, borderRadius: 8, paddingHorizontal: 4 },
+  removeClaim: {
+    width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  removeMark: { color: colors.primary, fontSize: 22, lineHeight: 24, fontWeight: '700', marginTop: -2 },
+  payerYours: { backgroundColor: '#E7F0F6' },
+  portionName: { ...typeScale.person, flex: 1 },
+  portionYours: { fontWeight: '800' },
+  portionMeta: { color: colors.muted, fontSize: 13, lineHeight: 18, fontWeight: '500' },
+  percentEdit: {
+    minWidth: 52, minHeight: 32, paddingHorizontal: 8, borderRadius: 8,
+    borderWidth: 1.5, borderColor: colors.primary, backgroundColor: '#FFFFFF',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  portionMoney: { ...typeScale.amount, width: 76, textAlign: 'right' },
+  portionMoneyYours: { fontWeight: '800' },
+  warn: { color: colors.warning, fontSize: 13, lineHeight: 18 },
+});
+
+const sheetRow = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
+  money: { fontFamily: monoFamily, color: colors.ink, fontSize: 13, lineHeight: 18, fontWeight: '700', textAlign: 'right' },
+});
+
+const summaryStyles = StyleSheet.create({
+  yours: { fontFamily: monoFamily, color: colors.ink, fontSize: 28, lineHeight: 34, fontWeight: '700' },
+  bill: { fontFamily: monoFamily, color: colors.ink, fontSize: 18, lineHeight: 24, fontWeight: '700' },
+});

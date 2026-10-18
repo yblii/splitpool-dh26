@@ -45,7 +45,6 @@ export function CardUnlock({ visible, last4, budgetCents, onAuthenticate, onDone
   const [scrim] = useState(() => new Animated.Value(1));
   const authenticate = useRef(onAuthenticate);
   const finish = useRef(onDone);
-
   useEffect(() => {
     authenticate.current = onAuthenticate;
     finish.current = onDone;

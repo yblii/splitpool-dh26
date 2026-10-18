@@ -27,7 +27,7 @@ export default function ProfileSetupScreen() {
       setMessage(error);
       return;
     }
-    router.replace('/');
+    router.replace('/connected');
   }
 
   if (status === 'unavailable') {

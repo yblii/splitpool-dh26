@@ -1,13 +1,12 @@
 import type {
   BillResponse,
-  MealHistoryEntry,
   MealTitleMemberInput,
   MealTitlesRequest,
   MealTitlesResponse,
 } from '@splitpool/contracts';
 import { apiUrl } from './api';
 
-/** Build Gemini title inputs from claimed items on a collaboration bill. */
+/** Build title inputs from claimed items on a collaboration bill. */
 export function membersFromBill(bill: BillResponse): MealTitleMemberInput[] {
   return bill.participants.map((participant) => ({
     id: participant.userId,
@@ -18,77 +17,64 @@ export function membersFromBill(bill: BillResponse): MealTitleMemberInput[] {
   }));
 }
 
-/** Local keyword fallback when the API or Gemini is unavailable. */
+/** A visibly labeled, deterministic fallback; never presented as generated AI. */
 export function localFallbackTitles(request: MealTitlesRequest): MealTitlesResponse {
   const used = new Set<string>();
-  const titles = request.members.map((member) => {
-    const items = member.items.map((item) => item.trim()).filter(Boolean);
-    const blob = items.join(' ').toLowerCase();
-    const pick = (title: string) => {
-      if (used.has(title)) return null;
+  return {
+    usedFallback: true,
+    source: 'local-fallback',
+    titles: request.members.map((member, index) => {
+      const food = member.items.join(' ').toLowerCase();
+      const candidates: [RegExp, string][] = [
+        [/rice|risotto|biryani/, 'Rice Royalty'],
+        [/pizza|margherita/, 'Pizza Diplomat'],
+        [/pasta|noodle|ramen/, 'Noodle Knight'],
+        [/salad|spinach|kale/, 'Salad Sidekick'],
+        [/mushroom/, 'Mushroom Maven'],
+        [/ice cream|cake|cookie/, 'Sweet Finisher'],
+      ];
+      const title = candidates.find(([pattern, name]) => pattern.test(food) && !used.has(name))?.[1]
+        ?? `Flavor Explorer ${index + 1}`;
       used.add(title);
-      return title;
-    };
-    let title =
-      (/\b(salad|kale|spinach|greens?|broccoli|avocado)\b/.test(blob) && pick('Green Machine'))
-      || (/\b(orange|lemon|lime|citrus|grapefruit|kiwi)\b/.test(blob) && pick('Vitamin C Warrior'))
-      || (/\b(berry|berries|blueberry|strawberry|smoothie)\b/.test(blob) && pick('Antioxidant Ace'))
-      || (/\b(salmon|tuna|fish|shrimp|seafood)\b/.test(blob) && pick('Omega Champion'))
-      || (/\b(steak|chicken|beef|pork|protein|egg|tofu)\b/.test(blob) && pick('Protein Pro'))
-      || (/\b(pizza|margherita)\b/.test(blob) && pick('Crust Virtuoso'))
-      || (/\b(pasta|noodle|ramen|spaghetti)\b/.test(blob) && pick('Pasta Virtuoso'))
-      || (/\b(sushi|roll|sashimi)\b/.test(blob) && pick('Sushi Star'))
-      || (/\b(taco|burrito|salsa|chili|spicy)\b/.test(blob) && pick('Spice Scout'))
-      || (/\b(dessert|cake|ice cream|cookie|brownie)\b/.test(blob) && pick('Sweet Finisher'))
-      || (items.length === 0 && pick('Table Cheer'))
-      || pick('Flavor Explorer')
-      || pick('Plate Poet')
-      || pick(`Food Fan ${used.size + 1}`)
-      || 'Dining Dynamo';
-    return { id: member.id, name: member.name, title, items };
-  });
-  return { titles, source: 'local-fallback', usedFallback: true };
+      return { ...member, title };
+    }),
+  };
 }
 
-export async function generateMealTitles(
-  request: MealTitlesRequest,
-  { signal }: { signal?: AbortSignal } = {},
-): Promise<MealTitlesResponse> {
-  if (!request.members.length) {
-    return { titles: [], source: 'local-fallback', usedFallback: true };
-  }
-  if (!apiUrl) return localFallbackTitles(request);
+export function validTitleResponse(data: unknown, request: MealTitlesRequest): data is MealTitlesResponse {
+  if (!data || typeof data !== 'object') return false;
+  const result = data as Partial<MealTitlesResponse>;
+  if (!Array.isArray(result.titles) || result.titles.length !== request.members.length
+    || typeof result.source !== 'string' || typeof result.usedFallback !== 'boolean') return false;
+  const ids = new Set<string>();
+  return result.titles.every(row => {
+    if (!row || typeof row.id !== 'string' || typeof row.title !== 'string'
+      || !request.members.some(member => member.id === row.id) || ids.has(row.id)
+      || row.title.length > 48 || !/^[A-Za-z][A-Za-z0-9 '\-]+$/.test(row.title)) return false;
+    ids.add(row.id);
+    return true;
+  });
+}
 
+export async function generateMealTitles(request: MealTitlesRequest, signal?: AbortSignal): Promise<MealTitlesResponse> {
+  if (!apiUrl) return localFallbackTitles(request);
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal?.addEventListener('abort', abort, { once: true });
+  if (signal?.aborted) controller.abort();
+  const timer = setTimeout(abort, 12000);
   try {
     const response = await fetch(`${apiUrl}/api/v1/demo/meal-titles`, {
-      method: 'POST',
-      signal,
+      method: 'POST', signal: controller.signal,
       headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
     });
-    if (!response.ok) return localFallbackTitles(request);
-    const data: unknown = await response.json();
-    if (!data || typeof data !== 'object' || !('titles' in data) || !Array.isArray((data as MealTitlesResponse).titles)) {
-      return localFallbackTitles(request);
-    }
-    return data as MealTitlesResponse;
+    const data: unknown = response.ok ? await response.json() : null;
+    return validTitleResponse(data, request) ? data : localFallbackTitles(request);
   } catch {
     return localFallbackTitles(request);
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', abort);
   }
-}
-
-export function makeHistoryEntry(input: {
-  groupName: string;
-  merchant: string;
-  titles: MealTitlesResponse['titles'];
-  source: string;
-}): MealHistoryEntry {
-  return {
-    id: `meal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    groupName: input.groupName,
-    merchant: input.merchant,
-    settledAt: new Date().toISOString(),
-    titles: input.titles,
-    source: input.source,
-  };
 }

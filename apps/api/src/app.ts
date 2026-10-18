@@ -1,7 +1,7 @@
 import cors, { type FastifyCorsOptions } from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import Fastify from 'fastify';
-import { makeDemoBill, PaymentLedger, type ExtractedReceipt, type MealTitlesResponse } from '@splitpool/contracts';
+import { makeDemoBill, PaymentLedger, type ExtractedReceipt } from '@splitpool/contracts';
 import type { VerifyToken } from './auth.ts';
 import type { Database } from './db.ts';
 import { ApiError } from './errors.ts';
@@ -16,12 +16,7 @@ import {
 } from './receipt/parser.ts';
 import { collaborationRoutes } from './routes.ts';
 import { CollaborationService } from './service.ts';
-import {
-  createTitleGenerator,
-  generateMealTitlesWithFallback,
-  normalizeMealTitlesRequest,
-  type TitleGenerator,
-} from './titles/generator.ts';
+import { createTitleGenerator, generateMealTitlesWithFallback, normalizeMealTitlesRequest, type TitleGenerator } from './titles/generator.ts';
 
 const MAX_RECEIPT_BYTES = 8 * 1024 * 1024;
 
@@ -156,20 +151,29 @@ export async function buildApp(options: BuildAppOptions = {}) {
     return reply.code(200).send(body);
   });
 
-  app.post('/api/v1/demo/meal-titles', async (request, reply) => {
+  app.post('/api/v1/demo/meal-titles', {
+    bodyLimit: 32 * 1024,
+    schema: { body: {
+      type: 'object', additionalProperties: false, required: ['members'],
+      properties: {
+        members: { type: 'array', minItems: 1, maxItems: 20, items: {
+          type: 'object', additionalProperties: false, required: ['id', 'name', 'items'],
+          properties: {
+            id: { type: 'string', minLength: 1, maxLength: 80 },
+            name: { type: 'string', minLength: 1, maxLength: 80 },
+            items: { type: 'array', maxItems: 40, items: { type: 'string', maxLength: 120 } },
+          },
+        } },
+      },
+    } },
+  }, async (request, reply) => {
     const body = normalizeMealTitlesRequest(request.body);
-    if (!body.members.length) {
-      return reply.code(400).send({ error: 'Expected at least one member with an id and name.' });
+    if (new Set(body.members.map(member => member.id)).size !== body.members.length) {
+      return reply.code(400).send({ error: 'Member ids must be unique.' });
     }
-    const env = loadApiEnv();
-    const generator = options.titleGenerator ?? createTitleGenerator();
-    request.log.info({
-      generator: generator.name,
-      geminiKeyPresent: env.geminiKeyPresent,
-      members: body.members.length,
-    }, 'Starting meal title generation');
-    const result: MealTitlesResponse = await generateMealTitlesWithFallback(generator, body, request.log);
-    return reply.code(200).send(result);
+    loadApiEnv();
+    reply.header('Cache-Control', 'no-store');
+    return generateMealTitlesWithFallback(options.titleGenerator ?? createTitleGenerator(), body, request.log);
   });
 
   const ledger = options.ledger ?? new PaymentLedger();
