@@ -1,4 +1,4 @@
-import type { ApiFailure, Profile } from '@splitpool/contracts';
+import type { ApiFailure, BillResponse, Group, GroupDetail, Profile } from '@splitpool/contracts';
 import { apiUrl } from './api';
 import { getSupabase } from './supabase';
 
@@ -27,7 +27,7 @@ export function formatApiError(error: unknown): string {
     return err.status ? `${err.message} (${err.code}, HTTP ${err.status})` : err.message;
   }
   if (error instanceof Error && error.message) return error.message;
-  return 'Could not save your profile. Try again.';
+  return 'Something went wrong. Try again.';
 }
 
 export function isApiConfigured() {
@@ -130,4 +130,56 @@ export async function saveAppProfile(
     signal,
   });
   return data.profile;
+}
+
+export async function listGroups({ signal }: { signal?: AbortSignal } = {}) {
+  const data = await apiRequest<{ groups: Group[] }>('/groups', { signal });
+  return data.groups;
+}
+
+export async function createGroup(name: string, { signal }: { signal?: AbortSignal } = {}) {
+  return apiRequest<Group>('/groups', {
+    method: 'POST',
+    body: { name },
+    signal,
+  });
+}
+
+export async function getGroup(groupId: string, { signal }: { signal?: AbortSignal } = {}) {
+  return apiRequest<GroupDetail>(`/groups/${groupId}`, { signal });
+}
+
+export async function createBill(
+  groupId: string,
+  participantIds: string[],
+  { signal }: { signal?: AbortSignal } = {},
+) {
+  return apiRequest<BillResponse>(`/groups/${groupId}/bills`, {
+    method: 'POST',
+    body: { participantIds },
+    signal,
+  });
+}
+
+export async function getBill(billId: string, { signal }: { signal?: AbortSignal } = {}) {
+  return apiRequest<BillResponse>(`/bills/${billId}`, { signal });
+}
+
+export async function createInvite(
+  groupId: string,
+  username?: string,
+  { signal }: { signal?: AbortSignal } = {},
+) {
+  return apiRequest<{ token: string; expiresAt: string; groupId: string }>(`/groups/${groupId}/invites`, {
+    method: 'POST',
+    body: username ? { username } : {},
+    signal,
+  });
+}
+
+export async function acceptInvite(token: string, { signal }: { signal?: AbortSignal } = {}) {
+  return apiRequest<{ groupId: string }>(`/invites/${token}/accept`, {
+    method: 'POST',
+    signal,
+  });
 }

@@ -49,6 +49,9 @@ function RootNavigator() {
             ),
           }}
         />
+        <Stack.Screen name="group/[groupId]" options={{ title: 'GROUP' }} />
+        <Stack.Screen name="bill/[billId]" options={{ title: 'BILL' }} />
+        <Stack.Screen name="invite/[token]" options={{ title: 'JOIN GROUP' }} />
         <Stack.Screen name="receipt" options={{ title: 'RECEIPT' }} />
         <Stack.Screen name="receipt-review" options={{ title: 'REVIEW' }} />
         <Stack.Screen name="profile" options={{ title: 'PROFILE' }} />
