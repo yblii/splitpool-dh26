@@ -7,7 +7,6 @@ import type { GroupDetail } from '@splitpool/contracts';
 import { Button, Card, DemoNote, Screen, colors, styles } from '../../components/ui';
 import {
   closeBill,
-  createBill,
   createInvite,
   formatApiError,
   getGroup,
@@ -32,14 +31,14 @@ export default function GroupScreen() {
     setMessage('');
     try {
       let next = await getGroup(groupId);
-      // If the payment ledger already finished, close the collaboration row before rendering.
       if (next.activeBillId) {
         try {
           const payment = await getBillPayment(next.activeBillId, appProfile.userId);
           const phase = payment?.session?.phase;
           if (phase === 'paid' || phase === 'canceled') {
             await closeBill(next.activeBillId, phase === 'paid' ? 'PAID' : 'CANCELLED');
-            next = await getGroup(groupId);
+            router.replace('/');
+            return;
           }
         } catch {
           // Keep the group view usable if payment status cannot be read.
@@ -48,6 +47,7 @@ export default function GroupScreen() {
       setGroup(next);
     } catch (error) {
       setMessage(formatApiError(error));
+      setGroup(null);
     }
   }, [groupId, appProfile]);
 
@@ -59,22 +59,9 @@ export default function GroupScreen() {
 
   const isHost = Boolean(group && appProfile && group.hostId === appProfile.userId);
 
-  async function openOrCreateBill() {
-    if (!group || !appProfile) return;
-    setBusy(true);
-    setMessage('');
-    try {
-      if (group.activeBillId) {
-        router.push({ pathname: '/bill/[billId]', params: { billId: group.activeBillId } });
-        return;
-      }
-      const bill = await createBill(group.id);
-      router.push({ pathname: '/bill/[billId]', params: { billId: bill.id } });
-    } catch (error) {
-      setMessage(formatApiError(error));
-    } finally {
-      setBusy(false);
-    }
+  async function openBill() {
+    if (!group?.activeBillId) return;
+    router.push({ pathname: '/bill/[billId]', params: { billId: group.activeBillId } });
   }
 
   async function markBillClosed() {
@@ -83,8 +70,7 @@ export default function GroupScreen() {
     setMessage('');
     try {
       await closeBill(group.activeBillId, 'PAID');
-      await load();
-      setMessage('Bill closed. It no longer appears as open.');
+      router.replace('/');
     } catch (error) {
       setMessage(formatApiError(error));
     } finally {
@@ -134,43 +120,44 @@ export default function GroupScreen() {
         <Text style={styles.subtitle}>
           {group
             ? `${group.members.length} member${group.members.length === 1 ? '' : 's'}${isHost ? ' · You are host' : ''}`
-            : 'Loading…'}
+            : message || 'Loading…'}
         </Text>
       </View>
 
-      <Button
-        title={busy ? 'Please wait…' : group?.activeBillId ? 'Open bill' : 'Start bill'}
-        disabled={busy || !group}
-        onPress={() => void openOrCreateBill()}
-      />
+      {group?.activeBillId && (
+        <Button
+          title={busy ? 'Please wait…' : 'Open bill'}
+          disabled={busy}
+          onPress={() => void openBill()}
+        />
+      )}
       {group?.activeBillId && isHost && (
         <Button
-          title="Close open bill"
+          title="Close bill"
           secondary
           disabled={busy}
           onPress={() => void markBillClosed()}
         />
       )}
-      {group && !group.activeBillId && (
-        <Text style={styles.small}>No open bill. Paid bills stay closed here — start a new one when you need it.</Text>
+
+      {group && (
+        <Card>
+          <Text style={styles.heading}>Members</Text>
+          {group.members.map((member) => (
+            <Text key={member.userId} style={styles.text}>
+              {member.displayName} (@{member.username})
+              {member.userId === group.hostId ? ' · host' : ''}
+              {member.userId === appProfile?.userId ? ' · you' : ''}
+            </Text>
+          ))}
+        </Card>
       )}
 
-      <Card>
-        <Text style={styles.heading}>Members</Text>
-        {group?.members.map((member) => (
-          <Text key={member.userId} style={styles.text}>
-            {member.displayName} (@{member.username})
-            {member.userId === group.hostId ? ' · host' : ''}
-            {member.userId === appProfile?.userId ? ' · you' : ''}
-          </Text>
-        )) ?? <Text style={styles.small}>Loading members…</Text>}
-      </Card>
-
-      {isHost && (
+      {isHost && group && (
         <Card>
           <Text style={styles.heading}>Invite</Text>
           <Text style={styles.small}>
-            Create a link friends can open while signed in. They join the group and become payers on the active bill.
+            Create a link friends can open while signed in. They join this bill’s group as payers.
           </Text>
           <Button
             title={busy ? 'Creating…' : 'Copy invite link'}

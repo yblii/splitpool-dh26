@@ -66,10 +66,10 @@ test('PostgreSQL: groups, permissions, independent tips, receipt edits, and conc
     }
     assert.equal((await request(member, 'PATCH', '/me', { username: 'PERSON_0' })).statusCode, 409);
     const group = (await request(host, 'POST', '/groups', { name: 'Dinner' })).json();
+    assert.ok(group.activeBillId, 'creating a group creates its one bill');
     assert.equal((await request(outsider, 'GET', `/groups/${group.id}`)).statusCode, 404);
-    const creation = await request(host, 'POST', `/groups/${group.id}/bills`, {});
-    assert.equal(creation.statusCode, 201, creation.body);
-    let bill: BillResponse = creation.json();
+    assert.equal((await request(host, 'POST', `/groups/${group.id}/bills`, {})).statusCode, 409);
+    let bill: BillResponse = (await request(host, 'GET', `/bills/${group.activeBillId}`)).json();
     assert.equal(bill.participants.length, 1);
     assert.equal(bill.participants[0].userId, host);
     const invite = (await request(host, 'POST', `/groups/${group.id}/invites`, {})).json();

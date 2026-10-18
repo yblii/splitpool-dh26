@@ -303,7 +303,7 @@ export default function BillScreen() {
         </Text>
       )}
       <Button title="Refresh" secondary disabled={loading || busy} onPress={() => void refresh({ clearConflict: true })} />
-      {bill && (
+      {bill && bill.state !== 'PAID' && bill.state !== 'CANCELLED' && (
         <Button
           title="Group details"
           secondary

@@ -41,7 +41,8 @@ CREATE TABLE bills (
   service_charge_mode text NOT NULL DEFAULT 'proportional' CHECK (service_charge_mode IN ('equal','proportional')),
   created_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE UNIQUE INDEX one_active_bill_per_group ON bills(group_id) WHERE state NOT IN ('PAID','CANCELLED');
+-- One bill per group for life; closed bills retire the group from listings.
+CREATE UNIQUE INDEX one_bill_per_group ON bills(group_id);
 CREATE TABLE bill_participants (
   bill_id uuid NOT NULL REFERENCES bills(id),
   user_id uuid NOT NULL REFERENCES profiles(user_id),

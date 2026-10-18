@@ -33,9 +33,11 @@ export class CollaborationService {
   }
 
   async listGroups(userId: string) {
+    // Closed bills retire the group: only open group↔bill pairs are listed.
     return (await this.db.query<Group>(`SELECT g.id, g.name, g.host_id AS "hostId", b.id AS "activeBillId"
-      FROM groups g JOIN group_members m ON m.group_id = g.id AND m.user_id = $1
-      LEFT JOIN bills b ON b.group_id = g.id AND b.state NOT IN ('PAID','CANCELLED')
+      FROM groups g
+      JOIN group_members m ON m.group_id = g.id AND m.user_id = $1
+      JOIN bills b ON b.group_id = g.id AND b.state NOT IN ('PAID','CANCELLED')
       ORDER BY g.created_at, g.id`, [userId])).rows;
   }
 
@@ -45,23 +47,30 @@ export class CollaborationService {
       const id = randomUUID();
       await tx.query('INSERT INTO groups(id, name, host_id) VALUES ($1,$2,$3)', [id, name.trim(), userId]);
       await tx.query('INSERT INTO group_members(group_id,user_id) VALUES ($1,$2)', [id, userId]);
-      return { id, name: name.trim(), hostId: userId, activeBillId: null } satisfies Group;
+      const billId = await this.insertBillForGroup(tx, id);
+      return { id, name: name.trim(), hostId: userId, activeBillId: billId } satisfies Group;
     });
   }
 
   async getGroup(userId: string, groupId: string) {
     return this.db.transaction(async tx => {
       const group = await this.groupAccess(tx, userId, groupId);
+      const active = (await tx.query('SELECT id FROM bills WHERE group_id = $1 AND state NOT IN (\'PAID\',\'CANCELLED\')', [groupId])).rows[0];
+      requireThat(active, 404, 'GROUP_CLOSED', 'This group’s bill is closed.');
       const members = (await tx.query<Profile>(`SELECT ${profileColumns} FROM profiles
         WHERE user_id IN (SELECT user_id FROM group_members WHERE group_id = $1) ORDER BY user_id`, [groupId])).rows;
-      const active = (await tx.query('SELECT id FROM bills WHERE group_id = $1 AND state NOT IN (\'PAID\',\'CANCELLED\')', [groupId])).rows[0];
-      return { ...group, activeBillId: active?.id ?? null, members };
+      return { ...group, activeBillId: active.id as string, members };
     }, true);
   }
 
   async invite(userId: string, groupId: string, username?: string) {
     return this.db.transaction(async tx => {
       await this.groupAccess(tx, userId, groupId, true);
+      const active = (await tx.query(
+        `SELECT id FROM bills WHERE group_id = $1 AND state NOT IN ('PAID','CANCELLED')`,
+        [groupId],
+      )).rows[0];
+      requireThat(active, 404, 'GROUP_CLOSED', 'This group’s bill is closed.');
       let target: string | null = null;
       if (username) {
         const profile = (await tx.query('SELECT user_id FROM profiles WHERE username = $1', [username.toLowerCase()])).rows[0];
@@ -81,20 +90,19 @@ export class CollaborationService {
       await this.profileRequired(tx, userId);
       const invite = (await tx.query('SELECT * FROM invites WHERE token_hash = $1 AND expires_at > now()', [hashToken(token)])).rows[0];
       requireThat(invite && (!invite.target_user_id || invite.target_user_id === userId), 404, 'INVITE_NOT_FOUND', 'Invitation is invalid or expired.');
-      // Link invitations are reusable until expiry. Joining is idempotent.
-      await tx.query('INSERT INTO group_members(group_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [invite.group_id, userId]);
-      // Every group member is a payer on the active bill.
       const active = (await tx.query(
         `SELECT id FROM bills WHERE group_id = $1 AND state NOT IN ('PAID','CANCELLED')`,
         [invite.group_id],
       )).rows[0];
-      if (active) {
-        const inserted = await tx.query(
-          'INSERT INTO bill_participants(bill_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
-          [active.id, userId],
-        );
-        if (inserted.rowCount) await tx.query('UPDATE bills SET version=version+1 WHERE id=$1', [active.id]);
-      }
+      requireThat(active, 404, 'GROUP_CLOSED', 'This group’s bill is closed.');
+      // Link invitations are reusable until expiry. Joining is idempotent.
+      await tx.query('INSERT INTO group_members(group_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [invite.group_id, userId]);
+      // Every group member is a payer on the group's one bill.
+      const inserted = await tx.query(
+        'INSERT INTO bill_participants(bill_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+        [active.id, userId],
+      );
+      if (inserted.rowCount) await tx.query('UPDATE bills SET version=version+1 WHERE id=$1', [active.id]);
       return { groupId: invite.group_id as string };
     });
   }
@@ -102,26 +110,17 @@ export class CollaborationService {
   async createBill(userId: string, groupId: string) {
     return this.db.transaction(async tx => {
       await this.groupAccess(tx, userId, groupId, true);
-      // Serialize creation per group; the partial unique index is a second guard.
       await tx.query('SELECT id FROM groups WHERE id = $1 FOR UPDATE', [groupId]);
-      const active = await tx.query('SELECT id FROM bills WHERE group_id = $1 AND state NOT IN (\'PAID\',\'CANCELLED\')', [groupId]);
-      requireThat(!active.rows.length, 409, 'ACTIVE_BILL_EXISTS', 'This group already has an active bill.');
-      const members = await tx.query<{ user_id: string }>(
-        'SELECT user_id FROM group_members WHERE group_id = $1 ORDER BY user_id',
-        [groupId],
-      );
-      requireThat(members.rows.length, 422, 'INVALID_ROSTER', 'A bill needs at least one group member.');
-      const id = randomUUID();
-      await tx.query('INSERT INTO bills(id,group_id) VALUES ($1,$2)', [id, groupId]);
-      for (const member of members.rows)
-        await tx.query('INSERT INTO bill_participants(bill_id,user_id) VALUES ($1,$2)', [id, member.user_id]);
-      return this.readBill(tx, id);
+      const existing = await tx.query('SELECT id, state FROM bills WHERE group_id = $1', [groupId]);
+      requireThat(!existing.rows.length, 409, 'BILL_EXISTS', 'This group already has its bill.');
+      const billId = await this.insertBillForGroup(tx, groupId);
+      return this.readBill(tx, billId);
     });
   }
 
   /**
    * Mirror payment-ledger progress onto the collaboration bill.
-   * PAID/CANCELLED clear `activeBillId` on group listings (partial unique index).
+   * PAID/CANCELLED retires the group from listings (one bill per group).
    * Unknown bill ids are ignored so in-memory payment demos stay usable without Postgres rows.
    */
   async syncPaymentState(billId: string, state: Bill['state']) {
@@ -150,6 +149,19 @@ export class CollaborationService {
       }
       return this.readBill(tx, billId);
     });
+  }
+
+  private async insertBillForGroup(tx: Sql, groupId: string) {
+    const members = await tx.query<{ user_id: string }>(
+      'SELECT user_id FROM group_members WHERE group_id = $1 ORDER BY user_id',
+      [groupId],
+    );
+    requireThat(members.rows.length, 422, 'INVALID_ROSTER', 'A bill needs at least one group member.');
+    const id = randomUUID();
+    await tx.query('INSERT INTO bills(id,group_id) VALUES ($1,$2)', [id, groupId]);
+    for (const member of members.rows)
+      await tx.query('INSERT INTO bill_participants(bill_id,user_id) VALUES ($1,$2)', [id, member.user_id]);
+    return id;
   }
 
   async getBill(userId: string, billId: string) {
