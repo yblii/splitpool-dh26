@@ -155,7 +155,12 @@ export default function GroupsScreen() {
           accessibilityRole="checkbox"
           accessibilityState={{ checked }}
           onPress={() => setSelected((current) => checked ? current.filter((id) => id !== friend.id) : [...current, friend.id])}
-          style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12 }}
+          style={{
+            minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12,
+            paddingHorizontal: 12, borderRadius: 14, borderWidth: 1.5,
+            backgroundColor: checked ? colors.light : 'transparent',
+            borderColor: checked ? colors.primary : 'transparent',
+          }}
         >
           <MemberAvatar person={friend} size={32} />
           <Text style={[styles.text, { flex: 1 }]}>{friend.name}</Text>
