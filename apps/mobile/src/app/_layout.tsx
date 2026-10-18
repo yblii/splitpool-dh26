@@ -7,14 +7,18 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors } from '../components/ui';
 import { ProfileIconButton } from '../components/ProfileIcon';
 import { AuthProvider, useAuth } from '../state/auth';
+import { AppProfileProvider, useAppProfile } from '../state/appProfile';
 import { DemoProvider } from '../state/demo';
 import { getSupabase, logSupabaseEnvStatus } from '../lib/supabase';
 
 function RootNavigator() {
-  const { session, profile, isLoading } = useAuth();
+  const { session, profile, isLoading: authLoading } = useAuth();
+  const { status: appProfileStatus } = useAppProfile();
   const signedIn = Boolean(session);
+  const profileReady = signedIn && appProfileStatus === 'ready';
+  const needsProfileSetup = signedIn && (appProfileStatus === 'needsSetup' || appProfileStatus === 'unavailable');
 
-  if (isLoading) {
+  if (authLoading || (signedIn && appProfileStatus === 'loading')) {
     return <View style={{ flex: 1, backgroundColor: colors.background }} />;
   }
 
@@ -32,7 +36,7 @@ function RootNavigator() {
       contentStyle: { backgroundColor: colors.background },
       headerBackTitle: 'Back',
     }}>
-      <Stack.Protected guard={signedIn}>
+      <Stack.Protected guard={profileReady}>
         <Stack.Screen
           name="index"
           options={{
@@ -49,6 +53,15 @@ function RootNavigator() {
         <Stack.Screen name="receipt-review" options={{ title: 'REVIEW' }} />
         <Stack.Screen name="profile" options={{ title: 'PROFILE' }} />
         <Stack.Screen name="payment" options={{ title: 'PAYMENT' }} />
+      </Stack.Protected>
+      <Stack.Protected guard={needsProfileSetup}>
+        <Stack.Screen
+          name="profile-setup"
+          options={{
+            title: appProfileStatus === 'unavailable' ? 'API SETUP' : 'PROFILE SETUP',
+            headerBackVisible: false,
+          }}
+        />
       </Stack.Protected>
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="login" options={{ title: 'SIGN IN', headerBackVisible: false }} />
@@ -80,10 +93,12 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <DemoProvider>
-            <StatusBar style="dark" />
-            <RootNavigator />
-          </DemoProvider>
+          <AppProfileProvider>
+            <DemoProvider>
+              <StatusBar style="dark" />
+              <RootNavigator />
+            </DemoProvider>
+          </AppProfileProvider>
         </AuthProvider>
       </QueryClientProvider>
     </SafeAreaProvider>
