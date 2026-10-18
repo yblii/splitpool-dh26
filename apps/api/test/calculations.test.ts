@@ -28,6 +28,14 @@ test('four-person totals conserve each cent and tie-break by stable user ID', ()
   assert.equal(summary.shares[0].userId, 'a');
   assert.equal(summary.shares[0].itemsCents, 26);
   assert.equal(summary.shares.reduce((sum, p) => sum + p.taxCents, 0), 7);
+  assert.equal(summary.shares.reduce((sum, p) => sum + p.serviceChargeCents, 0), 9);
+  // Tax/tip follow claimed item cents, not equal headcount — even if settings say equal.
+  const byItems = summary.shares.map(share => share.itemsCents);
+  const byTax = summary.shares.map(share => share.taxCents);
+  assert.deepEqual(
+    byTax.map((tax, index) => tax === 0 || byItems[index] > 0),
+    [true, true, true, true],
+  );
   input.participants.reverse(); input.claims.reverse();
   assert.deepEqual(summarize(input), summary);
 });
@@ -47,12 +55,11 @@ test('overclaims and receipt mismatches block completion', () => {
   assert.deepEqual(summary.blockers.map(b => b.code), ['RECEIPT_MISMATCH', 'OVERCLAIMED_ITEM']);
 });
 
-test('zero subtotal supports equal charges and blocks proportional nonzero charges', () => {
+test('zero subtotal blocks proportional tax or tip charges', () => {
   const input = bill(); input.items[0].netLineTotalCents = 0; input.printedTotalCents = 16;
   assert.equal(summarize(input).blockers.some(b => b.code === 'ZERO_SUBTOTAL'), true);
-  input.settings.serviceChargeMode = 'equal';
+  input.taxCents = 0; input.serviceChargeCents = 0; input.printedTotalCents = 0;
   assert.equal(summarize(input).complete, true);
-  assert.equal(summarize(input).shares.reduce((sum, p) => sum + p.totalCents, 0), 16);
 });
 
 test('many fractional allocations reconcile across variable rosters', () => {
@@ -62,17 +69,41 @@ test('many fractional allocations reconcile across variable rosters', () => {
     input.claims = input.participants.map(p => ({ userId: p.userId, itemId: 'item', fraction: { numerator: 1, denominator: count } }));
     const result = summarize(input);
     assert.equal(result.complete, true);
+    assert.equal(result.addedTipCents, 0);
     assert.equal(result.shares.reduce((sum, p) => sum + p.totalCents, 0), result.totalCents);
   }
 });
 
-test('personal tips belong entirely to their payer and do not change receipt reconciliation', () => {
+test('tax and tip split proportionally to claimed item cents when complete', () => {
+  const input = bill();
+  input.claims = [
+    { itemId: 'item', userId: 'a', fraction: { numerator: 3, denominator: 4 } },
+    { itemId: 'item', userId: 'b', fraction: { numerator: 1, denominator: 4 } },
+  ];
+  input.participants = input.participants.filter(p => p.userId === 'a' || p.userId === 'b');
+  input.taxCents = 8;
+  input.serviceChargeCents = 12;
+  input.printedTotalCents = 121;
+  const result = summarize(input);
+  assert.equal(result.complete, true);
+  const a = result.shares.find(share => share.userId === 'a')!;
+  const b = result.shares.find(share => share.userId === 'b')!;
+  assert.equal(a.itemsCents, 76);
+  assert.equal(b.itemsCents, 25);
+  assert.equal(a.taxCents + b.taxCents, 8);
+  assert.equal(a.serviceChargeCents + b.serviceChargeCents, 12);
+  assert.ok(a.taxCents > b.taxCents);
+  assert.ok(a.serviceChargeCents > b.serviceChargeCents);
+  assert.equal(a.tipCents, 0);
+  assert.equal(b.tipCents, 0);
+});
+
+test('personal tip fields do not change bill totals after proportional split', () => {
   const input = bill(); input.participants[0].tipCents = 150;
   const result = summarize(input);
   assert.equal(result.complete, true);
   assert.equal(result.receiptTotalCents, 117);
-  assert.equal(result.addedTipCents, 150);
-  assert.equal(result.totalCents, 267);
-  assert.equal(result.shares.find(s => s.userId === 'd')!.tipCents, 150);
-  assert.equal(result.shares.find(s => s.userId === 'a')!.tipCents, 0);
+  assert.equal(result.addedTipCents, 0);
+  assert.equal(result.totalCents, 117);
+  assert.equal(result.shares.every(share => share.tipCents === 0), true);
 });

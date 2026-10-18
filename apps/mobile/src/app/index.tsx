@@ -3,7 +3,8 @@ import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import type { Group } from '@splitpool/contracts';
 import { Button, Card, DemoNote, Screen, colors, styles } from '../components/ui';
-import { createBill, createGroup, formatApiError, listGroups } from '../lib/apiClient';
+import { closeBill, createGroup, formatApiError, listGroups } from '../lib/apiClient';
+import { getBillPayment } from '../lib/paymentApi';
 import { useAppProfile } from '../state/appProfile';
 
 export default function LandingScreen() {
@@ -19,13 +20,30 @@ export default function LandingScreen() {
     setLoading(true);
     setMessage('');
     try {
-      setGroups(await listGroups());
+      let next = await listGroups();
+      const userId = appProfile?.userId;
+      if (userId) {
+        for (const group of next) {
+          if (!group.activeBillId) continue;
+          try {
+            const payment = await getBillPayment(group.activeBillId, userId);
+            const phase = payment?.session?.phase;
+            if (phase === 'paid' || phase === 'canceled') {
+              await closeBill(group.activeBillId, phase === 'paid' ? 'PAID' : 'CANCELLED');
+            }
+          } catch {
+            // Ignore per-group payment reads; listing still renders.
+          }
+        }
+        next = await listGroups();
+      }
+      setGroups(next);
     } catch (error) {
       setMessage(formatApiError(error));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [appProfile]);
 
   useFocusEffect(
     useCallback(() => {
@@ -41,10 +59,10 @@ export default function LandingScreen() {
     setMessage('');
     try {
       const group = await createGroup(name);
-      const bill = await createBill(group.id);
+      if (!group.activeBillId) throw new Error('Group was created without a bill.');
       setGroupName('');
       setShowCreate(false);
-      router.push({ pathname: '/bill/[billId]', params: { billId: bill.id } });
+      router.push({ pathname: '/bill/[billId]', params: { billId: group.activeBillId } });
     } catch (error) {
       setMessage(formatApiError(error));
     } finally {
@@ -58,8 +76,8 @@ export default function LandingScreen() {
         <Text style={styles.title}>Your groups.</Text>
         <Text style={styles.subtitle}>
           {appProfile
-            ? `Signed in as @${appProfile.username}. Create a group to start a bill.`
-            : 'Create a group to start a bill.'}
+            ? `Signed in as @${appProfile.username}. Each group is one open bill.`
+            : 'Create a group to open a bill.'}
         </Text>
       </View>
 
@@ -96,28 +114,31 @@ export default function LandingScreen() {
 
       <View style={{ gap: 12 }}>
         <View style={styles.row}>
-          <Text style={styles.heading}>Groups</Text>
+          <Text style={styles.heading}>Open bills</Text>
           <Pressable accessibilityRole="button" hitSlop={12} onPress={() => void loadGroups()}>
             <Text style={styles.link}>{loading ? 'Loading…' : 'Refresh'}</Text>
           </Pressable>
         </View>
 
         {!loading && groups.length === 0 && (
-          <Text style={styles.small}>No groups yet. Tap New group to create one.</Text>
+          <Text style={styles.small}>No open bills. Tap New group to start one.</Text>
         )}
 
         {groups.map((group) => (
           <Pressable
             key={group.id}
             accessibilityRole="button"
-            accessibilityLabel={`Open group ${group.name}`}
-            onPress={() => router.push({ pathname: '/group/[groupId]', params: { groupId: group.id } })}
+            accessibilityLabel={`Open bill ${group.name}`}
+            onPress={() => {
+              if (!group.activeBillId) return;
+              router.push({ pathname: '/bill/[billId]', params: { billId: group.activeBillId } });
+            }}
             style={({ pressed }) => [local.groupRow, pressed && { opacity: 0.75 }]}
           >
             <View style={{ flex: 1, gap: 4 }}>
               <Text style={local.groupName}>{group.name}</Text>
               <Text style={styles.small}>
-                {group.activeBillId ? 'Active bill' : 'No active bill'}
+                Open bill
                 {group.hostId === appProfile?.userId ? ' · You are host' : ''}
               </Text>
             </View>

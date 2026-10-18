@@ -1,7 +1,16 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import type { ExtractedReceipt, SaveItemsRequest, SetClaimRequest, SetTipRequest, UpdateSettingsRequest } from '@splitpool/contracts';
+import type {
+  ExtractedReceipt,
+  PaymentLedger,
+  SaveItemsRequest,
+  SetClaimRequest,
+  SetTipRequest,
+  UpdateSettingsRequest,
+} from '@splitpool/contracts';
+import { LedgerError } from '@splitpool/contracts';
 import type { VerifyToken } from './auth.ts';
 import { ApiError } from './errors.ts';
+import { collaborationStateFromPayment } from './payments/billState.ts';
 import {
   parseWithFallback,
   type ReceiptFallbackReason,
@@ -31,6 +40,8 @@ function normalizeImageMimeType(mimeType: string): string {
 export type CollaborationRouteOptions = {
   parser: ReceiptParser;
   receiptRoot?: string;
+  /** When set, group reads close collaboration bills whose payment ledger is already terminal. */
+  ledger?: PaymentLedger;
 };
 
 export async function collaborationRoutes(
@@ -41,6 +52,21 @@ export async function collaborationRoutes(
 ) {
   const users = new WeakMap<FastifyRequest, string>();
   const user = (request: FastifyRequest) => users.get(request)!;
+  const reconcileBill = async (actorId: string, billId: string | null | undefined) => {
+    if (!billId || !options.ledger) return;
+    try {
+      const projection = options.ledger.billView(actorId, billId, Date.now());
+      const phase = projection.session?.phase;
+      if (phase !== 'paid' && phase !== 'canceled') return;
+      await service.syncPaymentState(
+        billId,
+        collaborationStateFromPayment({ phase, hasSnapshot: Boolean(projection.snapshotId) }),
+      );
+    } catch (error) {
+      if (error instanceof LedgerError && error.statusCode === 404) return;
+      throw error;
+    }
+  };
   // Encapsulated hook: health and demo routes outside this plugin remain public.
   app.addHook('onRequest', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
@@ -56,12 +82,21 @@ export async function collaborationRoutes(
   app.patch<{ Body: { username?: string; displayName?: string } }>('/me', {
     schema: { body: { ...object({ username, displayName: text(80) }, []), minProperties: 1 } },
   }, async request => ({ profile: await service.saveProfile(user(request), request.body) }));
-  app.get('/groups', async request => ({ groups: await service.listGroups(user(request)) }));
+  app.get('/groups', async request => {
+    const actorId = user(request);
+    const groups = await service.listGroups(actorId);
+    for (const group of groups) await reconcileBill(actorId, group.activeBillId);
+    return { groups: await service.listGroups(actorId) };
+  });
   app.post<{ Body: { name: string } }>('/groups', {
     schema: { body: object({ name: text(100) }) },
   }, async (request, reply) => reply.code(201).send(await service.createGroup(user(request), request.body.name)));
-  app.get<{ Params: { id: string } }>('/groups/:id', { schema: { params } },
-    request => service.getGroup(user(request), request.params.id));
+  app.get<{ Params: { id: string } }>('/groups/:id', { schema: { params } }, async (request) => {
+    const actorId = user(request);
+    const group = await service.getGroup(actorId, request.params.id);
+    await reconcileBill(actorId, group.activeBillId);
+    return service.getGroup(actorId, request.params.id);
+  });
   app.post<{ Params: { id: string }; Body: { username?: string } }>('/groups/:id/invites', {
     schema: { params, body: object({ username }, []) },
   }, async (request, reply) => reply.code(201).send(await service.invite(user(request), request.params.id, request.body.username)));
@@ -137,4 +172,7 @@ export async function collaborationRoutes(
   app.put<{ Params: { id: string }; Body: SetTipRequest }>('/bills/:id/tip', {
     schema: { params, body: object({ expectedVersion, tipCents: cents }) },
   }, request => service.setTip(user(request), request.params.id, request.body));
+  app.post<{ Params: { id: string }; Body: { state: 'PAID' | 'CANCELLED' } }>('/bills/:id/close', {
+    schema: { params, body: object({ state: { type: 'string', enum: ['PAID', 'CANCELLED'] } }) },
+  }, request => service.closeBill(user(request), request.params.id, request.body.state));
 }

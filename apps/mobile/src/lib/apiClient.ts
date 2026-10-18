@@ -193,6 +193,19 @@ export async function getBill(billId: string, { signal }: { signal?: AbortSignal
   return apiRequest<BillResponse>(`/bills/${billId}`, { signal });
 }
 
+/** Mark a collaboration bill PAID/CANCELLED; the group leaves open-bill listings. */
+export async function closeBill(
+  billId: string,
+  state: 'PAID' | 'CANCELLED',
+  { signal }: { signal?: AbortSignal } = {},
+) {
+  return apiRequest<BillResponse>(`/bills/${billId}/close`, {
+    method: 'POST',
+    body: { state },
+    signal,
+  });
+}
+
 /** Host OCR upload for a bill; persists image_key + draft on the API. */
 export async function extractBillReceipt(
   billId: string,
