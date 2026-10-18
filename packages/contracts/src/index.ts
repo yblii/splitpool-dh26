@@ -4,6 +4,7 @@ export type * from './api.ts';
 export { allocateCents };
 
 export type PersonId = 'you' | 'alex' | 'sam';
+export type SplitMode = 'proportional' | 'equal';
 export const tipPercents = [15, 18, 20, 25] as const;
 export type TipPercent = (typeof tipPercents)[number];
 export type TipChoice = { kind: 'percent'; percent: TipPercent } | { kind: 'custom'; cents: number };
@@ -26,7 +27,7 @@ export function personItemLines(bill: DemoBill, personId: PersonId) {
   });
 }
 
-// Starter demo supports whole and half claims. General rational claims are a future API feature.
+// The original demo bill still uses whole and half claims. Percentage splits are defined below.
 export type DemoItem = {
   id: string;
   name: string;
@@ -96,6 +97,7 @@ export function claimedHalves(item: DemoItem): number {
 }
 
 export function summarizeBill(bill: DemoBill, choices: TipChoices) {
+
   const subtotal = bill.items.reduce((sum, item) => sum + item.cents, 0);
   const itemShares = people.map(() => 0);
   for (const item of bill.items) {
@@ -310,3 +312,417 @@ export function demoBillFromVerifiedReceipt(
 
 export * from './payment';
 export * from './ledger';
+
+/** 100% expressed as basis points so splits stay in integers. */
+export const FULL_SPLIT_BASIS_POINTS = 10_000;
+
+export type ShareMode = 'auto' | 'custom';
+
+export type SplitShare = {
+  personId: string;
+  mode: ShareMode;
+  /** Set only for custom shares. 10_000 is 100%. */
+  basisPoints?: number;
+};
+
+export type SplitLine = {
+  id: string;
+  name: string;
+  cents: number;
+  quantity: number;
+  shares: SplitShare[];
+};
+
+export type ResolvedPortion = {
+  personId: string;
+  mode: ShareMode;
+  basisPoints: number;
+  cents: number;
+};
+
+export type ItemSplitStatus = 'unclaimed' | 'complete' | 'incomplete' | 'overallocated';
+
+export type ItemResolution = {
+  portions: ResolvedPortion[];
+  allocatedBasisPoints: number;
+  remainderBasisPoints: number;
+  unallocatedCents: number;
+  status: ItemSplitStatus;
+  message?: string;
+};
+
+export type ItemVisualState = 'unclaimed' | 'single' | 'equal' | 'custom' | 'incomplete' | 'error';
+
+export type SplitBillInput = {
+  items: SplitLine[];
+  taxCents: number;
+  tipCents: number;
+  serviceChargeCents?: number;
+  discountCents?: number;
+  printedTotalCents?: number;
+};
+
+export type SplitPersonTotal = {
+  id: string;
+  itemsCents: number;
+  taxCents: number;
+  tipCents: number;
+  serviceCents: number;
+  discountCents: number;
+  totalCents: number;
+};
+
+export type SplitBlocker =
+  | { kind: 'unclaimed'; itemId: string; itemName: string }
+  | { kind: 'incomplete'; itemId: string; itemName: string; remainderBasisPoints: number }
+  | { kind: 'overallocated'; itemId: string; itemName: string; message: string }
+  | { kind: 'total_mismatch'; computedCents: number; printedCents: number };
+
+export type SplitSummary = {
+  subtotalCents: number;
+  taxCents: number;
+  tipCents: number;
+  serviceCents: number;
+  discountCents: number;
+  computedTotalCents: number;
+  printedTotalCents: number;
+  totalsMatch: boolean;
+  fullyAllocated: number;
+  itemCount: number;
+  itemsComplete: boolean;
+  readyToFinalize: boolean;
+  unallocatedCents: number;
+  blockers: SplitBlocker[];
+  people: SplitPersonTotal[];
+  resolutions: { itemId: string; resolution: ItemResolution }[];
+};
+
+export type CustomShareResult = {
+  line: SplitLine;
+  error?: string;
+};
+
+const rosterOrder = (roster: readonly string[]) => new Map(roster.map((id, index) => [id, index]));
+
+export function formatBasisPoints(basisPoints: number): string {
+  const sign = basisPoints < 0 ? '-' : '';
+  const absolute = Math.abs(Math.trunc(basisPoints));
+  const whole = Math.floor(absolute / 100);
+  const fraction = absolute % 100;
+  if (fraction === 0) return `${sign}${whole}%`;
+  return `${sign}${whole}.${String(fraction).padStart(2, '0')}%`;
+}
+
+/** Parse a percentage field without binary floating point. */
+export function percentInputToBasisPoints(value: string): { basisPoints: number } | { error: string } {
+  const trimmed = value.trim().replace(/%$/, '').trim();
+  if (!trimmed) return { error: 'Enter a percentage.' };
+  if (!/^\d{1,3}(\.\d{1,2})?$/.test(trimmed)) {
+    return { error: 'Use a number from 0 to 100, with up to two decimals.' };
+  }
+  const [wholeText, fractionText = ''] = trimmed.split('.');
+  const basisPoints = Number(wholeText) * 100 + Number((fractionText + '00').slice(0, 2));
+  if (basisPoints > FULL_SPLIT_BASIS_POINTS) return { error: 'Enter a percentage from 0 to 100.' };
+  return { basisPoints };
+}
+
+/** Split basis points across `count` people. Leftover points go to the last seats. */
+export function splitBasisPoints(total: number, count: number): number[] {
+  if (!Number.isInteger(total) || total < 0 || !Number.isInteger(count) || count < 0) {
+    throw new Error('Expected a nonnegative total and count.');
+  }
+  if (count === 0) return [];
+  const base = Math.floor(total / count);
+  const extra = total - base * count;
+  return Array.from({ length: count }, (_, index) => base + (index >= count - extra ? 1 : 0));
+}
+
+export function resolveItemSplit(line: SplitLine, roster: readonly string[]): ItemResolution {
+  const order = rosterOrder(roster);
+  const claims = line.shares
+    .filter((share) => order.has(share.personId))
+    .sort((a, b) => order.get(a.personId)! - order.get(b.personId)!);
+
+  if (claims.length === 0) {
+    return {
+      portions: [],
+      allocatedBasisPoints: 0,
+      remainderBasisPoints: FULL_SPLIT_BASIS_POINTS,
+      unallocatedCents: line.cents,
+      status: 'unclaimed',
+      message: 'Unclaimed',
+    };
+  }
+
+  const customSum = claims.reduce((sum, share) => (
+    sum + (share.mode === 'custom' ? Math.max(0, share.basisPoints ?? 0) : 0)
+  ), 0);
+
+  if (customSum > FULL_SPLIT_BASIS_POINTS) {
+    return {
+      portions: claims.map((share) => ({
+        personId: share.personId,
+        mode: share.mode,
+        basisPoints: share.mode === 'custom' ? share.basisPoints ?? 0 : 0,
+        cents: 0,
+      })),
+      allocatedBasisPoints: customSum,
+      remainderBasisPoints: FULL_SPLIT_BASIS_POINTS - customSum,
+      unallocatedCents: line.cents,
+      status: 'overallocated',
+      message: 'Custom percentages add up to more than 100%.',
+    };
+  }
+
+  const autos = claims.filter((share) => share.mode !== 'custom');
+  const autoPoints = splitBasisPoints(FULL_SPLIT_BASIS_POINTS - customSum, autos.length);
+  let autoIndex = 0;
+  const resolved = claims.map((share) => {
+    if (share.mode === 'custom') {
+      return { personId: share.personId, mode: 'custom' as const, basisPoints: share.basisPoints ?? 0 };
+    }
+    return { personId: share.personId, mode: 'auto' as const, basisPoints: autoPoints[autoIndex++] ?? 0 };
+  });
+
+  const weights = resolved.map((portion) => portion.basisPoints);
+  const weightSum = weights.reduce((sum, weight) => sum + weight, 0);
+  let cents: number[] = weights.map(() => 0);
+  let unallocatedCents = line.cents;
+
+  if (weightSum > 0 && weightSum < FULL_SPLIT_BASIS_POINTS) {
+    const amounts = allocateCents(line.cents, [...weights, FULL_SPLIT_BASIS_POINTS - weightSum]);
+    cents = amounts.slice(0, weights.length);
+    unallocatedCents = amounts[amounts.length - 1] ?? 0;
+  } else if (weightSum >= FULL_SPLIT_BASIS_POINTS) {
+    cents = allocateCents(line.cents, weights);
+    unallocatedCents = 0;
+  }
+
+  const portions = resolved.map((portion, index) => ({ ...portion, cents: cents[index] ?? 0 }));
+  const allocatedBasisPoints = portions.reduce((sum, portion) => sum + portion.basisPoints, 0);
+  const status: ItemSplitStatus = allocatedBasisPoints === FULL_SPLIT_BASIS_POINTS ? 'complete' : 'incomplete';
+  const idle = portions.filter((portion) => portion.basisPoints === 0);
+
+  let message: string | undefined;
+  if (status === 'incomplete') {
+    message = `${formatBasisPoints(FULL_SPLIT_BASIS_POINTS - allocatedBasisPoints)} still needs an owner.`;
+  } else if (idle.length > 0) {
+    message = 'Custom shares already use the full item, so someone on it is at 0%.';
+  }
+
+  return {
+    portions,
+    allocatedBasisPoints,
+    remainderBasisPoints: FULL_SPLIT_BASIS_POINTS - allocatedBasisPoints,
+    unallocatedCents,
+    status,
+    message,
+  };
+}
+
+export function itemVisualState(resolution: ItemResolution): ItemVisualState {
+  if (resolution.status === 'unclaimed') return 'unclaimed';
+  if (resolution.status === 'overallocated') return 'error';
+  if (resolution.status === 'incomplete') return 'incomplete';
+  if (resolution.portions.length <= 1) return 'single';
+  if (resolution.portions.some((portion) => portion.mode === 'custom')) return 'custom';
+  return 'equal';
+}
+
+export function joinSplit(line: SplitLine, personId: string): SplitLine {
+  if (line.shares.some((share) => share.personId === personId)) return line;
+  return { ...line, shares: [...line.shares, { personId, mode: 'auto' }] };
+}
+
+export function leaveSplit(line: SplitLine, personId: string): SplitLine {
+  return { ...line, shares: line.shares.filter((share) => share.personId !== personId) };
+}
+
+export function resetSplitToEqual(line: SplitLine): SplitLine {
+  return {
+    ...line,
+    shares: line.shares.map((share) => ({ personId: share.personId, mode: 'auto' as const })),
+  };
+}
+
+export function setCustomShare(line: SplitLine, personId: string, basisPoints: number): CustomShareResult {
+  if (!Number.isInteger(basisPoints) || basisPoints < 0 || basisPoints > FULL_SPLIT_BASIS_POINTS) {
+    return { line, error: 'Enter a percentage from 0 to 100.' };
+  }
+  const otherCustom = line.shares
+    .filter((share) => share.personId !== personId && share.mode === 'custom')
+    .reduce((sum, share) => sum + (share.basisPoints ?? 0), 0);
+  if (otherCustom + basisPoints > FULL_SPLIT_BASIS_POINTS) {
+    return {
+      line,
+      error: `${formatBasisPoints(FULL_SPLIT_BASIS_POINTS - otherCustom)} is still open after the other custom shares.`,
+    };
+  }
+  const nextShare: SplitShare = { personId, mode: 'custom', basisPoints };
+  const exists = line.shares.some((share) => share.personId === personId);
+  return {
+    line: {
+      ...line,
+      shares: exists
+        ? line.shares.map((share) => share.personId === personId ? nextShare : share)
+        : [...line.shares, nextShare],
+    },
+  };
+}
+
+function emptyTotals(roster: readonly string[]): Record<string, number> {
+  return Object.fromEntries(roster.map((id) => [id, 0]));
+}
+
+function allocateExtra(
+  amount: number,
+  roster: readonly string[],
+  payerIds: readonly string[],
+  weights: readonly number[],
+): Record<string, number> {
+  const result = emptyTotals(roster);
+  if (amount === 0 || payerIds.length === 0) return result;
+  const parts = allocateCents(Math.abs(amount), [...weights]);
+  const sign = amount < 0 ? -1 : 1;
+  payerIds.forEach((id, index) => { result[id] = sign * (parts[index] ?? 0); });
+  return result;
+}
+
+export function summarizeSplitBill(
+  bill: SplitBillInput,
+  roster: readonly string[],
+  mode: 'proportional' | 'equal',
+): SplitSummary {
+  const resolutions = bill.items.map((item) => ({
+    itemId: item.id,
+    resolution: resolveItemSplit(item, roster),
+  }));
+  const itemCents = emptyTotals(roster);
+  let unallocatedCents = 0;
+  const blockers: SplitBlocker[] = [];
+
+  bill.items.forEach((item, index) => {
+    const resolution = resolutions[index]?.resolution;
+    if (!resolution) return;
+    unallocatedCents += resolution.unallocatedCents;
+    for (const portion of resolution.portions) itemCents[portion.personId] += portion.cents;
+    if (resolution.status === 'unclaimed') {
+      blockers.push({ kind: 'unclaimed', itemId: item.id, itemName: item.name });
+    } else if (resolution.status === 'incomplete') {
+      blockers.push({
+        kind: 'incomplete',
+        itemId: item.id,
+        itemName: item.name,
+        remainderBasisPoints: resolution.remainderBasisPoints,
+      });
+    } else if (resolution.status === 'overallocated') {
+      blockers.push({
+        kind: 'overallocated',
+        itemId: item.id,
+        itemName: item.name,
+        message: resolution.message ?? 'Custom percentages add up to more than 100%.',
+      });
+    }
+  });
+
+  const subtotalCents = bill.items.reduce((sum, item) => sum + item.cents, 0);
+  const serviceCents = bill.serviceChargeCents ?? 0;
+  const discountCents = bill.discountCents ?? 0;
+  const computedTotalCents = subtotalCents + bill.taxCents + bill.tipCents + serviceCents - discountCents;
+  const printedTotalCents = bill.printedTotalCents ?? computedTotalCents;
+  const totalsMatch = computedTotalCents === printedTotalCents;
+  if (!totalsMatch) {
+    blockers.push({ kind: 'total_mismatch', computedCents: computedTotalCents, printedCents: printedTotalCents });
+  }
+
+  const fullyAllocated = resolutions.filter((entry) => entry.resolution.status === 'complete').length;
+  const itemsComplete = bill.items.length > 0 && fullyAllocated === bill.items.length;
+  const payerIds = roster.filter((id) => (itemCents[id] ?? 0) > 0);
+  const weights = mode === 'equal' ? payerIds.map(() => 1) : payerIds.map((id) => itemCents[id] ?? 0);
+  const canShareExtras = itemsComplete && payerIds.length > 0;
+  const taxByPerson = canShareExtras ? allocateExtra(bill.taxCents, roster, payerIds, weights) : emptyTotals(roster);
+  const tipByPerson = canShareExtras ? allocateExtra(bill.tipCents, roster, payerIds, weights) : emptyTotals(roster);
+  const serviceByPerson = canShareExtras ? allocateExtra(serviceCents, roster, payerIds, weights) : emptyTotals(roster);
+  const discountByPerson = canShareExtras ? allocateExtra(discountCents, roster, payerIds, weights) : emptyTotals(roster);
+
+  return {
+    subtotalCents,
+    taxCents: bill.taxCents,
+    tipCents: bill.tipCents,
+    serviceCents,
+    discountCents,
+    computedTotalCents,
+    printedTotalCents,
+    totalsMatch,
+    fullyAllocated,
+    itemCount: bill.items.length,
+    itemsComplete,
+    readyToFinalize: itemsComplete && totalsMatch,
+    unallocatedCents,
+    blockers,
+    resolutions,
+    people: roster.map((id) => ({
+      id,
+      itemsCents: itemCents[id] ?? 0,
+      taxCents: taxByPerson[id] ?? 0,
+      tipCents: tipByPerson[id] ?? 0,
+      serviceCents: serviceByPerson[id] ?? 0,
+      discountCents: discountByPerson[id] ?? 0,
+      totalCents: (itemCents[id] ?? 0) + (taxByPerson[id] ?? 0) + (tipByPerson[id] ?? 0)
+        + (serviceByPerson[id] ?? 0) - (discountByPerson[id] ?? 0),
+    })),
+  };
+}
+
+export function makeSampleSplitItems(): SplitLine[] {
+  return [
+    { id: 'pizza', name: 'Pizza', cents: 3000, quantity: 1, shares: [] },
+    { id: 'ice-cream', name: 'Ice Cream', cents: 1500, quantity: 1, shares: [] },
+    { id: 'drinks', name: 'Drinks', cents: 1200, quantity: 2, shares: [] },
+    { id: 'appetizer', name: 'Shared Appetizer', cents: 1800, quantity: 1, shares: [] },
+  ];
+}
+
+/** Labeled sample used by the mobile demo. These items are not OCR output. */
+export function makeSplitDemoReceipt(): ExtractedReceipt {
+  const items = makeSampleSplitItems();
+  const taxCents = 600;
+  const tipCents = 1350;
+  const subtotal = items.reduce((sum, item) => sum + item.cents, 0);
+  return {
+    schemaVersion: 1,
+    source: 'sample-demo',
+    merchant: 'The Little Table',
+    currency: 'USD',
+    items: items.map((item) => ({
+      clientId: item.id,
+      name: item.name,
+      quantity: item.quantity,
+      netLineTotalCents: item.cents,
+      confidence: 1,
+    })),
+    taxCents,
+    tipCents,
+    serviceChargeCents: 0,
+    discountCents: 0,
+    printedTotalCents: subtotal + taxCents + tipCents,
+    warnings: ['provider_unavailable'],
+  };
+}
+
+export function splitLinesFromVerified(receipt: VerifiedReceipt): SplitLine[] {
+  const seen = new Set<string>();
+  return receipt.items.map((item, index) => {
+    let id = item.id || `item-${index + 1}`;
+    if (seen.has(id)) id = `${id}-${index + 1}`;
+    seen.add(id);
+    return {
+      id,
+      name: item.name,
+      cents: item.netLineTotalCents,
+      quantity: item.quantity,
+      shares: [],
+    };
+  });
+}
+

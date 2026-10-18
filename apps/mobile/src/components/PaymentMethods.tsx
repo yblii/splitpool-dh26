@@ -1,7 +1,7 @@
 import { Alert, Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { demoMethodLabel, demoMethods, isCardWallet, people, type DemoMethodId } from '@splitpool/contracts';
-import { useDemo } from '../state/demo';
+import { useDemo } from '../state/legacyPayment';
 import { colors, SegmentedControl, styles } from './ui';
 
 const tint: Record<DemoMethodId, string> = {
