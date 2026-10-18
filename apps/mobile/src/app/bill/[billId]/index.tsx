@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { formatMoney, type BillItem, type BillResponse, type Fraction } from '@splitpool/contracts';
 import { Button, Card, DemoNote, Screen, SegmentedControl, colors, styles } from '../../../components/ui';
@@ -7,7 +7,6 @@ import { useBillPoll } from '../../../hooks/useBillPoll';
 import {
   formatApiError,
   isApiClientError,
-  setBillTip,
   setItemClaim,
 } from '../../../lib/apiClient';
 import {
@@ -19,18 +18,6 @@ import {
   remainingForItem,
 } from '../../../lib/claims';
 import { useAppProfile } from '../../../state/appProfile';
-
-function centsToInput(cents: number): string {
-  return (Math.max(0, cents) / 100).toFixed(2);
-}
-
-function inputToCents(value: string): number {
-  const normalized = value.trim().replace(/[^0-9.]/g, '');
-  if (!normalized) return 0;
-  const amount = Number.parseFloat(normalized);
-  if (!Number.isFinite(amount)) return 0;
-  return Math.max(0, Math.round(amount * 100));
-}
 
 function ClaimControls({
   bill,
@@ -131,7 +118,6 @@ export default function BillScreen() {
     refresh,
   } = useBillPoll({ billId });
   const [busy, setBusy] = useState(false);
-  const [tipInput, setTipInput] = useState<string | null>(null);
 
   const userId = appProfile?.userId;
   const isHost = Boolean(bill && group && userId && group.hostId === userId);
@@ -141,10 +127,6 @@ export default function BillScreen() {
     () => (bill && userId ? bill.summary.shares.find((share) => share.userId === userId) : undefined),
     [bill, userId],
   );
-  const myTipCents = bill && userId
-    ? (bill.participants.find((participant) => participant.userId === userId)?.tipCents ?? 0)
-    : 0;
-  const tipValue = tipInput ?? centsToInput(myTipCents);
 
   async function handleMutationError(error: unknown) {
     if (isApiClientError(error) && error.code === 'VERSION_CONFLICT') {
@@ -167,26 +149,6 @@ export default function BillScreen() {
         fraction,
       });
       setBill(next);
-    } catch (error) {
-      await handleMutationError(error);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function onSaveTip() {
-    if (!bill || !canEdit) return;
-    const tipCents = inputToCents(tipValue);
-    setBusy(true);
-    setMessage('');
-    setConflict(false);
-    try {
-      const next = await setBillTip(bill.id, {
-        expectedVersion: bill.version,
-        tipCents,
-      });
-      setBill(next);
-      setTipInput(null);
     } catch (error) {
       await handleMutationError(error);
     } finally {
@@ -238,17 +200,22 @@ export default function BillScreen() {
           {myShare && (
             <Card>
               <Text style={styles.heading}>Your share</Text>
+              <Text style={styles.small}>
+                {bill.summary.complete
+                  ? 'Tax and tip are split from your claimed items.'
+                  : 'Tax and tip appear here once every item is claimed.'}
+              </Text>
               <View style={styles.row}>
                 <Text style={styles.text}>Items</Text>
                 <Text style={styles.text}>{formatMoney(myShare.itemsCents)}</Text>
               </View>
               <View style={styles.row}>
-                <Text style={styles.text}>Tax / service</Text>
-                <Text style={styles.text}>{formatMoney(myShare.taxCents + myShare.serviceChargeCents)}</Text>
+                <Text style={styles.text}>Tax</Text>
+                <Text style={styles.text}>{formatMoney(myShare.taxCents)}</Text>
               </View>
               <View style={styles.row}>
-                <Text style={styles.text}>Your tip</Text>
-                <Text style={styles.text}>{formatMoney(myShare.tipCents)}</Text>
+                <Text style={styles.text}>Tip / service</Text>
+                <Text style={styles.text}>{formatMoney(myShare.serviceChargeCents)}</Text>
               </View>
               <View style={styles.row}>
                 <Text style={styles.heading}>You owe</Text>
@@ -280,23 +247,6 @@ export default function BillScreen() {
             ) : null}
           </Card>
 
-          {canEdit && (
-            <Card>
-              <Text style={styles.heading}>Your tip</Text>
-              <Text style={styles.small}>Optional personal tip — only you pay this amount.</Text>
-              <Text style={styles.label}>Tip amount</Text>
-              <TextInput
-                accessibilityLabel="Tip amount"
-                keyboardType="decimal-pad"
-                value={tipValue}
-                onChangeText={setTipInput}
-                style={styles.input}
-                editable={!busy}
-              />
-              <Button title={busy ? 'Saving…' : 'Save tip'} disabled={busy} onPress={() => void onSaveTip()} />
-            </Card>
-          )}
-
           <Card>
             <Text style={styles.heading}>Members</Text>
             <Text style={styles.small}>Everyone in the group is a payer on this bill.</Text>
@@ -304,7 +254,6 @@ export default function BillScreen() {
               <Text key={participant.userId} style={styles.text}>
                 {participant.displayName}
                 {participant.userId === userId ? ' · you' : ''}
-                {participant.tipCents > 0 ? ` · tip ${formatMoney(participant.tipCents)}` : ''}
               </Text>
             ))}
           </Card>
@@ -335,8 +284,26 @@ export default function BillScreen() {
           } as unknown as Href)}
         />
       )}
+      {bill?.state === 'PAID' && (
+        <Text style={styles.small}>This bill is paid and no longer open.</Text>
+      )}
+      {bill && bill.state !== 'PAID' && bill.state !== 'CANCELLED' && bill.summary.complete && (
+        <Button
+          title={isHost ? 'Confirm Payment' : 'Continue to payment'}
+          disabled={busy}
+          onPress={() => router.push({
+            pathname: '/bill/[billId]/payment',
+            params: { billId: bill.id },
+          } as unknown as Href)}
+        />
+      )}
+      {bill && bill.state !== 'PAID' && bill.state !== 'CANCELLED' && !bill.summary.complete && bill.items.length > 0 && (
+        <Text style={[styles.small, { color: colors.warning }]}>
+          Claim every item before the host can confirm payment.
+        </Text>
+      )}
       <Button title="Refresh" secondary disabled={loading || busy} onPress={() => void refresh({ clearConflict: true })} />
-      {bill && (
+      {bill && bill.state !== 'PAID' && bill.state !== 'CANCELLED' && (
         <Button
           title="Group details"
           secondary

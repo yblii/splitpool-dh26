@@ -28,13 +28,25 @@ function headers(userId: string, extra: Record<string, string> = {}) {
 }
 
 it('collects each share onto one simulated card and hides the card from other members', async () => {
-  const app = await buildApp({ ledger: new PaymentLedger({ fundingDelayMs: 1000 }) });
+  const mirrored: Array<{ billId: string; state: string }> = [];
+  const app = await buildApp({
+    ledger: new PaymentLedger({ fundingDelayMs: 1000 }),
+    syncBillState: (billId, state) => { mirrored.push({ billId, state }); },
+  });
   try {
     const missing = await app.inject({ method: 'POST', url: '/api/v1/bills/dinner/review', payload: draft });
     expect(missing.statusCode).toBe(401);
 
+    const empty = await app.inject({ method: 'GET', url: '/api/v1/bills/dinner/payment', headers: headers('spender') });
+    expect(empty.statusCode).toBe(200);
+    expect(empty.json()).toBeNull();
+
     const review = await app.inject({ method: 'POST', url: '/api/v1/bills/dinner/review', headers: headers('spender'), payload: draft });
     expect(review.statusCode).toBe(200);
+    expect(mirrored.at(-1)).toEqual({ billId: 'dinner', state: 'REVIEW' });
+    const peeked = await app.inject({ method: 'GET', url: '/api/v1/bills/dinner/payment', headers: headers('alex') });
+    expect(peeked.statusCode).toBe(200);
+    expect(peeked.json().snapshotId).toBeTruthy();
     for (const user of ['spender', 'alex', 'sam']) {
       const accepted = await app.inject({ method: 'POST', url: '/api/v1/bills/dinner/acceptances', headers: headers(user) });
       expect(accepted.statusCode).toBe(200);
@@ -43,6 +55,7 @@ it('collects each share onto one simulated card and hides the card from other me
       method: 'POST', url: '/api/v1/bills/dinner/confirm', headers: headers('spender', { 'idempotency-key': 'confirm' }),
     });
     expect(confirmed.statusCode).toBe(200);
+    expect(mirrored.at(-1)).toEqual({ billId: 'dinner', state: 'COLLECTING' });
     const sessionId = confirmed.json().sessionId as string;
     const again = await app.inject({
       method: 'POST', url: '/api/v1/bills/dinner/confirm', headers: headers('spender', { 'idempotency-key': 'confirm' }),
@@ -79,6 +92,7 @@ it('collects each share onto one simulated card and hides the card from other me
       payload: { scenario: 'exact' },
     });
     expect(charge.json().phase).toBe('paid');
+    expect(mirrored.at(-1)).toEqual({ billId: 'dinner', state: 'PAID' });
   } finally { await app.close(); }
 });
 

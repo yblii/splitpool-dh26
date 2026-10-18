@@ -66,10 +66,10 @@ test('PostgreSQL: groups, permissions, independent tips, receipt edits, and conc
     }
     assert.equal((await request(member, 'PATCH', '/me', { username: 'PERSON_0' })).statusCode, 409);
     const group = (await request(host, 'POST', '/groups', { name: 'Dinner' })).json();
+    assert.ok(group.activeBillId, 'creating a group creates its one bill');
     assert.equal((await request(outsider, 'GET', `/groups/${group.id}`)).statusCode, 404);
-    const creation = await request(host, 'POST', `/groups/${group.id}/bills`, {});
-    assert.equal(creation.statusCode, 201, creation.body);
-    let bill: BillResponse = creation.json();
+    assert.equal((await request(host, 'POST', `/groups/${group.id}/bills`, {})).statusCode, 409);
+    let bill: BillResponse = (await request(host, 'GET', `/bills/${group.activeBillId}`)).json();
     assert.equal(bill.participants.length, 1);
     assert.equal(bill.participants[0].userId, host);
     const invite = (await request(host, 'POST', `/groups/${group.id}/invites`, {})).json();
@@ -121,8 +121,10 @@ test('PostgreSQL: groups, permissions, independent tips, receipt edits, and conc
     const tip = await request(member, 'PUT', `/bills/${bill.id}/tip`, { expectedVersion: bill.version, tipCents: 300 });
     assert.equal(tip.statusCode, 200, tip.body);
     bill = tip.json();
-    assert.equal(bill.summary.totalCents, 1602);
-    assert.equal(bill.summary.shares.find(p => p.userId === member)!.tipCents, 300);
+    // Personal tip rows may still be stored, but totals split receipt tax/tip by claims only.
+    assert.equal(bill.summary.addedTipCents, 0);
+    assert.equal(bill.summary.shares.find(p => p.userId === member)!.tipCents, 0);
+    assert.equal(bill.summary.totalCents, bill.summary.receiptTotalCents);
     assert.equal((await request(host, 'PUT', `/bills/${bill.id}/tip`, { expectedVersion: bill.version, tipCents: 0, userId: member })).statusCode, 400);
     assert.equal(
       (await request(host, 'PATCH', `/bills/${bill.id}/settings`, { expectedVersion: bill.version, participantIds: [host, third, fourth] })).json().error.code,

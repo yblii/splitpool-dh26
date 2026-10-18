@@ -24,6 +24,7 @@ function Navigator() {
       <Stack.Screen name="bill/[billId]/index" />
       <Stack.Screen name="bill/[billId]/receipt" />
       <Stack.Screen name="bill/[billId]/receipt-review" />
+      <Stack.Screen name="bill/[billId]/payment" />
       <Stack.Screen name="invite/[token]" />
       <Stack.Screen name="account" />
     </Stack.Protected>
