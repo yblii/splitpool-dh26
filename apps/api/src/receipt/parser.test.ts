@@ -51,7 +51,7 @@ describe('receipt parser adapter', () => {
   it('uses the sample parser when Gemini is not configured', async () => {
     expect(createReceiptParser({}).name).toBe('sample-fallback');
     expect(createReceiptParser({ GEMINI_API_KEY: '   ' }).name).toBe('sample-fallback');
-    expect(createReceiptParser({ GEMINI_API_KEY: 'AIza-test' }).name).toBe('gemini-2.5-flash');
+    expect(createReceiptParser({ GEMINI_API_KEY: 'AIza-test' }).name).toBe('gemini-3.8-flash');
 
     const parser = createSampleFallbackParser();
     const draft = await parser.parseReceiptImage({

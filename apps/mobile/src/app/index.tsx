@@ -1,80 +1,141 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import { claimedHalves, formatMoney, people } from '@splitpool/contracts';
-import { Button, Card, colors, DemoNote, Screen, SegmentedControl, styles } from '../components/ui';
+import { GroupCard } from '../components/groups';
+import { MemberAvatar } from '../components/people';
+import { BottomSheet } from '../components/sheets';
+import { AppHeader, Button, Card, ErrorBanner, Screen, styles } from '../components/ui';
 import { useDemo } from '../state/demo';
 
-export default function GroupScreen() {
-  const { bill, summary, person, setPerson, setClaim, phase, renameGroup } = useDemo();
-  const [renaming, setRenaming] = useState(false);
-  const [name, setName] = useState(bill.groupName);
-  const currentShare = summary.shares.find((share) => share.id === person)!;
-  const completedItems = bill.items.length - summary.unclaimed;
+export default function GroupsScreen() {
+  const demo = useDemo();
+  const [creating, setCreating] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [groupName, setGroupName] = useState('');
+  const [selected, setSelected] = useState<string[]>([]);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [friendName, setFriendName] = useState('');
+  const [friendMessage, setFriendMessage] = useState<string | null>(null);
+  const [friendError, setFriendError] = useState<string | null>(null);
 
-  return <Screen footer={<>
-    <View style={styles.row}>
-      <Text style={styles.label}>{person === 'you' ? 'Your share' : `${currentShare.name}’s share`}{!summary.complete ? ' · items only' : ''}</Text>
-      <Text style={local.share}>{formatMoney(currentShare.total)}</Text>
+  function openGroup(id: string) {
+    demo.selectGroup(id);
+    router.push({ pathname: '/group', params: { id } });
+  }
+
+  function startBill(groupId: string) {
+    demo.selectGroup(groupId);
+    demo.selectReceiptGroup(groupId);
+    setStarting(false);
+    router.push('/receipt');
+  }
+
+  function createGroup() {
+    const result = demo.createGroup(groupName, selected);
+    if ('error' in result) {
+      setCreateError(result.error);
+      return;
+    }
+    setCreating(false);
+    setGroupName('');
+    setSelected([]);
+    setCreateError(null);
+    router.push({ pathname: '/group', params: { id: result.id } });
+  }
+
+  function addFriend() {
+    const result = demo.addFriend(friendName);
+    if (!result.ok) {
+      setFriendError(result.message);
+      setFriendMessage(null);
+      return;
+    }
+    setFriendName('');
+    setFriendError(null);
+    setFriendMessage(`${result.person.name} was added. This is a local demo, so no invite was sent.`);
+  }
+
+  return <Screen header={<AppHeader title="Groups" right={<Pressable accessibilityRole="button" accessibilityLabel="Open profile" hitSlop={8} onPress={() => router.push('/profile')} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}>
+    <Text style={styles.link}>Profile</Text>
+  </Pressable>} />}>
+    <View style={{ gap: 6 }}>
+      <Text style={styles.title}>Groups</Text>
+      <Text style={styles.subtitle}>Pick a group, then split a receipt together.</Text>
     </View>
-    <Button title={phase === 'paid' ? 'View payment' : 'Review split'} onPress={() => router.push('/payment')} />
-    <DemoNote />
-  </>}>
-    <View style={{ gap: 10 }}>
-      <View style={styles.row}>
-        <Text style={styles.label}>Your group</Text>
-        <Pressable accessibilityRole="button" accessibilityState={{ disabled: phase !== 'editing' }} disabled={phase !== 'editing'}
-          hitSlop={12} onPress={() => setRenaming(!renaming)}><Text style={styles.link}>{renaming ? 'Cancel' : 'Edit group'}</Text></Pressable>
-      </View>
-      <Text style={styles.title}>{bill.groupName}</Text>
-      <Text style={styles.subtitle}>{bill.merchant} · {people.length} people</Text>
-    </View>
-    {renaming && <Card>
-      <TextInput accessibilityLabel="Group name" value={name} onChangeText={setName} style={styles.input} maxLength={60} />
-      <Button title="Save group name" disabled={!name.trim()} onPress={() => { renameGroup(name); setRenaming(false); }} />
-    </Card>}
-    <View style={local.totalRow}>
-      <View style={{ gap: 5 }}><Text style={styles.label}>Bill total</Text><Text style={local.total}>{formatMoney(summary.total)}</Text></View>
-      <View style={{ gap: 5, alignItems: 'flex-end' }}>
-        <Text style={[styles.label, { color: phase === 'paid' ? colors.success : colors.primary }]}>{phase === 'paid' ? 'Demo paid' : `${completedItems} of ${bill.items.length} claimed`}</Text>
-        <View style={local.progressTrack}><View style={[local.progressFill, { width: `${completedItems / Math.max(bill.items.length, 1) * 100}%` }]} /></View>
-      </View>
-    </View>
+    <Button title="Start a new bill" onPress={() => setStarting(true)} />
+    <Button title="New group" secondary onPress={() => { setCreateError(null); setCreating(true); }} />
     <View style={{ gap: 12 }}>
-      <Text style={styles.label}>Claiming as · demo participants</Text>
-      <SegmentedControl label="Claiming as" options={people.map((entry) => ({ value: entry.id, label: entry.name }))} value={person} onChange={setPerson} />
+      {demo.groups.map((group) => {
+        const members = group.memberIds.map((id) => demo.lookup(id));
+        return <GroupCard
+          key={group.id}
+          name={group.name}
+          members={members}
+          meta={`${members.length} ${members.length === 1 ? 'member' : 'members'}`}
+          detail={demo.activityLabel(group.id)}
+          onPress={() => openGroup(group.id)}
+        />;
+      })}
     </View>
-    <View>
-      <View style={[styles.row, { paddingBottom: 8 }]}>
-        <Text style={styles.heading}>Choose your items</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="Add a receipt" hitSlop={12} onPress={() => router.push('/receipt')}><Text style={styles.link}>Receipt ↗</Text></Pressable>
+    <Card>
+      <Text style={styles.heading}>Friends</Text>
+      <Text style={styles.small}>Add a demo friend by username. Try @riley or @morgan.</Text>
+      <TextInput
+        accessibilityLabel="Friend username"
+        autoCapitalize="none"
+        autoCorrect={false}
+        value={friendName}
+        onChangeText={setFriendName}
+        placeholder="@username"
+        placeholderTextColor="#5C6E7E"
+        style={styles.input}
+      />
+      <Button title="Add friend" compact onPress={addFriend} />
+      {friendError && <ErrorBanner message={friendError} />}
+      {friendMessage && <ErrorBanner tone="success" message={friendMessage} />}
+      <View style={{ gap: 8 }}>
+        {demo.friends.map((friend) => <Pressable
+          key={friend.id}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${friend.name}'s profile`}
+          onPress={() => router.push({ pathname: '/friend', params: { id: friend.id } })}
+          style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12 }}
+        >
+          <MemberAvatar person={friend} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.text}>{friend.name}</Text>
+            <Text style={styles.small}>@{friend.username}</Text>
+          </View>
+          <Text style={{ color: '#5C6E7E', fontSize: 22 }}>›</Text>
+        </Pressable>)}
       </View>
-      <Text style={styles.small}>Select the share you want to cover.</Text>
-      {bill.items.map((item) => <View key={item.id} style={local.item}>
-        <View style={styles.row}><Text style={local.itemName}>{item.name}</Text><Text style={local.price}>{formatMoney(item.cents)}</Text></View>
-        <View style={styles.row}>
-          <Text style={[styles.small, { flex: 1 }]}>{people.filter((entry) => item.halves[entry.id] > 0).map((entry) => `${entry.name} ${item.halves[entry.id] === 2 ? 'all' : '½'}`).join(' · ') || 'No claims yet'}</Text>
-          <Text style={[styles.label, { color: claimedHalves(item) === 2 ? colors.success : colors.warning }]}>
-            {claimedHalves(item) === 2 ? 'Claimed' : `${(2 - claimedHalves(item)) / 2 * 100}% available`}
-          </Text>
-        </View>
-        <SegmentedControl label={item.name} options={[{ label: 'None', value: 0 }, { label: 'Half', value: 1 }, { label: 'All mine', value: 2 }]}
-          value={item.halves[person]} onChange={(value) => setClaim(item.id, value)} disabled={phase !== 'editing'} />
-      </View>)}
-    </View>
-    <Text accessibilityLiveRegion="polite" style={[styles.small, { color: summary.complete ? colors.success : colors.warning }]}>
-      {summary.complete ? 'Every item is accounted for. Ready to review.' : `${summary.unclaimed} ${summary.unclaimed === 1 ? 'item needs' : 'items need'} a claim before payment.`}
-    </Text>
+    </Card>
+
+    <BottomSheet visible={creating} title="New group" onClose={() => setCreating(false)} footer={<Button title="Create group" onPress={createGroup} />}>
+      <Text style={styles.small}>The group stays on this device. Nothing is invited for real.</Text>
+      <Text style={styles.label}>Group name</Text>
+      <TextInput accessibilityLabel="Group name" value={groupName} onChangeText={setGroupName} placeholder="Friday dinner" placeholderTextColor="#5C6E7E" style={styles.input} maxLength={40} />
+      <Text style={styles.label}>Friends</Text>
+      {demo.friends.map((friend) => {
+        const checked = selected.includes(friend.id);
+        return <Pressable
+          key={friend.id}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked }}
+          onPress={() => setSelected((current) => checked ? current.filter((id) => id !== friend.id) : [...current, friend.id])}
+          style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12 }}
+        >
+          <MemberAvatar person={friend} size={32} />
+          <Text style={[styles.text, { flex: 1 }]}>{friend.name}</Text>
+          <Text style={{ color: checked ? '#1F4E72' : '#5C6E7E', fontWeight: '700' }}>{checked ? 'Added' : 'Add'}</Text>
+        </Pressable>;
+      })}
+      {createError && <ErrorBanner message={createError} />}
+    </BottomSheet>
+
+    <BottomSheet visible={starting} title="Which group?" onClose={() => setStarting(false)}>
+      <Text style={styles.small}>The receipt is attached to one group.</Text>
+      {demo.groups.map((group) => <Button key={group.id} title={group.name} secondary onPress={() => startBill(group.id)} />)}
+    </BottomSheet>
   </Screen>;
 }
-
-const local = StyleSheet.create({
-  totalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 20, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border, gap: 12 },
-  total: { color: colors.ink, fontSize: 34, lineHeight: 41, letterSpacing: -0.8, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  share: { color: colors.ink, fontSize: 20, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  progressTrack: { height: 3, width: 94, backgroundColor: colors.border, marginTop: 5 },
-  progressFill: { height: 3, backgroundColor: colors.primary },
-  item: { paddingVertical: 22, borderBottomWidth: 1, borderColor: colors.border, gap: 12 },
-  itemName: { flex: 1, color: colors.ink, fontSize: 16, lineHeight: 23, letterSpacing: 0.4, fontWeight: '800', textTransform: 'uppercase' },
-  price: { color: colors.ink, fontSize: 16, lineHeight: 23, fontWeight: '700', fontVariant: ['tabular-nums'] },
-});

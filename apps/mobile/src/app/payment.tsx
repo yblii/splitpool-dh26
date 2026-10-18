@@ -1,55 +1,76 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { formatMoney } from '@splitpool/contracts';
-import { Button, Card, colors, DemoNote, Screen, SegmentedControl, styles } from '../components/ui';
-import { useDemo } from '../state/demo';
+import { PaymentStatusRow, VirtualCard } from '../components/payment-ui';
+import { PersonSwitcher } from '../components/people';
+import { AppHeader, Button, Card, ErrorBanner, Screen, styles } from '../components/ui';
+import { billStatusLabel, payerStatus, useDemo } from '../state/demo';
 
 export default function PaymentScreen() {
-  const { bill, summary, mode, setMode, linked, phase, pay } = useDemo();
-  const busy = phase === 'collecting' || phase === 'paying';
-  return <Screen footer={<>
-    <Button title={phase === 'paid' ? 'Demo payment complete ✓' : phase === 'collecting' ? 'Collecting shares…' : phase === 'paying' ? 'Paying merchant…' : !linked ? 'Add payment method' : 'Simulate payment'}
-      disabled={!summary.complete || busy || phase === 'paid'} onPress={() => linked ? pay() : router.push('/profile')} />
-    <DemoNote />
-  </>}>
-    <View style={{ gap: 10 }}>
-      <Text style={styles.title}>{phase === 'paid' ? 'All settled.' : 'Review your split.'}</Text>
-      <Text style={styles.subtitle}>{phase === 'paid' ? 'Your demo payment is complete.' : `${bill.groupName} · ${bill.merchant}`}</Text>
+  const demo = useDemo();
+  const bill = demo.currentBill;
+  const summary = demo.summary;
+  const host = demo.personId === 'you';
+
+  if (!bill || !summary) {
+    return <Screen header={<AppHeader title="Payment" onBack={() => router.back()} />}>
+      <Text style={styles.subtitle}>There is no active bill for this group.</Text>
+    </Screen>;
+  }
+
+  const locked = bill.phase === 'editing' || bill.phase === 'review' || bill.phase === 'collecting' || bill.phase === 'failed';
+  const failedPerson = bill.failedPersonId ? demo.lookup(bill.failedPersonId) : null;
+  const cardStatus = bill.phase === 'paid'
+    ? 'Payment complete'
+    : bill.phase === 'merchant_pending'
+      ? 'Merchant payment pending'
+      : bill.phase === 'ready'
+        ? 'Virtual card ready'
+        : bill.phase === 'failed'
+          ? 'Payment failed'
+          : bill.phase === 'collecting'
+            ? 'Collecting payments'
+            : 'Waiting for approval';
+  const cardDetail = 'This picture cannot pay a merchant. No charge leaves this demo.';
+
+  return <Screen header={<AppHeader title={bill.phase === 'paid' ? 'Complete' : 'Payment'} onBack={() => router.back()} />}>
+    <View style={{ gap: 4 }}>
+      <Text style={styles.title}>{bill.phase === 'paid' ? 'Demo complete' : demo.viewingGroup.name}</Text>
+      <Text style={styles.subtitle}>{bill.merchant} · {formatMoney(summary.computedTotalCents)} · {billStatusLabel(bill.phase)}</Text>
     </View>
-    <View style={local.totalRow}>
-      <Text style={styles.label}>Bill total</Text><Text style={local.total}>{formatMoney(summary.total)}</Text>
-    </View>
-    <Card>
-      <Text style={styles.heading}>Tax & tip</Text>
-      <SegmentedControl label="Tax and tip split" options={[{ value: 'proportional', label: 'By item share' }, { value: 'equal', label: 'Split equally' }]}
-        value={mode} onChange={setMode} disabled={phase !== 'editing'} />
-      <Text style={styles.small}>{mode === 'equal' ? 'Tax and tip are shared equally across all three people.' : 'Tax and tip follow each person’s share of the items.'}</Text>
-    </Card>
+    {bill.phase === 'paid' && <ErrorBanner tone="success" title="Nothing was charged" message={`The demo collected ${formatMoney(summary.computedTotalCents)} across ${summary.people.filter((person) => person.totalCents > 0).length} people and then stopped. No restaurant was paid.`} />}
+    <VirtualCard
+      locked={locked}
+      amountCents={summary.computedTotalCents}
+      groupName={demo.viewingGroup.name}
+      status={cardStatus}
+      detail={cardDetail}
+    />
+    <PersonSwitcher people={demo.members} value={demo.personId} onChange={demo.setPerson} />
     <View>
-      <Text style={styles.heading}>Who pays what</Text>
-      {summary.shares.map((share) => <View key={share.id} style={local.person}>
-        <View style={styles.row}><Text style={local.name}>{share.name}</Text><Text style={local.amount}>{formatMoney(share.total)}</Text></View>
-        <Text style={styles.small}>{formatMoney(share.items)} items{summary.complete ? ` + ${formatMoney(share.tax)} tax + ${formatMoney(share.tip)} tip` : ' · tax and tip pending'}</Text>
-      </View>)}
+      <Text style={styles.heading}>Contributions</Text>
+      {summary.people.map((person) => <PaymentStatusRow
+        key={person.id}
+        person={demo.lookup(person.id)}
+        status={payerStatus(bill.phase, !!bill.approvals[person.id], bill.failedPersonId === person.id, person.totalCents > 0)}
+        amountCents={person.totalCents}
+      />)}
     </View>
-    {!summary.complete && <View style={{ gap: 12 }}>
-      <Text accessibilityLiveRegion="polite" style={[styles.small, { color: colors.warning }]}>Claim every item before paying. Tax and tip will be added once the split is complete.</Text>
-      <Button title="Return to bill" secondary onPress={() => router.replace('/')} />
-    </View>}
-    <Card>
-      <Text style={styles.heading}>Payment method</Text>
-      <View style={styles.row}><Text style={styles.text}>{linked ? 'Demo Visa ···· 4242' : 'No method selected'}</Text>
-        <Pressable onPress={() => router.push('/profile')} accessibilityRole="button" hitSlop={12}
-          style={{ paddingVertical: 12 }}><Text style={styles.link}>Manage</Text></Pressable></View>
-      <Text style={styles.small}>Alex and Sam are demo participants. Payment is simulated; no card is charged.</Text>
-    </Card>
+    {bill.phase === 'failed' && failedPerson && <ErrorBanner tone="danger" title="Payment failed" message={`${failedPerson.name}'s simulated payment failed. The card stays locked. A retry does not charge anyone again, because nobody was charged.`} />}
+    {host && <Card>
+      <Text style={styles.heading}>Demo controls</Text>
+      <Text style={styles.small}>These buttons only change the story on this screen. They do not contact a bank or a restaurant.</Text>
+      {bill.phase === 'collecting' && <>
+        <Button title="Simulate successful payments" onPress={demo.simulateCollectionSuccess} />
+        <Button title="Simulate a failed payment" secondary onPress={demo.simulateCollectionFailure} />
+      </>}
+      {bill.phase === 'failed' && <Button title="Simulate retry" onPress={demo.retryFailed} />}
+      {bill.phase === 'ready' && <Button title="Simulate merchant checkout" onPress={demo.simulateMerchant} />}
+      {bill.phase === 'merchant_pending' && <Button title="Finish the simulated checkout" onPress={demo.completeMerchant} />}
+      {bill.phase !== 'editing' && bill.phase !== 'review' && bill.phase !== 'paid' && <Button title="Cancel demo collection" secondary onPress={demo.cancelCollection} />}
+      {bill.phase === 'paid' && <Button title="Back to groups" onPress={() => router.replace('/')} />}
+    </Card>}
+    {!host && <Text style={styles.small}>Switch to You to run the host’s simulated collection.</Text>}
+    {bill.phase === 'editing' || bill.phase === 'review' ? <Button title="Return to the split" secondary onPress={() => router.push(bill.phase === 'review' ? '/confirm' : '/split')} /> : null}
   </Screen>;
 }
-
-const local = StyleSheet.create({
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border, paddingVertical: 22, gap: 12 },
-  total: { color: colors.ink, fontSize: 34, fontWeight: '700', fontVariant: ['tabular-nums'], letterSpacing: -0.8 },
-  person: { borderBottomWidth: 1, borderColor: colors.border, paddingVertical: 22, gap: 6 },
-  name: { fontSize: 18, letterSpacing: 0.8, color: colors.ink, fontWeight: '800', textTransform: 'uppercase' },
-  amount: { color: colors.ink, fontSize: 21, fontWeight: '700', fontVariant: ['tabular-nums'] },
-});

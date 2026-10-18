@@ -1,13 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Text, TextInput } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
+import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Card, DemoNote, Screen, styles } from '../components/ui';
-import { useDemo } from '../state/demo';
+import { MemberAvatar } from '../components/people';
+import { AppHeader, Button, Card, Screen, colors, styles } from '../components/ui';
+import { DEMO_CARDS, useDemo } from '../state/demo';
 import { apiUrl, checkApi } from '../lib/api';
 import { getSupabase, supabaseConfigured } from '../lib/supabase';
 
 export default function ProfileScreen() {
-  const { profileName, setProfileName, linked, setLinked, reset } = useDemo();
+  const demo = useDemo();
+  const [editing, setEditing] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [signedInEmail, setSignedInEmail] = useState<string>();
@@ -45,51 +48,70 @@ export default function ProfileScreen() {
   async function signOut() {
     const result = await getSupabase()?.auth.signOut();
     if (result?.error) setMessage(result.error.message);
-    else { reset(); setMessage('Signed out. Local bill reset.'); }
+    else { demo.reset(); setMessage('Signed out. Local bill reset.'); }
   }
 
-  return <Screen>
-    <Text style={styles.title}>Your details.</Text>
-    <Text style={styles.subtitle}>A familiar name. An easier split.</Text>
-    <Card>
-      <Text style={styles.heading}>Profile</Text>
+  return <Screen header={<AppHeader title="Profile" onBack={() => router.back()} />}>
+    <View style={{ alignItems: 'center', gap: 8, paddingTop: 8 }}>
+      <MemberAvatar person={demo.you} size={88} />
+      <Text style={styles.title}>{demo.profileName || 'You'}</Text>
+      <Text style={styles.subtitle}>@{demo.username} · shown as You on bills</Text>
+    </View>
+    <Button title={editing ? 'Close editor' : 'Edit profile'} secondary onPress={() => setEditing((open) => !open)} />
+    {editing && <Card>
       <Text style={styles.label}>Display name</Text>
-      <TextInput accessibilityLabel="Display name" value={profileName} onChangeText={setProfileName} maxLength={30} style={styles.input} placeholder="Your name" />
-      <Text style={styles.small}>Used on this device. Reloading resets the demo.</Text>
+      <TextInput accessibilityLabel="Display name" value={demo.profileName} onChangeText={demo.setProfileName} maxLength={30} style={styles.input} />
+      <Text style={styles.label}>Username</Text>
+      <TextInput accessibilityLabel="Username" autoCapitalize="none" autoCorrect={false} value={demo.username} onChangeText={demo.setUsername} maxLength={24} style={styles.input} />
+      <Text style={styles.small}>Stored on this device until you reload. Reloading resets the demo bill.</Text>
+    </Card>}
+    <Card>
+      <Text style={styles.heading}>Payment methods</Text>
+      <Text style={styles.small}>These are labeled demo cards. Do not enter a real card number. SplitPool does not store one here.</Text>
+      {DEMO_CARDS.map((card) => {
+        const selected = demo.selectedCard?.id === card.id;
+        return <Pressable
+          key={card.id}
+          accessibilityRole="button"
+          accessibilityState={{ selected }}
+          onPress={() => demo.selectCard(selected ? null : card.id)}
+          style={{
+            minHeight: 72, borderRadius: 16, borderWidth: 1.5, padding: 14, gap: 4,
+            borderColor: selected ? colors.primary : colors.border,
+            backgroundColor: selected ? colors.light : colors.paper,
+          }}
+        >
+          <Text style={[styles.text, { fontWeight: '700' }]}>{card.brand}</Text>
+          <Text style={styles.small}>···· {card.last4} · Demo card{selected ? ' · Selected' : ''}</Text>
+        </Pressable>;
+      })}
     </Card>
     <Card>
-      <Text style={styles.heading}>Payment method</Text>
-      <Text style={styles.text}>{linked ? 'Demo Visa ···· 4242' : 'No demo method selected'}</Text>
-      <Button title={linked ? 'Remove demo card' : 'Use demo card'} secondary onPress={() => setLinked(!linked)} />
-      <Text style={styles.small}>A sample card for trying the split. No payment details are collected.</Text>
+      <Text style={styles.heading}>Settings</Text>
+      <Button title={showConnections ? 'Hide app connections' : 'App connections'} secondary onPress={() => setShowConnections((open) => !open)} />
+      <Button title="Reset local demo" secondary onPress={() => { demo.reset(); setMessage('Demo reset. Groups, claims, and the sample bill are back to the start.'); }} />
+      {!!message && !showConnections && <Text style={styles.small}>{message}</Text>}
     </Card>
-    <Button title={showConnections ? 'Hide app connections' : 'App connections'} secondary onPress={() => setShowConnections(!showConnections)} />
-    {(showConnections || supabaseConfigured) && <>
-    <Card>
+    {(showConnections || supabaseConfigured) && <Card>
       <Text style={styles.heading}>Connected account</Text>
-      {!supabaseConfigured ? <Text style={styles.small}>Add your Supabase URL and publishable key to apps/mobile/.env, then restart Expo. You can use the demo without an account.</Text> : signedInEmail ? <>
+      {!supabaseConfigured ? <Text style={styles.small}>Add your Supabase URL and publishable key to apps/mobile/.env, then restart Expo. The demo works without an account.</Text> : signedInEmail ? <>
         <Text style={styles.text}>Signed in as {signedInEmail}</Text>
         <Button title="Sign out" secondary onPress={() => void signOut()} />
       </> : <>
-        <TextInput accessibilityLabel="Email" autoCapitalize="none" keyboardType="email-address" autoComplete="email" value={email} onChangeText={setEmail} placeholder="Email" style={styles.input} />
-        <TextInput accessibilityLabel="Password" autoCapitalize="none" secureTextEntry autoComplete="current-password" value={password} onChangeText={setPassword} placeholder="Password" style={styles.input} />
+        <TextInput accessibilityLabel="Email" autoCapitalize="none" keyboardType="email-address" autoComplete="email" value={email} onChangeText={setEmail} placeholder="Email" placeholderTextColor={colors.muted} style={styles.input} />
+        <TextInput accessibilityLabel="Password" autoCapitalize="none" secureTextEntry autoComplete="current-password" value={password} onChangeText={setPassword} placeholder="Password" placeholderTextColor={colors.muted} style={styles.input} />
         <Button title={busy ? 'Please wait…' : 'Sign in'} disabled={busy || !email.trim() || !password} onPress={() => void authenticate(false)} />
         <Button title="Create account" secondary disabled={busy || !email.trim() || password.length < 8} onPress={() => void authenticate(true)} />
-        <Text style={styles.small}>Use at least 8 characters for a new account. Sign-in is real when configured; groups and payments remain demo data.</Text>
+        <Text style={styles.small}>Use at least 8 characters for a new account. Sign-in is real when configured. Groups and payments stay demo data.</Text>
       </>}
       {!!message && <Text style={styles.small}>{message}</Text>}
-    </Card>
-    </>}
-    {showConnections &&
-    <Card>
+    </Card>}
+    {showConnections && <Card>
       <Text style={styles.heading}>Backend connection</Text>
-      <Text style={styles.small}>{apiUrl || 'No API configured. The demo works independently.'}</Text>
+      <Text style={styles.small}>{apiUrl || 'No API configured. The demo works on its own.'}</Text>
       <Button title={health.isFetching ? 'Checking…' : 'Check API connection'} disabled={!apiUrl || health.isFetching} secondary onPress={() => void health.refetch()} />
       {health.data && <Text style={styles.small}>{health.data}</Text>}
-      {health.error && <Text style={styles.small}>{health.error.message} On a phone, use your computer’s LAN IP and allow port 3001 through the firewall.</Text>}
-    </Card>
-    }
-    <Button title="Reset local demo" secondary onPress={reset} />
-    <DemoNote />
+      {health.error && <Text style={styles.small}>{health.error.message}</Text>}
+    </Card>}
   </Screen>;
 }
