@@ -17,9 +17,18 @@ export default function GroupsScreen() {
   const [friendName, setFriendName] = useState('');
   const [friendMessage, setFriendMessage] = useState<string | null>(null);
   const [friendError, setFriendError] = useState<string | null>(null);
-  const [pinned, setPinned] = useState<string[]>(['fam']);
   const [hidden, setHidden] = useState<string[]>([]);
   const [showHidden, setShowHidden] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  const [order, setOrder] = useState<string[]>(() => demo.groups.map((group) => group.id));
+  const missingGroup = demo.groups.some((group) => !order.includes(group.id));
+  const staleGroup = order.some((id) => !demo.groups.some((group) => group.id === id));
+  if (missingGroup || staleGroup) {
+    const kept = order.filter((id) => demo.groups.some((group) => group.id === id));
+    const added = demo.groups.map((group) => group.id).filter((id) => !kept.includes(id));
+    setOrder([...kept, ...added]);
+  }
 
   function openGroup(id: string) {
     demo.selectGroup(id);
@@ -51,9 +60,30 @@ export default function GroupsScreen() {
     setFriendMessage(`${result.person.name} was added. This stays on this device.`);
   }
 
-  const visible = demo.groups.filter((group) => !hidden.includes(group.id));
-  const hiddenGroups = demo.groups.filter((group) => hidden.includes(group.id));
-  const ordered = [...visible].sort((a, b) => Number(pinned.includes(b.id)) - Number(pinned.includes(a.id)));
+  const byId = new Map(demo.groups.map((group) => [group.id, group]));
+  const ordered = order.map((id) => byId.get(id)).filter((group): group is NonNullable<typeof group> => !!group && !hidden.includes(group.id));
+  const hiddenGroups = order.map((id) => byId.get(id)).filter((group): group is NonNullable<typeof group> => !!group && hidden.includes(group.id));
+  const pickedIsHidden = !!pickedId && hidden.includes(pickedId);
+
+  function moveGroup(id: string, slots: number) {
+    setOrder((current) => {
+      const visibleIds = current.filter((entry) => !hidden.includes(entry));
+      const from = visibleIds.indexOf(id);
+      const to = Math.max(0, Math.min(visibleIds.length - 1, from + slots));
+      if (from < 0 || from === to) return current;
+      const next = [...visibleIds];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return [...next, ...current.filter((entry) => hidden.includes(entry))];
+    });
+  }
+
+  function togglePicked() {
+    if (!pickedId) return;
+    const hiding = !hidden.includes(pickedId);
+    setHidden((current) => hiding ? [...current, pickedId] : current.filter((id) => id !== pickedId));
+    if (hiding) setShowHidden(true);
+  }
 
   return <Screen
     header={<AppHeader title="Groups" right={<Pressable accessibilityRole="button" accessibilityLabel="New group" hitSlop={8} onPress={() => { setCreateError(null); setCreating(true); }} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}>
@@ -62,7 +92,6 @@ export default function GroupsScreen() {
     footer={<View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
       <Pressable accessibilityRole="button" accessibilityLabel="Open your profile" onPress={() => router.push('/profile')} style={dock}>
         <MemberAvatar person={demo.you} size={36} />
-        <Text style={dockLabel}>Profile</Text>
       </Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel="Open friends" onPress={() => { setFriendError(null); setFriendsOpen(true); }} style={dock}>
         <AvatarStack people={demo.friends} size={28} />
@@ -70,16 +99,30 @@ export default function GroupsScreen() {
       </Pressable>
     </View>}
   >
-    <Text style={styles.title}>Groups</Text>
+    <View style={styles.row}>
+      <Text style={styles.title}>Groups</Text>
+      {editing ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+        <Pressable accessibilityRole="button" accessibilityLabel={pickedIsHidden ? 'Show selected group' : 'Hide selected group'} disabled={!pickedId} onPress={togglePicked} style={{ minHeight: 44, justifyContent: 'center' }}>
+          <Text style={[styles.link, { opacity: pickedId ? 1 : 0.35 }]}>{pickedIsHidden ? 'Show' : 'Hide'}</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Done editing groups" onPress={() => { setEditing(false); setPickedId(null); }} style={{ minHeight: 44, justifyContent: 'center' }}>
+          <Text style={styles.link}>Done</Text>
+        </Pressable>
+      </View> : <Pressable accessibilityRole="button" accessibilityLabel="Edit groups" onPress={() => setEditing(true)} style={{ minHeight: 44, justifyContent: 'center' }}>
+        <Text style={styles.link}>Edit</Text>
+      </Pressable>}
+    </View>
+    {editing && <Text style={styles.small}>Select a group, then Hide. Drag a group up or down to reorder.</Text>}
     <View style={{ gap: 18 }}>
       {ordered.map((group) => <GroupCard
         key={group.id}
+        id={group.id}
         name={group.name}
         members={group.memberIds.map((id) => demo.lookup(id))}
-        pinned={pinned.includes(group.id)}
-        onPress={() => openGroup(group.id)}
-        onPin={() => setPinned((current) => current.includes(group.id) ? current.filter((id) => id !== group.id) : [group.id, ...current])}
-        onHide={() => setHidden((current) => current.includes(group.id) ? current : [...current, group.id])}
+        editing={editing}
+        selected={pickedId === group.id}
+        onPress={() => editing ? setPickedId(group.id) : openGroup(group.id)}
+        onDrag={(slots) => moveGroup(group.id, slots)}
       />)}
     </View>
     <Pressable accessibilityRole="button" accessibilityState={{ expanded: showHidden }} onPress={() => setShowHidden((current) => !current)} style={{ minHeight: 44, justifyContent: 'center' }}>
@@ -89,15 +132,12 @@ export default function GroupsScreen() {
     {showHidden && <View style={{ gap: 18 }}>
       {hiddenGroups.map((group) => <GroupCard
         key={group.id}
+        id={group.id}
         name={group.name}
         members={group.memberIds.map((id) => demo.lookup(id))}
-        onPress={() => openGroup(group.id)}
-        hideLabel="Show"
-        onPin={() => {
-          setHidden((current) => current.filter((id) => id !== group.id));
-          setPinned((current) => current.includes(group.id) ? current : [group.id, ...current]);
-        }}
-        onHide={() => setHidden((current) => current.filter((id) => id !== group.id))}
+        editing={editing}
+        selected={pickedId === group.id}
+        onPress={() => editing ? setPickedId(group.id) : openGroup(group.id)}
       />)}
     </View>}
 
@@ -157,4 +197,4 @@ export default function GroupsScreen() {
 }
 
 const dock = { minHeight: 48, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 };
-const dockLabel = { color: colors.ink, fontWeight: '700' as const, fontSize: 15 };
+const dockLabel = { fontFamily: 'Inter', color: colors.ink, fontWeight: '700' as const, fontSize: 15 };

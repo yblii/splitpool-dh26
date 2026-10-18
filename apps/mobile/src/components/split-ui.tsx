@@ -14,7 +14,7 @@ import {
 } from '@splitpool/contracts';
 import { MemberAvatar, type AvatarPerson } from './people';
 import { BottomSheet } from './sheets';
-import { Button, colors, styles, useReduceMotion } from './ui';
+import { Button, RippedEdge, colors, styles, useReduceMotion } from './ui';
 
 const STATE_LABEL: Record<ItemVisualState, string> = {
   unclaimed: 'Unclaimed',
@@ -99,7 +99,6 @@ export function MoneyText({ cents, style }: { cents: number; style?: object }) {
 }
 
 const RECEIPT_PAPER = '#FFFDF8';
-const TOOTH = 22;
 
 const cardMotion = new Map<string, { editable: boolean; reduceMotion: boolean; dragging: boolean; openPercent: () => void }>();
 
@@ -143,9 +142,9 @@ export function ReceiptPaper({ title, dimTitle, alert, children }: {
   alert?: string | null;
   children: ReactNode;
 }) {
-  return <View>
-    <ReceiptTeeth color={RECEIPT_PAPER} pointing="up" />
-    <View style={paperStyles.body}>
+  return <View style={{ flexDirection: 'row', alignItems: 'stretch' }}>
+    <RippedEdge color={RECEIPT_PAPER} side="left" />
+    <View style={[paperStyles.body, { flex: 1 }]}>
       {title ? <Text style={[paperStyles.title, dimTitle && paperStyles.dimmed]}>{title}</Text> : null}
       {title ? <View style={paperStyles.rule} /> : null}
       {children}
@@ -154,32 +153,7 @@ export function ReceiptPaper({ title, dimTitle, alert, children }: {
         <Text style={paperStyles.alertText}>{alert}</Text>
       </View> : null}
     </View>
-    <ReceiptTeeth color={RECEIPT_PAPER} pointing="down" />
-  </View>;
-}
-
-function ReceiptTeeth({ color, pointing }: { color: string; pointing: 'up' | 'down' }) {
-  const [count, setCount] = useState(24);
-  const up = pointing === 'up';
-  return <View
-    onLayout={(event) => {
-      const next = Math.max(10, Math.floor(event.nativeEvent.layout.width / TOOTH));
-      setCount((current) => current === next ? current : next);
-    }}
-    style={[paperStyles.teeth, { backgroundColor: '#E7D3B8' }]}
-  >
-    {Array.from({ length: count }, (_, index) => <View key={index} style={{
-      width: 0,
-      height: 0,
-      borderLeftWidth: TOOTH / 2,
-      borderRightWidth: TOOTH / 2,
-      borderBottomWidth: up ? 16 : 0,
-      borderTopWidth: up ? 0 : 16,
-      borderLeftColor: 'transparent',
-      borderRightColor: 'transparent',
-      borderBottomColor: up ? color : 'transparent',
-      borderTopColor: up ? 'transparent' : color,
-    }} />)}
+    <RippedEdge color={RECEIPT_PAPER} side="right" />
   </View>;
 }
 
@@ -593,7 +567,6 @@ const barStyles = StyleSheet.create({
 });
 
 const paperStyles = StyleSheet.create({
-  teeth: { flexDirection: 'row', height: 16, overflow: 'hidden' },
   body: {
     backgroundColor: RECEIPT_PAPER,
     paddingHorizontal: 14,
@@ -607,7 +580,7 @@ const paperStyles = StyleSheet.create({
   },
   title: {
     color: colors.ink, fontSize: 22, lineHeight: 28, fontWeight: '700', textAlign: 'center', paddingTop: 4, paddingBottom: 8,
-    fontFamily: Platform.select({ ios: 'Courier', android: 'monospace', default: 'Courier New, Courier, monospace' }),
+    fontFamily: 'Inter',
   },
   dimmed: { opacity: 0.25 },
   rule: { borderBottomWidth: 1, borderStyle: 'dashed', borderColor: '#D9CBB8', marginBottom: 4 },
@@ -635,9 +608,9 @@ const cardStyles = StyleSheet.create({
   errorLine: { backgroundColor: '#FBF4EA' },
   hatch: { width: 10, alignSelf: 'stretch', borderRadius: 2, overflow: 'hidden' },
   chevron: { color: colors.muted, fontSize: 18, lineHeight: 22, width: 14 },
-  name: { color: colors.ink, fontSize: 16, lineHeight: 21, fontWeight: '700' },
+  name: { fontFamily: 'Inter', color: colors.ink, fontSize: 16, lineHeight: 21, fontWeight: '700' },
   meta: { color: colors.muted, fontSize: 12, lineHeight: 16 },
-  price: { color: colors.ink, fontSize: 15, lineHeight: 20, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  price: { fontFamily: 'Inter', color: colors.ink, fontSize: 15, lineHeight: 20, fontWeight: '700', fontVariant: ['tabular-nums'] },
   avatars: { flexDirection: 'row', marginLeft: 2 },
   percentChip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
   percentText: { color: colors.primary, fontSize: 12, lineHeight: 16, fontWeight: '800' },
@@ -677,6 +650,6 @@ const sheetRow = StyleSheet.create({
 });
 
 const summaryStyles = StyleSheet.create({
-  yours: { color: colors.ink, fontSize: 28, lineHeight: 34, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  bill: { color: colors.ink, fontSize: 18, lineHeight: 24, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  yours: { fontFamily: 'Inter', color: colors.ink, fontSize: 28, lineHeight: 34, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  bill: { fontFamily: 'Inter', color: colors.ink, fontSize: 18, lineHeight: 24, fontWeight: '700', fontVariant: ['tabular-nums'] },
 });

@@ -16,7 +16,7 @@ export function MemberAvatar({ person, size = 36 }: { person: AvatarPerson; size
       alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.paper,
     }}
   >
-    <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: Math.max(11, size * 0.38) }}>{person.initial}</Text>
+    <Text style={{ fontFamily: 'Inter', color: '#FFFFFF', fontWeight: '700', fontSize: Math.max(11, size * 0.38) }}>{person.initial}</Text>
   </View>;
 }
 

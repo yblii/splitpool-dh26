@@ -4,12 +4,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useInter } from '../fonts';
 import { colors } from '../components/ui';
 import { DemoProvider } from '../state/demo';
 import { getSupabase } from '../lib/supabase';
 
 export default function RootLayout() {
   const [queryClient] = useState(() => new QueryClient());
+  const fontsReady = useInter();
   useEffect(() => {
     const client = getSupabase();
     if (!client || Platform.OS === 'web') return;
@@ -20,6 +22,7 @@ export default function RootLayout() {
     });
     return () => { subscription.remove(); client.auth.stopAutoRefresh(); };
   }, []);
+  if (!fontsReady) return null;
   return <SafeAreaProvider>
     <QueryClientProvider client={queryClient}>
       <DemoProvider>

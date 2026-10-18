@@ -1,4 +1,4 @@
-import { useEffect, useState, type PropsWithChildren, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type PropsWithChildren, type ReactNode } from 'react';
 import {
   AccessibilityInfo,
   Platform,
@@ -14,6 +14,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { inter } from '../fonts';
 
 export const colors = {
   background: '#F3F6F8',
@@ -33,6 +34,44 @@ export const colors = {
   disabled: '#E6ECF1',
   shadow: 'rgba(22, 50, 74, 0.08)',
 };
+
+const RIP_DEPTH = [4, 15, 7, 12, 3, 16, 9, 5, 14, 8, 2, 13, 6, 11, 16, 4];
+const RIP_HEIGHT = [6, 9, 4, 11, 7, 5, 8, 3, 10, 6];
+
+export function RippedEdge({ color, side }: { color: string; side: 'left' | 'right' }) {
+  const [span, setSpan] = useState(0);
+  const pieces = useMemo(() => {
+    if (span <= 0) return [];
+    const rows: { h: number; depth: number; gap: number }[] = [];
+    let used = 0;
+    let index = 0;
+    while (used < span) {
+      const room = span - used;
+      const h = Math.min(RIP_HEIGHT[index % RIP_HEIGHT.length], room);
+      const gap = h > 4 && index % 4 === 1 ? 2 : 0;
+      rows.push({ h: h - gap, depth: RIP_DEPTH[index % RIP_DEPTH.length], gap });
+      used += h;
+      index += 1;
+    }
+    return rows;
+  }, [span]);
+  const towardEnd = side === 'right' ? 'flex-start' : 'flex-end';
+  return <View
+    onLayout={(event) => {
+      const next = Math.round(event.nativeEvent.layout.height);
+      setSpan((current) => current === next ? current : next);
+    }}
+    style={{ width: 16, overflow: 'hidden' }}
+  >
+    {pieces.map((piece, index) => <View key={index} style={{
+      height: piece.h,
+      width: piece.depth,
+      marginBottom: piece.gap,
+      backgroundColor: color,
+      alignSelf: towardEnd,
+    }} />)}
+  </View>;
+}
 
 export function useReduceMotion() {
   const [reduce, setReduce] = useState(false);
@@ -167,8 +206,8 @@ export const styles = StyleSheet.create({
   },
   headerSide: { width: 76, minHeight: 44, justifyContent: 'center' },
   headerRight: { alignItems: 'flex-end' },
-  headerTitle: { flex: 1, textAlign: 'center', color: colors.ink, fontSize: 17, lineHeight: 22, fontWeight: '700' },
-  headerAction: { color: colors.primary, fontSize: 16, lineHeight: 22, fontWeight: '600', paddingHorizontal: 8 },
+  headerTitle: { ...inter, flex: 1, textAlign: 'center', color: colors.ink, fontSize: 17, lineHeight: 22, fontWeight: '700' },
+  headerAction: { ...inter, color: colors.primary, fontSize: 16, lineHeight: 22, fontWeight: '600', paddingHorizontal: 8 },
   card: {
     backgroundColor: colors.paper, borderRadius: 20, padding: 16, gap: 12,
     borderWidth: 1, borderColor: colors.border,
@@ -179,12 +218,12 @@ export const styles = StyleSheet.create({
       },
     }),
   },
-  title: { fontSize: 30, lineHeight: 36, fontWeight: '700', color: colors.ink, letterSpacing: -0.4 },
-  subtitle: { fontSize: 15, lineHeight: 22, color: colors.muted },
-  heading: { fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.ink },
-  text: { fontSize: 16, lineHeight: 23, color: colors.ink },
-  small: { fontSize: 13, lineHeight: 18, color: colors.muted },
-  label: { fontSize: 12, lineHeight: 16, letterSpacing: 0.4, fontWeight: '700', color: colors.muted },
+  title: { ...inter, fontSize: 30, lineHeight: 36, fontWeight: '700', color: colors.ink, letterSpacing: -0.4 },
+  subtitle: { ...inter, fontSize: 15, lineHeight: 22, color: colors.muted },
+  heading: { ...inter, fontSize: 18, lineHeight: 24, fontWeight: '700', color: colors.ink },
+  text: { ...inter, fontSize: 16, lineHeight: 23, color: colors.ink },
+  small: { ...inter, fontSize: 13, lineHeight: 18, color: colors.muted },
+  label: { ...inter, fontSize: 12, lineHeight: 16, letterSpacing: 0.4, fontWeight: '700', color: colors.muted },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   button: {
@@ -195,33 +234,33 @@ export const styles = StyleSheet.create({
   buttonCompact: { minHeight: 44, paddingVertical: 10 },
   secondary: { backgroundColor: colors.paper, borderColor: colors.border },
   buttonDisabled: { backgroundColor: colors.disabled, borderColor: colors.disabled },
-  buttonText: { fontSize: 16, lineHeight: 21, textAlign: 'center', fontWeight: '700', color: '#FFFFFF' },
-  secondaryText: { color: colors.primary },
-  disabledText: { color: colors.muted },
+  buttonText: { ...inter, fontSize: 16, lineHeight: 21, textAlign: 'center', fontWeight: '700', color: '#FFFFFF' },
+  secondaryText: { ...inter, color: colors.primary },
+  disabledText: { ...inter, color: colors.muted },
   pressed: { opacity: 0.82 },
   dimmed: { opacity: 0.55 },
   segments: { flexDirection: 'row', backgroundColor: colors.subtle, borderRadius: 14, padding: 4, gap: 4 },
   segment: { flex: 1, minHeight: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
   segmentSelected: { backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.border },
-  segmentText: { color: colors.muted, fontSize: 13, lineHeight: 18, fontWeight: '700', textAlign: 'center' },
-  segmentTextSelected: { color: colors.ink },
+  segmentText: { ...inter, color: colors.muted, fontSize: 13, lineHeight: 18, fontWeight: '700', textAlign: 'center' },
+  segmentTextSelected: { ...inter, color: colors.ink },
   notice: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingTop: 2 },
   noticeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.warning },
-  noticeText: { color: colors.muted, fontSize: 12, lineHeight: 16, fontWeight: '600' },
+  noticeText: { ...inter, color: colors.muted, fontSize: 12, lineHeight: 16, fontWeight: '600' },
   input: {
     borderWidth: 1, borderColor: colors.border, backgroundColor: colors.paper, borderRadius: 14,
-    paddingHorizontal: 14, paddingVertical: 12, fontSize: 16, color: colors.ink, minHeight: 48,
+    paddingHorizontal: 14, paddingVertical: 12, ...inter, fontSize: 16, color: colors.ink, minHeight: 48,
   },
   field: { gap: 6 },
   divider: { height: 1, backgroundColor: colors.border },
-  link: { color: colors.primary, fontSize: 15, lineHeight: 20, fontWeight: '700' },
+  link: { ...inter, color: colors.primary, fontSize: 15, lineHeight: 20, fontWeight: '700' },
   footer: {
     backgroundColor: colors.background, borderTopWidth: 1, borderColor: colors.border,
     paddingTop: 12, paddingHorizontal: 20, gap: 10,
   },
   banner: { borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, gap: 4 },
-  bannerTitle: { fontSize: 14, lineHeight: 18, fontWeight: '700' },
-  bannerBody: { fontSize: 14, lineHeight: 20 },
+  bannerTitle: { ...inter, fontSize: 14, lineHeight: 18, fontWeight: '700' },
+  bannerBody: { ...inter, fontSize: 14, lineHeight: 20 },
   empty: {
     backgroundColor: colors.paper, borderRadius: 20, borderWidth: 1, borderColor: colors.border,
     padding: 20, gap: 6,
@@ -229,5 +268,5 @@ export const styles = StyleSheet.create({
 });
 
 export function moneyStyle(extra?: TextStyle): TextStyle {
-  return { fontVariant: ['tabular-nums'], fontWeight: '700', color: colors.ink, ...extra };
+  return { ...inter, fontVariant: ['tabular-nums'], fontWeight: '700', color: colors.ink, ...extra };
 }
