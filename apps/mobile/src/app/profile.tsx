@@ -96,7 +96,7 @@ export default function ProfileScreen() {
         <View style={{ gap: 10 }}>
           <Text style={styles.title}>Your profile.</Text>
           <Text style={styles.subtitle}>
-            Sign in to save your name, phone, and photo. The bill demo still works without an account.
+            Sign in to use SplitPool and manage your name, phone, and photo.
           </Text>
         </View>
         <Card>
