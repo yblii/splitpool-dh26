@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { Link, router } from 'expo-router';
-import { Button, Card, DemoNote, Screen, styles } from '../components/ui';
+import { Button, Card, Screen, styles } from '../components/ui';
 import { getSupabaseEnvStatus } from '../lib/supabase';
 import { useAuth } from '../state/auth';
 import { useAppProfile } from '../state/appProfile';
@@ -82,7 +82,6 @@ export default function LoginScreen() {
           </Pressable>
         </Link>
       </View>
-      <DemoNote />
       <Button title="Explore the local demo" secondary onPress={() => router.replace('/')} />
     </Screen>
   );

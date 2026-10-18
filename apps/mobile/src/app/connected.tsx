@@ -29,6 +29,9 @@ export default function ConnectedGroupsScreen() {
   const you = avatarFromProfile(
     appProfile ?? { userId: 'you', username: 'you', displayName: profile?.firstName || 'You' },
   );
+  const firstName = profile?.firstName?.trim()
+    || appProfile?.displayName?.trim().split(/\s+/)[0]
+    || 'You';
   const yourFoodTitle = demo.you.title;
 
   const loadGroups = useCallback(async () => {
@@ -71,34 +74,18 @@ export default function ConnectedGroupsScreen() {
 
   return (
     <Screen
-      header={(
-        <AppHeader
-          title="SplitPool"
-          right={(
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="New group"
-              hitSlop={8}
-              onPress={() => { setCreateError(null); setCreating(true); }}
-              style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}
-            >
-              <Text style={styles.link}>+ New</Text>
-            </Pressable>
-          )}
-        />
-      )}
+      header={<AppHeader title="SplitPool" />}
       footer={(
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Open your account" onPress={() => router.push('/account')} style={dock}>
-            <MemberAvatar person={you} size={36} />
-          </Pressable>
+        <View style={{ gap: 10 }}>
+          <Button title="+ New" onPress={() => { setCreateError(null); setCreating(true); }} />
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Open local demo"
-            onPress={() => router.push({ pathname: '/', params: { local: '1' } })}
+            accessibilityLabel={`Open your account, ${firstName}`}
+            onPress={() => router.push('/account')}
             style={dock}
           >
-            <Text style={dockLabel}>Demo</Text>
+            <MemberAvatar person={you} size={36} />
+            <Text style={dockLabel}>{firstName}</Text>
           </Pressable>
         </View>
       )}

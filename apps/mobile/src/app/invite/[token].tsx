@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Button, Card, DemoNote, Screen, colors, styles } from '../../components/ui';
+import { Button, Card, Screen, colors, styles } from '../../components/ui';
 import { acceptInvite, formatApiError } from '../../lib/apiClient';
 
 export default function AcceptInviteScreen() {
@@ -39,7 +39,6 @@ export default function AcceptInviteScreen() {
         {!!message && <Text style={[styles.small, { color: colors.warning }]}>{message}</Text>}
       </Card>
       <Button title="Back to groups" secondary onPress={() => router.replace('/connected')} />
-      <DemoNote />
     </Screen>
   );
 }

@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Button, Card, DemoNote, Screen, styles } from '../components/ui';
+import { Button, Card, Screen, styles } from '../components/ui';
 
 export default function VerifyEmailScreen() {
   const { email } = useLocalSearchParams<{ email?: string }>();
@@ -20,7 +20,6 @@ export default function VerifyEmailScreen() {
         </Text>
         <Button title="Go to sign in" onPress={() => router.replace('/login')} />
       </Card>
-      <DemoNote />
     </Screen>
   );
 }

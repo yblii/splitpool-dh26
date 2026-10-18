@@ -3,7 +3,7 @@ import { Alert, Image, Pressable, StyleSheet, Text, TextInput, View } from 'reac
 import * as ImagePicker from 'expo-image-picker';
 import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
-import { Button, Card, DemoNote, Screen, colors, styles } from '../components/ui';
+import { Button, Card, Screen, colors, styles } from '../components/ui';
 import { useDemo } from '../state/demo';
 import { useAuth, type AuthProfile } from '../state/auth';
 import { useAppProfile } from '../state/appProfile';
@@ -132,7 +132,6 @@ export default function ProfileScreen() {
           <Button title={linked ? 'Remove demo card' : 'Use demo card'} secondary onPress={() => setLinked(!linked)} />
           <Text style={styles.small}>A sample card for trying the split. No payment details are collected.</Text>
         </Card>
-        <DemoNote />
       </Screen>
     );
   }
@@ -246,7 +245,6 @@ export default function ProfileScreen() {
       <Pressable onPress={() => router.push('/')} accessibilityRole="button" hitSlop={12}>
         <Text style={[styles.link, { textAlign: 'center' }]}>Back to bill</Text>
       </Pressable>
-      <DemoNote />
     </Screen>
   );
 }
