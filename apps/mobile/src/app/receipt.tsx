@@ -7,8 +7,14 @@ import { Button, Card, colors, DemoNote, Screen, styles } from '../components/ui
 import { apiUrl, extractReceiptFromImage } from '../lib/api';
 import { useDemo } from '../state/demo';
 
+type PickedReceipt = {
+  uri: string;
+  mimeType?: string;
+  fileName?: string;
+};
+
 export default function ReceiptScreen() {
-  const [uri, setUri] = useState<string>();
+  const [picked, setPicked] = useState<PickedReceipt>();
   const [busy, setBusy] = useState(false);
   const { setPendingReceipt, phase } = useDemo();
 
@@ -25,7 +31,14 @@ export default function ReceiptScreen() {
       const result = camera
         ? await ImagePicker.launchCameraAsync(options)
         : await ImagePicker.launchImageLibraryAsync(options);
-      if (!result.canceled) setUri(result.assets[0].uri);
+      if (!result.canceled) {
+        const asset = result.assets[0];
+        setPicked({
+          uri: asset.uri,
+          mimeType: asset.mimeType ?? undefined,
+          fileName: asset.fileName ?? undefined,
+        });
+      }
     } catch {
       Alert.alert('Could not open photos', 'Try again or use the sample receipt below.');
     }
@@ -37,7 +50,7 @@ export default function ReceiptScreen() {
   }
 
   async function parseSelected() {
-    if (!uri) {
+    if (!picked) {
       Alert.alert('Add a photo first', 'Take or choose a receipt photo, or use the sample receipt.');
       return;
     }
@@ -59,7 +72,7 @@ export default function ReceiptScreen() {
 
     setBusy(true);
     try {
-      const { draft, usedFallback } = await extractReceiptFromImage(uri);
+      const { draft, usedFallback } = await extractReceiptFromImage(picked);
       if (usedFallback) {
         Alert.alert(
           'Using sample parse',
@@ -82,10 +95,10 @@ export default function ReceiptScreen() {
 
   return <Screen footer={<>
     <Button
-      title={busy ? 'Parsing…' : uri ? 'Parse receipt' : Platform.OS === 'web' ? 'Choose a photo' : 'Take a photo'}
+      title={busy ? 'Parsing…' : picked ? 'Parse receipt' : Platform.OS === 'web' ? 'Choose a photo' : 'Take a photo'}
       disabled={busy}
       onPress={() => {
-        if (!uri) void pick(Platform.OS !== 'web');
+        if (!picked) void pick(Platform.OS !== 'web');
         else void parseSelected();
       }}
     />
@@ -93,7 +106,7 @@ export default function ReceiptScreen() {
   </>}>
     <View style={{ gap: 10 }}><Text style={styles.title}>Add your receipt.</Text>
       <Text style={styles.subtitle}>One clear photo. Every item accounted for.</Text></View>
-    {uri ? <Image source={{ uri }} accessibilityLabel="Selected receipt preview" style={local.preview} resizeMode="contain" /> :
+    {picked ? <Image source={{ uri: picked.uri }} accessibilityLabel="Selected receipt preview" style={local.preview} resizeMode="contain" /> :
       <View style={local.placeholder}>
         <View style={local.receiptMark}><View style={local.markLine} /><View style={local.markLine} /><View style={[local.markLine, { width: 18 }]} /></View>
         <Text style={styles.label}>Your receipt goes here</Text>
@@ -103,7 +116,7 @@ export default function ReceiptScreen() {
       <Text style={styles.heading}>Keep it simple</Text>
       <Text style={styles.text}>Lay the receipt flat and make sure the text is easy to read.</Text>
       {Platform.OS !== 'web' && <Button title="Choose from photos" secondary disabled={busy} onPress={() => void pick(false)} />}
-      {uri && Platform.OS === 'web' && <Button title="Choose another photo" secondary disabled={busy} onPress={() => void pick(false)} />}
+      {picked && Platform.OS === 'web' && <Button title="Choose another photo" secondary disabled={busy} onPress={() => void pick(false)} />}
       <Text style={styles.small}>
         Photos upload to your local API for GPT-4o parsing. Without an API key the server returns a labeled sample draft.
       </Text>

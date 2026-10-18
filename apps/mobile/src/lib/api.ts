@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import type { ExtractedReceipt } from '@splitpool/contracts';
 
 export const apiUrl = process.env.EXPO_PUBLIC_API_URL?.trim().replace(/\/$/, '');
@@ -18,31 +19,67 @@ export type ReceiptExtractionResponse = {
   usedFallback: boolean;
 };
 
-async function imagePart(uri: string, mimeType = 'image/jpeg'): Promise<Blob | { uri: string; name: string; type: string }> {
-  if (uri.startsWith('blob:') || uri.startsWith('http://') || uri.startsWith('https://') || uri.startsWith('data:')) {
-    const response = await fetch(uri);
-    return response.blob();
+export type ReceiptImageUpload = {
+  uri: string;
+  mimeType?: string;
+  fileName?: string;
+};
+
+/** React Native multipart file part — must not be a web Blob/File. */
+type ReactNativeFilePart = {
+  uri: string;
+  name: string;
+  type: string;
+};
+
+function receiptFileMeta(image: ReceiptImageUpload): { name: string; type: string } {
+  const type = image.mimeType?.trim() || 'image/jpeg';
+  const extension = type.includes('png') ? 'png'
+    : type.includes('webp') ? 'webp'
+      : type.includes('heic') ? 'heic'
+        : 'jpg';
+  const name = image.fileName?.trim() || `receipt.${extension}`;
+  return { name, type };
+}
+
+async function appendReceiptImage(form: FormData, image: ReceiptImageUpload): Promise<void> {
+  const { name, type } = receiptFileMeta(image);
+
+  if (Platform.OS === 'web') {
+    // Browser FormData expects Blob/File parts.
+    const response = await fetch(image.uri);
+    const blob = await response.blob();
+    form.append('image', blob, name);
+    return;
   }
-  // React Native FormData file shape for local camera / library URIs.
-  return { uri, name: 'receipt.jpg', type: mimeType };
+
+  // Physical devices / Expo Go: RN fetch only accepts { uri, name, type }.
+  const file: ReactNativeFilePart = {
+    uri: image.uri,
+    name,
+    type,
+  };
+  form.append('image', file as unknown as Blob);
 }
 
 /** Upload a receipt image to the demo extract route and return draft JSON. */
 export async function extractReceiptFromImage(
-  uri: string,
-  { signal, mimeType = 'image/jpeg' }: { signal?: AbortSignal; mimeType?: string } = {},
+  image: string | ReceiptImageUpload,
+  { signal }: { signal?: AbortSignal } = {},
 ): Promise<ReceiptExtractionResponse> {
   if (!apiUrl) throw new Error('Set EXPO_PUBLIC_API_URL in apps/mobile/.env to parse receipts.');
 
+  const upload = typeof image === 'string' ? { uri: image } : image;
+  if (!upload.uri) throw new Error('Receipt image URI is missing.');
+
   const form = new FormData();
-  const part = await imagePart(uri, mimeType);
-  if (part instanceof Blob) form.append('image', part, 'receipt.jpg');
-  else form.append('image', part as unknown as Blob);
+  await appendReceiptImage(form, upload);
 
   const response = await fetch(`${apiUrl}/api/v1/demo/receipt-extractions`, {
     method: 'POST',
     body: form,
     signal,
+    // Let fetch set multipart boundary; do not set Content-Type manually.
   });
 
   if (!response.ok) {
