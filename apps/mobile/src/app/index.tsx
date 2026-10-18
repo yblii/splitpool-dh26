@@ -156,10 +156,10 @@ export default function GroupsScreen() {
           accessibilityState={{ checked }}
           onPress={() => setSelected((current) => checked ? current.filter((id) => id !== friend.id) : [...current, friend.id])}
           style={{
-            minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 12,
-            paddingHorizontal: 12, borderRadius: 14, borderWidth: 1.5,
-            backgroundColor: checked ? colors.light : 'transparent',
-            borderColor: checked ? colors.primary : 'transparent',
+            minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12,
+            paddingHorizontal: 12, borderRadius: 16, borderWidth: 2,
+            backgroundColor: checked ? '#D3E6F4' : colors.paper,
+            borderColor: checked ? colors.primary : colors.border,
           }}
         >
           <MemberAvatar person={friend} size={32} />
