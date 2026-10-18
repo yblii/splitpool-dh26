@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { Text, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
+import * as Linking from 'expo-linking';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import type { GroupDetail } from '@splitpool/contracts';
 import { Button, Card, DemoNote, Screen, colors, styles } from '../../components/ui';
@@ -11,13 +13,16 @@ import {
 } from '../../lib/apiClient';
 import { useAppProfile } from '../../state/appProfile';
 
+function inviteUrlForToken(token: string) {
+  return Linking.createURL(`/invite/${token}`);
+}
+
 export default function GroupScreen() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
   const { appProfile } = useAppProfile();
   const [group, setGroup] = useState<GroupDetail | null>(null);
   const [message, setMessage] = useState('');
-  const [inviteUsername, setInviteUsername] = useState('');
-  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -56,27 +61,30 @@ export default function GroupScreen() {
     }
   }
 
-  async function onInvite(kind: 'username' | 'link') {
+  async function copyInviteLink() {
     if (!group) return;
     setBusy(true);
     setMessage('');
-    setInviteToken(null);
     try {
-      const result = await createInvite(
-        group.id,
-        kind === 'username' ? inviteUsername.trim() : undefined,
-      );
-      if (kind === 'username') {
-        setMessage(`Invite created for @${inviteUsername.trim().toLowerCase()}.`);
-        setInviteUsername('');
-      } else {
-        setInviteToken(result.token);
-        setMessage('Shareable invite link token created (valid 24 hours).');
-      }
+      const result = await createInvite(group.id);
+      const url = inviteUrlForToken(result.token);
+      setInviteUrl(url);
+      await Clipboard.setStringAsync(url);
+      setMessage('Invite link copied. Valid for 24 hours.');
     } catch (error) {
       setMessage(formatApiError(error));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function copyAgain() {
+    if (!inviteUrl) return;
+    try {
+      await Clipboard.setStringAsync(inviteUrl);
+      setMessage('Invite link copied again.');
+    } catch {
+      setMessage('Could not copy. Select the link and copy it manually.');
     }
   }
 
@@ -119,38 +127,19 @@ export default function GroupScreen() {
       {isHost && (
         <Card>
           <Text style={styles.heading}>Invite</Text>
-          <Text style={styles.label}>Username</Text>
-          <TextInput
-            accessibilityLabel="Invite username"
-            autoCapitalize="none"
-            autoCorrect={false}
-            value={inviteUsername}
-            onChangeText={setInviteUsername}
-            placeholder="friend_username"
-            style={styles.input}
-            maxLength={30}
-          />
+          <Text style={styles.small}>
+            Create a link friends can open while signed in. They join the group and become payers on the active bill.
+          </Text>
           <Button
-            title="Invite by username"
-            secondary
-            disabled={busy || inviteUsername.trim().length < 3}
-            onPress={() => void onInvite('username')}
-          />
-          <Button
-            title="Create invite link token"
-            secondary
+            title={busy ? 'Creating…' : 'Copy invite link'}
             disabled={busy}
-            onPress={() => void onInvite('link')}
+            onPress={() => void copyInviteLink()}
           />
-          {inviteToken && (
+          {inviteUrl && (
             <View style={{ gap: 8 }}>
-              <Text style={styles.small}>Token (share with a signed-in teammate):</Text>
-              <Text selectable style={styles.text}>{inviteToken}</Text>
-              <Button
-                title="Open accept screen"
-                secondary
-                onPress={() => router.push({ pathname: '/invite/[token]', params: { token: inviteToken } })}
-              />
+              <Text style={styles.label}>Invite URL</Text>
+              <Text selectable style={styles.text}>{inviteUrl}</Text>
+              <Button title="Copy again" secondary disabled={busy} onPress={() => void copyAgain()} />
             </View>
           )}
         </Card>

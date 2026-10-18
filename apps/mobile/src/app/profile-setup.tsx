@@ -68,7 +68,7 @@ export default function ProfileSetupScreen() {
       <View style={{ gap: 10 }}>
         <Text style={styles.title}>Choose a username.</Text>
         <Text style={styles.subtitle}>
-          Friends invite you by username. Display name is what they see on the bill.
+          Friends invite you with a link. Display name is what they see on the bill.
         </Text>
       </View>
       <Card>
