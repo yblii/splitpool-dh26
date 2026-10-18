@@ -82,13 +82,13 @@ Each item price is its full line total, including quantity. Show existing gratui
 
 **Behavior**
 
-The creator is the host. Invitees sign in and explicitly join; app links resume the invitation after sign-in. Each group has one active bill whose payer roster is explicit. Members modify their own claims; the host manages receipt corrections, payer roster, tax, and tip settings.
+The creator is the host. Invitees sign in and explicitly join; app links resume the invitation after sign-in. Link invitations are reusable for 24 hours; username invitations can only be accepted by their intended user. Joining a group does not automatically add the user to an existing bill. Each group has one active bill whose payer roster is explicit. Members modify their own claims and optional tip contributions; the host manages receipt corrections, payer roster, and mandatory-charge allocation settings.
 
 Group membership and bill payer rosters are dynamic and use real user IDs. The starter's three fixed participants are demo fixtures, not a product limit. Support multiple groups and variable roster sizes; calculations and claim validation must use each bill's stored roster. Any future group-size limit should be an explicit configurable policy rather than hardcoded participant identities.
 
 Represent a claim as an exact fraction, such as `1/3`, rather than a floating-point percentage. Claims for each item must total exactly `1` before finalization. Reject overclaims and show remaining fractions for underclaimed items.
 
-Tax and tip can each be divided equally across bill payers or proportionally to item subtotals. An added tip percentage uses the pretax net item subtotal. Convert to cents once; allocate fractional cents deterministically using largest remainders, with stable user IDs breaking ties. Every item's shares and all participant totals must reconcile exactly. A zero item subtotal requires equal extras or a correction.
+Printed tax and mandatory gratuity/service charges can each be divided equally across bill payers or proportionally to item subtotals, with independent settings. Each payer contributes their own optional tip as an integer cent amount; only that payer can change it, and it is added entirely to their total. The UI can offer percentage shortcuts before submitting the chosen amount. Optional tips are excluded from printed receipt reconciliation and added to the final bill total separately. Allocate fractional cents deterministically using largest remainders, with stable user IDs breaking ties. Every item's shares and all participant totals must reconcile exactly. A zero item subtotal with nonzero proportional mandatory charges requires equal allocation or a correction.
 
 **Concurrent edits**
 
@@ -96,19 +96,22 @@ Every bill has a version. A write includes `expectedVersion`; Fastify opens a tr
 
 For the MVP, clients poll `GET /bills/:id` approximately every two seconds while the bill screen is active. Each request verifies identity and current group membership and returns committed authoritative state. Refetch immediately after a successful mutation, a stale-write conflict, reconnect, or foreground event. Stop polling in the background and back off on errors. Show cached data as stale while offline and disable mutations. Polling controls update visibility; database transactions and version checks enforce correctness.
 
-Supabase Realtime database subscriptions are not part of this Tiger Data integration. Authenticated Fastify WebSockets can be added later to notify authorized group members after commits, with clients still refetching authoritative state. Receipt edits invalidate affected claims; any changes after final review invalidate participant acceptances.
+Supabase Realtime database subscriptions are not part of this Tiger Data integration. Authenticated Fastify WebSockets can be added later to notify authorized group members after commits, with clients still refetching authoritative state. Price-only receipt corrections retain fractions; changing an item's identity/name or quantity clears its claims, and deleting an item removes its claims. A payer must clear their own claims and optional tip before the host removes them from the roster. Receipt corrections preserve explicit personal tip amounts. All bill edits, including tips, require `EDITING`; after final review the host must reopen the bill and clear participant acceptances before editing.
 
-**Data:** `groups`, `group_members`, `invites`, `bills(state, version, totals, split_settings)`, `bill_participants`, and `claims(item_id, user_id, numerator, denominator)`.
+**Data:** `groups`, `group_members`, `invites`, `bills(state, version, totals, split_settings)`, `bill_participants(bill_id, user_id, tip_cents)`, and `claims(item_id, user_id, numerator, denominator)`. See [backend setup and contracts](backend.md) for the implemented collaboration API and integration boundaries.
 
 | API | Purpose |
 | --- | --- |
 | `POST /groups` | Create a group and host membership |
+| `GET /groups` | List the caller's groups and active bills |
+| `GET /groups/:id` | Read group membership and active bill |
 | `POST /groups/:id/invites` | Create a username invitation or expiring link |
 | `POST /invites/:token/accept` | Join the group |
 | `POST /groups/:id/bills` | Create the active bill with its payer roster |
 | `GET /bills/:id` | Read items, claims, totals, version, and blockers |
 | `PUT /bills/:id/items/:itemId/claim` | Set own fraction; zero removes it |
-| `PATCH /bills/:id/settings` | Host updates tax/tip settings or payer roster |
+| `PATCH /bills/:id/settings` | Host updates tax/mandatory-charge allocation or payer roster |
+| `PUT /bills/:id/tip` | Payer sets their own optional tip in cents |
 
 Example claim body: `{ "fraction": { "numerator": 1, "denominator": 3 }, "expectedVersion": 12 }`.
 

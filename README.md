@@ -1,6 +1,6 @@
 # SplitPool
 
-An Expo / React Native mobile starter for iOS and Android, with a TypeScript/Fastify API and shared bill types. See the [core design](docs/design.md).
+An Expo / React Native mobile starter for iOS and Android, with a TypeScript/Fastify API and shared bill types. See the [core design](docs/design.md) and [backend setup/API guide](docs/backend.md).
 
 ## Run it on your phone
 
@@ -62,7 +62,7 @@ The preview profile produces an installable Android APK. For iOS, use `--platfor
 - Optional real Supabase email/password sign-up/sign-in, once configured.
 - A read-only Fastify health endpoint and demo bill endpoint, with an in-app connection check.
 
-The bill lives in memory and resets on reload. Participant switching simulates collaboration on one device. Live group creation/invites, persistent profiles, concurrent multi-device edits, receipt upload/OCR, real card linking, issuing, and collection/refunds are next implementation steps. Supabase sign-in alone does not connect the demo bill to a database. No real money moves.
+The mobile demo bill lives in memory and resets on reload. Participant switching simulates collaboration on one device. The backend now implements persistent profiles, groups/invites, manual bills, concurrent fractional claims, and personal tips using Tiger Data PostgreSQL and Supabase Auth; the mobile screens still need integration with these APIs. Receipt upload/OCR, real card linking, issuing, and collection/refunds belong to separate integrations. Supabase sign-in alone does not connect the demo bill to a database. No real money moves.
 
 Try the demo: claim the salad, open **Review split**, choose a split mode, add the demo card from Profile, and simulate payment. Use **Reset local demo** in Profile to start again.
 
@@ -92,7 +92,7 @@ To check it from the app, copy `apps/mobile/.env.example` to `apps/mobile/.env`,
 
 Use `ipconfig` on Windows to find the active Wi-Fi adapter's IPv4 address. The phone's `localhost` is the phone itself. Allow port 3001 on your private network if needed. For remote devices, deploy the API with HTTPS or expose it through a separate secure tunnel. Standalone native builds should use HTTPS; plain HTTP behavior depends on platform network policy.
 
-The API currently exposes only public demo data. Add server-side token verification, authorization, database transactions, and private data policies before implementing real group/payment endpoints.
+Without backend configuration, the API exposes only public demo data. To enable authenticated collaboration routes, configure `apps/api/.env` and apply the database migration using the [backend setup/API guide](docs/backend.md). The connected API verifies Supabase access tokens, checks group/host permissions, and uses PostgreSQL transactions with bill versions. Payment endpoints remain a separate integration.
 
 ## Optional Supabase
 
@@ -114,9 +114,12 @@ apps/mobile/src/app/          Expo Router screens
 apps/mobile/src/components/  Shared native UI
 apps/mobile/src/state/       In-memory demo state
 apps/mobile/src/lib/         API and optional Supabase clients
-apps/api/src/                Fastify server and read-only demo routes
+apps/api/src/                Fastify server, auth, collaboration routes, and calculations
+apps/api/migrations/         Versioned Tiger Data/PostgreSQL schema
+apps/api/test/               Backend unit/HTTP and optional PostgreSQL integration tests
 packages/contracts/src/     Shared types, sample bill, exact-cent demo calculations
 docs/design.md              Four-component product/technical design
+docs/backend.md             Backend setup, endpoint contracts, and teammate integration
 ```
 
 ## Checks
@@ -125,7 +128,7 @@ docs/design.md              Four-component product/technical design
 npm run check
 ```
 
-This runs workspace typechecks, Expo ESLint, and Vitest tests for allocation and API behavior. Use Expo's installer for SDK-compatible mobile packages, for example from `apps/mobile`:
+This runs workspace typechecks, Expo ESLint, Vitest checks, and Node backend tests. Database integration tests require `TEST_DATABASE_URL`; otherwise they are explicitly skipped. Use Expo's installer for SDK-compatible mobile packages, for example from `apps/mobile`:
 
 ```sh
 npx expo install expo-image-picker

@@ -1,10 +1,22 @@
+import { supabaseVerifier } from './auth.ts';
 import { buildApp } from './app.ts';
+import { postgresDatabase } from './db.ts';
 import { loadApiEnv } from './load-env.ts';
 import { createReceiptParser } from './receipt/parser.ts';
 
 const env = loadApiEnv();
 const parser = createReceiptParser();
-const app = await buildApp();
+
+const { DATABASE_URL, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } = process.env;
+const configured = [DATABASE_URL, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY].filter(Boolean).length;
+if (configured !== 0 && configured !== 3) throw new Error('Set DATABASE_URL, SUPABASE_URL, and SUPABASE_PUBLISHABLE_KEY together.');
+if (process.env.NODE_ENV === 'production' && configured !== 3) throw new Error('Production requires database and authentication configuration.');
+
+const app = await buildApp({
+  db: DATABASE_URL ? postgresDatabase(DATABASE_URL) : undefined,
+  verifyToken: SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY ? supabaseVerifier(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY) : undefined,
+  origins: process.env.CORS_ORIGINS?.split(',').map(origin => origin.trim()).filter(Boolean),
+});
 
 app.log.info({
   envFile: env.path,
