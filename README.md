@@ -1,6 +1,6 @@
 # SplitPool
 
-An Expo / React Native mobile starter for iOS and Android, with a TypeScript/Fastify API and shared bill types. See the [core design](docs/design.md).
+An Expo / React Native mobile starter for iOS and Android, with a TypeScript/Fastify API and shared bill types. See the [core design](docs/design.md) and the [virtual card lifecycle](docs/virtual-card.md).
 
 ## Run it on your phone
 
@@ -58,13 +58,13 @@ The preview profile produces an installable Android APK. For iOS, use `--platfor
 - Local group renaming, demo display name, and whole/half item claims across three switchable demo participants.
 - Exact-cent totals with equal or proportional tax/tip splitting; incomplete claims block demo payment.
 - Native camera/photo selection and an explicitly labeled sample receipt preview.
-- A demo card toggle and simulated contribution/merchant payment states.
+- A simulated payment that collects each person's share and pools it onto one virtual card.
 - Optional real Supabase email/password sign-up/sign-in, once configured.
 - A read-only Fastify health endpoint and demo bill endpoint, with an in-app connection check.
 
 The bill lives in memory and resets on reload. Participant switching simulates collaboration on one device. Live group creation/invites, persistent profiles, concurrent multi-device edits, receipt upload/OCR, real card linking, issuing, and collection/refunds are next implementation steps. Supabase sign-in alone does not connect the demo bill to a database. No real money moves.
 
-Try the demo: claim the salad, open **Review split**, choose a split mode, add the demo card from Profile, and simulate payment. Use **Reset local demo** in Profile to start again.
+Try the demo: claim the salad, open **Review split**, and add a demo card for each person from Profile. You, Alex, and Sam can each choose a different method. Use **Reset local demo** in Profile to start again.
 
 ## Optional API
 
@@ -112,8 +112,9 @@ apps/mobile/src/components/  Shared native UI
 apps/mobile/src/state/       In-memory demo state
 apps/mobile/src/lib/         API and optional Supabase clients
 apps/api/src/                Fastify server and read-only demo routes
-packages/contracts/src/     Shared types, sample bill, exact-cent demo calculations
+packages/contracts/src/     Shared types, sample bill, exact-cent and payment rules
 docs/design.md              Four-component product/technical design
+docs/virtual-card.md        Payment products, budget, clocks, and derived phase
 ```
 
 ## Checks

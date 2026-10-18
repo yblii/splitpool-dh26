@@ -48,7 +48,7 @@ export default function ReceiptScreen() {
       <View style={styles.divider} />
       <View style={styles.row}><Text style={styles.text}>Tax</Text><Text style={styles.text}>{formatMoney(bill.taxCents)}</Text></View>
       <View style={styles.row}><Text style={styles.text}>Tip</Text><Text style={styles.text}>{formatMoney(bill.tipCents)}</Text></View>
-      <View style={styles.row}><Text style={styles.heading}>Total</Text><Text style={styles.heading}>{formatMoney(summary.total)}</Text></View>
+      <View style={styles.row}><Text style={styles.heading}>Total</Text><Text style={styles.heading}>{formatMoney(summary.subtotal + bill.taxCents + bill.tipCents)}</Text></View>
     </Card>}
   </Screen>;
 }

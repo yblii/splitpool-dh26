@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Text, TextInput } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
+import { PaymentMethods } from '../components/PaymentMethods';
 import { Button, Card, DemoNote, Screen, styles } from '../components/ui';
 import { useDemo } from '../state/demo';
 import { apiUrl, checkApi } from '../lib/api';
 import { getSupabase, supabaseConfigured } from '../lib/supabase';
 
 export default function ProfileScreen() {
-  const { profileName, setProfileName, linked, setLinked, reset } = useDemo();
+  const { profileName, setProfileName, reset } = useDemo();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [signedInEmail, setSignedInEmail] = useState<string>();
@@ -59,9 +60,7 @@ export default function ProfileScreen() {
     </Card>
     <Card>
       <Text style={styles.heading}>Payment method</Text>
-      <Text style={styles.text}>{linked ? 'Demo Visa ···· 4242' : 'No demo method selected'}</Text>
-      <Button title={linked ? 'Remove demo card' : 'Use demo card'} secondary onPress={() => setLinked(!linked)} />
-      <Text style={styles.small}>A sample card for trying the split. No payment details are collected.</Text>
+      <PaymentMethods />
     </Card>
     <Button title={showConnections ? 'Hide app connections' : 'App connections'} secondary onPress={() => setShowConnections(!showConnections)} />
     {(showConnections || supabaseConfigured) && <>

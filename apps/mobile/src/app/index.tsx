@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import { claimedHalves, formatMoney, people } from '@splitpool/contracts';
+import { claimedHalves, demoMethodLabel, formatMoney, people } from '@splitpool/contracts';
 import { Button, Card, colors, DemoNote, Screen, SegmentedControl, styles } from '../components/ui';
 import { useDemo } from '../state/demo';
 
 export default function GroupScreen() {
-  const { bill, summary, person, setPerson, setClaim, phase, renameGroup } = useDemo();
+  const { bill, summary, person, setPerson, setClaim, phase, renameGroup, methods } = useDemo();
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(bill.groupName);
   const currentShare = summary.shares.find((share) => share.id === person)!;
@@ -43,6 +43,9 @@ export default function GroupScreen() {
     <View style={{ gap: 12 }}>
       <Text style={styles.label}>Claiming as · demo participants</Text>
       <SegmentedControl label="Claiming as" options={people.map((entry) => ({ value: entry.id, label: entry.name }))} value={person} onChange={setPerson} />
+      <Pressable accessibilityRole="button" accessibilityLabel="Choose a payment method" onPress={() => router.push('/profile')} hitSlop={8}>
+        <Text style={methods[person].methodId ? styles.small : styles.link}>{methods[person].methodId ? demoMethodLabel(methods[person].methodId) : 'Add a payment method'}</Text>
+      </Pressable>
     </View>
     <View>
       <View style={[styles.row, { paddingBottom: 8 }]}>
