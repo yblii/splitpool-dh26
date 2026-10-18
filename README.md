@@ -105,7 +105,7 @@ EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 
 Expo only exposes variables prefixed with `EXPO_PUBLIC_` to the app. Names like `SUPABASE_URL` without that prefix will not work. After editing `.env`, fully restart Expo.
 
-The app opens on **Sign in**. Create an account from there; after sign-up you are sent to a verify-email screen with a button back to login. Use **Continue without account** to try the local bill demo. Sign-up stores first name, last name, and phone in Supabase user metadata. Native session storage uses Expo SecureStore; the browser uses the SDK's browser storage.
+The app opens on **Sign in**. Create an account from there; after sign-up you are sent to a verify-email screen with a button back to login. A signed-in session is required to use the app. Sign-up stores first name, last name, and phone in Supabase user metadata. Native session storage uses Expo SecureStore; the browser uses the SDK's browser storage.
 
 For profile photos, create a public Storage bucket named `avatars` and allow authenticated users to upload to a folder matching their user id. Bills remain local demo state until database tables and policies are implemented.
 

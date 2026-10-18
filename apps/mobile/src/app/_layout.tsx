@@ -11,7 +11,8 @@ import { DemoProvider } from '../state/demo';
 import { getSupabase, logSupabaseEnvStatus } from '../lib/supabase';
 
 function RootNavigator() {
-  const { session, profile, allowApp, isLoading } = useAuth();
+  const { session, profile, isLoading } = useAuth();
+  const signedIn = Boolean(session);
 
   if (isLoading) {
     return <View style={{ flex: 1, backgroundColor: colors.background }} />;
@@ -31,14 +32,14 @@ function RootNavigator() {
       contentStyle: { backgroundColor: colors.background },
       headerBackTitle: 'Back',
     }}>
-      <Stack.Protected guard={allowApp}>
+      <Stack.Protected guard={signedIn}>
         <Stack.Screen
           name="index"
           options={{
             title: 'SPLITPOOL',
             headerRight: () => (
               <ProfileIconButton
-                avatarUrl={session ? profile?.avatarUrl : undefined}
+                avatarUrl={profile?.avatarUrl}
                 onPress={() => router.push('/profile')}
               />
             ),
@@ -49,7 +50,7 @@ function RootNavigator() {
         <Stack.Screen name="profile" options={{ title: 'PROFILE' }} />
         <Stack.Screen name="payment" options={{ title: 'PAYMENT' }} />
       </Stack.Protected>
-      <Stack.Protected guard={!allowApp}>
+      <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="login" options={{ title: 'SIGN IN', headerBackVisible: false }} />
         <Stack.Screen name="signup" options={{ title: 'SIGN UP' }} />
         <Stack.Screen name="verify-email" options={{ title: 'VERIFY EMAIL', headerBackVisible: false }} />

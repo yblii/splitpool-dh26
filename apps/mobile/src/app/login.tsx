@@ -6,7 +6,7 @@ import { getSupabaseEnvStatus } from '../lib/supabase';
 import { useAuth } from '../state/auth';
 
 export default function LoginScreen() {
-  const { configured, signIn, continueAsGuest } = useAuth();
+  const { configured, signIn } = useAuth();
   const envStatus = getSupabaseEnvStatus();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -66,15 +66,6 @@ export default function LoginScreen() {
           title={busy ? 'Signing in…' : 'Sign in'}
           disabled={busy || !email.trim() || !password || !configured}
           onPress={() => void onSubmit()}
-        />
-        <Button
-          title="Continue without account"
-          secondary
-          disabled={busy}
-          onPress={() => {
-            continueAsGuest();
-            router.replace('/');
-          }}
         />
         {!!message && <Text style={styles.small}>{message}</Text>}
       </Card>
