@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AppState, Platform, Text } from 'react-native';
+import { AppState, Platform, Text, View } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -11,7 +11,11 @@ import { DemoProvider } from '../state/demo';
 import { getSupabase, logSupabaseEnvStatus } from '../lib/supabase';
 
 function RootNavigator() {
-  const { session, profile } = useAuth();
+  const { session, profile, allowApp, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <View style={{ flex: 1, backgroundColor: colors.background }} />;
+  }
 
   return (
     <Stack screenOptions={{
@@ -27,24 +31,29 @@ function RootNavigator() {
       contentStyle: { backgroundColor: colors.background },
       headerBackTitle: 'Back',
     }}>
-      <Stack.Screen
-        name="index"
-        options={{
-          title: 'SPLITPOOL',
-          headerRight: () => (
-            <ProfileIconButton
-              avatarUrl={session ? profile?.avatarUrl : undefined}
-              onPress={() => router.push(session ? '/profile' : '/login')}
-            />
-          ),
-        }}
-      />
-      <Stack.Screen name="receipt" options={{ title: 'RECEIPT' }} />
-      <Stack.Screen name="receipt-review" options={{ title: 'REVIEW' }} />
-      <Stack.Screen name="profile" options={{ title: 'PROFILE' }} />
-      <Stack.Screen name="login" options={{ title: 'SIGN IN' }} />
-      <Stack.Screen name="signup" options={{ title: 'SIGN UP' }} />
-      <Stack.Screen name="payment" options={{ title: 'PAYMENT' }} />
+      <Stack.Protected guard={allowApp}>
+        <Stack.Screen
+          name="index"
+          options={{
+            title: 'SPLITPOOL',
+            headerRight: () => (
+              <ProfileIconButton
+                avatarUrl={session ? profile?.avatarUrl : undefined}
+                onPress={() => router.push('/profile')}
+              />
+            ),
+          }}
+        />
+        <Stack.Screen name="receipt" options={{ title: 'RECEIPT' }} />
+        <Stack.Screen name="receipt-review" options={{ title: 'REVIEW' }} />
+        <Stack.Screen name="profile" options={{ title: 'PROFILE' }} />
+        <Stack.Screen name="payment" options={{ title: 'PAYMENT' }} />
+      </Stack.Protected>
+      <Stack.Protected guard={!allowApp}>
+        <Stack.Screen name="login" options={{ title: 'SIGN IN', headerBackVisible: false }} />
+        <Stack.Screen name="signup" options={{ title: 'SIGN UP' }} />
+        <Stack.Screen name="verify-email" options={{ title: 'VERIFY EMAIL', headerBackVisible: false }} />
+      </Stack.Protected>
     </Stack>
   );
 }

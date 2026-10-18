@@ -59,7 +59,7 @@ The preview profile produces an installable Android APK. For iOS, use `--platfor
 - Exact-cent totals with equal or proportional tax/tip splitting; incomplete claims block demo payment.
 - Native camera/photo selection, Gemini receipt parsing via the local API (sample fallback without a key), and a host review screen that writes verified items into the local demo bill.
 - A demo card toggle and simulated contribution/merchant payment states.
-- Dedicated Supabase email/password login and sign-up screens (first name, last name, email, password, phone), plus a profile icon on the bill screen for photo and profile edits.
+- Auth-first launch: sign-in is the default screen; sign-up collects first name, last name, email, password, and phone, then opens a verify-email page. A profile icon on the bill screen supports photo and profile edits.
 - A read-only Fastify health endpoint and demo bill endpoint, with an in-app connection check.
 
 The bill lives in memory and resets on reload. Participant switching simulates collaboration on one device. Live group creation/invites, persistent profiles, concurrent multi-device edits, receipt upload/OCR, real card linking, issuing, and collection/refunds are next implementation steps. Supabase sign-in alone does not connect the demo bill to a database. No real money moves.
@@ -105,7 +105,7 @@ EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 
 Expo only exposes variables prefixed with `EXPO_PUBLIC_` to the app. Names like `SUPABASE_URL` without that prefix will not work. After editing `.env`, fully restart Expo.
 
-Open **Sign in** / **Sign up** from the profile icon on the bill screen (or Profile when signed out). Sign-up stores first name, last name, and phone in Supabase user metadata. Confirm signup by email if your project requires it, then sign in. Native session storage uses Expo SecureStore; the browser uses the SDK's browser storage.
+The app opens on **Sign in**. Create an account from there; after sign-up you are sent to a verify-email screen with a button back to login. Use **Continue without account** to try the local bill demo. Sign-up stores first name, last name, and phone in Supabase user metadata. Native session storage uses Expo SecureStore; the browser uses the SDK's browser storage.
 
 For profile photos, create a public Storage bucket named `avatars` and allow authenticated users to upload to a folder matching their user id. Bills remain local demo state until database tables and policies are implemented.
 

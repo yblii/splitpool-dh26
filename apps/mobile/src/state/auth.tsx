@@ -26,14 +26,22 @@ type UpdateProfileInput = {
   phone: string;
 };
 
+export type SignUpResult =
+  | { ok: true; email: string; needsEmailVerification: boolean }
+  | { ok: false; error: string };
+
 type AuthContextValue = {
   configured: boolean;
   isLoading: boolean;
+  isGuest: boolean;
   session: Session | null;
   user: User | null;
   profile: AuthProfile | null;
+  /** True when a real session exists or the user chose demo/guest access. */
+  allowApp: boolean;
+  continueAsGuest: () => void;
   signIn: (email: string, password: string) => Promise<string | undefined>;
-  signUp: (input: SignUpInput) => Promise<string | undefined>;
+  signUp: (input: SignUpInput) => Promise<SignUpResult>;
   signOut: () => Promise<string | undefined>;
   updateProfile: (input: UpdateProfileInput) => Promise<string | undefined>;
   uploadAvatar: (image: { uri: string; mimeType?: string }) => Promise<string | undefined>;
@@ -77,6 +85,7 @@ async function readImageBytes(uri: string) {
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const [isLoading, setIsLoading] = useState(() => getSupabase() != null);
+  const [isGuest, setIsGuest] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<AuthProfile | null>(null);
 
@@ -88,12 +97,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
       if (!active) return;
       setSession(data.session);
       setProfile(profileFromUser(data.session?.user));
+      if (data.session) setIsGuest(false);
       setIsLoading(false);
     });
     const { data } = client.auth.onAuthStateChange((_event, next) => {
       if (!active) return;
       setSession(next);
       setProfile(profileFromUser(next?.user));
+      if (next) setIsGuest(false);
       setIsLoading(false);
     });
     return () => {
@@ -105,14 +116,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const value = useMemo<AuthContextValue>(() => ({
     configured: supabaseConfigured,
     isLoading,
+    isGuest,
     session,
     user: session?.user ?? null,
     profile,
+    allowApp: Boolean(session) || isGuest,
+    continueAsGuest: () => setIsGuest(true),
     async signIn(email, password) {
       const client = getSupabase();
       if (!client) return 'Add your Supabase URL and publishable key to apps/mobile/.env, then restart Expo.';
       try {
         const { error } = await client.auth.signInWithPassword({ email: email.trim(), password });
+        if (!error) setIsGuest(false);
         return error?.message;
       } catch {
         return 'Could not reach Supabase. Check your connection and configuration.';
@@ -120,12 +135,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
     },
     async signUp({ firstName, lastName, email, password, phone }) {
       const client = getSupabase();
-      if (!client) return 'Add your Supabase URL and publishable key to apps/mobile/.env, then restart Expo.';
+      if (!client) {
+        return {
+          ok: false,
+          error: 'Add your Supabase URL and publishable key to apps/mobile/.env, then restart Expo.',
+        };
+      }
       const trimmedFirst = firstName.trim();
       const trimmedLast = lastName.trim();
+      const trimmedEmail = email.trim();
       try {
         const { data, error } = await client.auth.signUp({
-          email: email.trim(),
+          email: trimmedEmail,
           password,
           options: {
             data: {
@@ -136,14 +157,24 @@ export function AuthProvider({ children }: PropsWithChildren) {
             },
           },
         });
-        if (error) return error.message;
-        if (!data.session) return 'Check your email to confirm your account, then sign in.';
-        return undefined;
+        if (error) return { ok: false, error: error.message };
+        // Always send users through verify-email; drop any immediate session so
+        // protected routes do not skip them into the app before they confirm.
+        if (data.session) {
+          await client.auth.signOut();
+        }
+        setIsGuest(false);
+        return {
+          ok: true,
+          email: trimmedEmail,
+          needsEmailVerification: !data.session,
+        };
       } catch {
-        return 'Could not reach Supabase. Check your connection and configuration.';
+        return { ok: false, error: 'Could not reach Supabase. Check your connection and configuration.' };
       }
     },
     async signOut() {
+      setIsGuest(false);
       const client = getSupabase();
       if (!client) return undefined;
       const { error } = await client.auth.signOut();
@@ -198,7 +229,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         return 'Could not upload that photo. Try another image.';
       }
     },
-  }), [isLoading, profile, session]);
+  }), [isGuest, isLoading, profile, session]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

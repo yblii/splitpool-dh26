@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
-import { Link, router } from 'expo-router';
+import { Link, router, type Href } from 'expo-router';
 import { Button, Card, DemoNote, Screen, styles } from '../components/ui';
 import { getSupabaseEnvStatus } from '../lib/supabase';
 import { useAuth } from '../state/auth';
@@ -30,16 +30,11 @@ export default function SignUpScreen() {
     setMessage('');
     const result = await signUp({ firstName, lastName, email, password, phone });
     setBusy(false);
-    if (result === 'Check your email to confirm your account, then sign in.') {
-      setMessage(result);
-      setPassword('');
+    if (!result.ok) {
+      setMessage(result.error);
       return;
     }
-    if (result) {
-      setMessage(result);
-      return;
-    }
-    router.replace('/profile');
+    router.replace({ pathname: '/verify-email', params: { email: result.email } } as Href);
   }
 
   return (
