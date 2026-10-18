@@ -68,9 +68,9 @@ export async function collaborationRoutes(
   app.post<{ Params: { token: string } }>('/invites/:token/accept', {
     schema: { params: object({ token: { type: 'string', pattern: '^[A-Za-z0-9_-]{43}$' } }) },
   }, request => service.acceptInvite(user(request), request.params.token));
-  app.post<{ Params: { id: string }; Body: { participantIds: string[] } }>('/groups/:id/bills', {
-    schema: { params, body: object({ participantIds: ids }) },
-  }, async (request, reply) => reply.code(201).send(await service.createBill(user(request), request.params.id, request.body.participantIds.map(id => id.toLowerCase()))));
+  app.post<{ Params: { id: string } }>('/groups/:id/bills', {
+    schema: { params, body: object({}, []) },
+  }, async (request, reply) => reply.code(201).send(await service.createBill(user(request), request.params.id)));
   app.get<{ Params: { id: string } }>('/bills/:id', { schema: { params } },
     request => service.getBill(user(request), request.params.id));
   app.post<{ Params: { id: string } }>('/bills/:id/receipt-extractions', { schema: { params } },

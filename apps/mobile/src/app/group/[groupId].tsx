@@ -47,7 +47,7 @@ export default function GroupScreen() {
         router.push({ pathname: '/bill/[billId]', params: { billId: group.activeBillId } });
         return;
       }
-      const bill = await createBill(group.id, [appProfile.userId]);
+      const bill = await createBill(group.id);
       router.push({ pathname: '/bill/[billId]', params: { billId: bill.id } });
     } catch (error) {
       setMessage(formatApiError(error));

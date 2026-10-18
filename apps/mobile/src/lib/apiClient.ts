@@ -6,7 +6,6 @@ import type {
   GroupDetail,
   Profile,
   SaveItemsRequest,
-  UpdateSettingsRequest,
   VerifiedReceipt,
 } from '@splitpool/contracts';
 import { apiUrl } from './api';
@@ -182,14 +181,10 @@ export async function getGroup(groupId: string, { signal }: { signal?: AbortSign
   return apiRequest<GroupDetail>(`/groups/${groupId}`, { signal });
 }
 
-export async function createBill(
-  groupId: string,
-  participantIds: string[],
-  { signal }: { signal?: AbortSignal } = {},
-) {
+export async function createBill(groupId: string, { signal }: { signal?: AbortSignal } = {}) {
   return apiRequest<BillResponse>(`/groups/${groupId}/bills`, {
     method: 'POST',
-    body: { participantIds },
+    body: {},
     signal,
   });
 }
@@ -279,18 +274,6 @@ export async function setBillTip(
 ) {
   return apiRequest<BillResponse>(`/bills/${billId}/tip`, {
     method: 'PUT',
-    body: input,
-    signal,
-  });
-}
-
-export async function updateBillSettings(
-  billId: string,
-  input: UpdateSettingsRequest,
-  { signal }: { signal?: AbortSignal } = {},
-) {
-  return apiRequest<BillResponse>(`/bills/${billId}/settings`, {
-    method: 'PATCH',
     body: input,
     signal,
   });

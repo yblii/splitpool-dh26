@@ -5,12 +5,10 @@ import { formatMoney, type BillItem, type BillResponse, type Fraction } from '@s
 import { Button, Card, DemoNote, Screen, SegmentedControl, colors, styles } from '../../../components/ui';
 import { useBillPoll } from '../../../hooks/useBillPoll';
 import {
-  ApiClientError,
   formatApiError,
   isApiClientError,
   setBillTip,
   setItemClaim,
-  updateBillSettings,
 } from '../../../lib/apiClient';
 import {
   claimForUser,
@@ -137,7 +135,6 @@ export default function BillScreen() {
 
   const userId = appProfile?.userId;
   const isHost = Boolean(bill && group && userId && group.hostId === userId);
-  const isPayer = Boolean(bill && userId && bill.participants.some((participant) => participant.userId === userId));
   const canEdit = bill?.state === 'EDITING';
   const canScan = Boolean(isHost && canEdit);
   const myShare = useMemo(
@@ -178,7 +175,7 @@ export default function BillScreen() {
   }
 
   async function onSaveTip() {
-    if (!bill || !isPayer || !canEdit) return;
+    if (!bill || !canEdit) return;
     const tipCents = inputToCents(tipValue);
     setBusy(true);
     setMessage('');
@@ -192,36 +189,6 @@ export default function BillScreen() {
       setTipInput(null);
     } catch (error) {
       await handleMutationError(error);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function togglePayer(memberId: string) {
-    if (!bill || !isHost || !canEdit) return;
-    const onRoster = bill.participants.some((participant) => participant.userId === memberId);
-    const nextIds = onRoster
-      ? bill.participants.map((participant) => participant.userId).filter((id) => id !== memberId)
-      : [...bill.participants.map((participant) => participant.userId), memberId];
-    if (!nextIds.length) {
-      Alert.alert('Keep one payer', 'A bill needs at least one payer on the roster.');
-      return;
-    }
-    setBusy(true);
-    setMessage('');
-    setConflict(false);
-    try {
-      const next = await updateBillSettings(bill.id, {
-        expectedVersion: bill.version,
-        participantIds: nextIds,
-      });
-      setBill(next);
-    } catch (error) {
-      if (error instanceof ApiClientError && (error.code === 'PAYER_HAS_CLAIMS' || error.code === 'PAYER_HAS_TIP')) {
-        setMessage(error.message);
-      } else {
-        await handleMutationError(error);
-      }
     } finally {
       setBusy(false);
     }
@@ -298,35 +265,22 @@ export default function BillScreen() {
                   ? 'No items yet. Scan a receipt to load a draft for host review.'
                   : 'No items yet. The group host scans and confirms the receipt first.'}
               </Text>
-            ) : isPayer ? (
+            ) : userId ? (
               bill.items.map((item) => (
                 <View key={item.id} style={{ gap: 10, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
                   <ClaimControls
                     bill={bill}
                     item={item}
-                    userId={userId!}
+                    userId={userId}
                     busy={busy}
                     onClaim={(fraction) => void onClaim(item.id, fraction)}
                   />
                 </View>
               ))
-            ) : (
-              bill.items.map((item) => (
-                <View key={item.id} style={styles.row}>
-                  <Text style={[styles.text, { flex: 1 }]}>
-                    {item.name}
-                    {item.quantity > 1 ? ` ×${item.quantity}` : ''}
-                  </Text>
-                  <Text style={styles.text}>{formatMoney(item.netLineTotalCents)}</Text>
-                </View>
-              ))
-            )}
-            {!isPayer && bill.items.length > 0 && (
-              <Text style={styles.small}>Ask the host to add you as a payer before claiming items.</Text>
-            )}
+            ) : null}
           </Card>
 
-          {isPayer && canEdit && (
+          {canEdit && (
             <Card>
               <Text style={styles.heading}>Your tip</Text>
               <Text style={styles.small}>Optional personal tip — only you pay this amount.</Text>
@@ -344,7 +298,8 @@ export default function BillScreen() {
           )}
 
           <Card>
-            <Text style={styles.heading}>Payers</Text>
+            <Text style={styles.heading}>Members</Text>
+            <Text style={styles.small}>Everyone in the group is a payer on this bill.</Text>
             {bill.participants.map((participant) => (
               <Text key={participant.userId} style={styles.text}>
                 {participant.displayName}
@@ -353,30 +308,6 @@ export default function BillScreen() {
               </Text>
             ))}
           </Card>
-
-          {isHost && group && canEdit && (
-            <Card>
-              <Text style={styles.heading}>Roster</Text>
-              <Text style={styles.small}>Host only. Members must clear claims and tips before removal.</Text>
-              {group.members.map((member) => {
-                const onRoster = bill.participants.some((participant) => participant.userId === member.userId);
-                return (
-                  <View key={member.userId} style={styles.row}>
-                    <Text style={[styles.text, { flex: 1 }]}>
-                      {member.displayName}
-                      {member.userId === group.hostId ? ' · host' : ''}
-                    </Text>
-                    <Button
-                      title={onRoster ? 'Remove' : 'Add'}
-                      secondary
-                      disabled={busy}
-                      onPress={() => void togglePayer(member.userId)}
-                    />
-                  </View>
-                );
-              })}
-            </Card>
-          )}
 
           {bill.summary.blockers.length > 0 && (
             <Card>

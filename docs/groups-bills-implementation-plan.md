@@ -59,9 +59,9 @@ So this work is primarily **mobile wiring + one receipt-persistence gap**, not a
 | --- | --- |
 | List / read group | Row in `group_members` for that user |
 | Create group | Any user with a profile; creator becomes `host_id` + first member |
-| Invite / save receipt items / change roster & tax settings | Group **host** only |
+| Invite / save receipt items / tax settings | Group **host** only |
 | Create bill / read bill | Group **member** |
-| Claim items / set tip | Bill **participant** (payer roster), own rows only |
+| Claim items / set tip | Group **member** (everyone on the active bill is a payer), own rows only |
 | Non-member `GET /bills/:id` | `404` / inaccessible (no bill leakage) |
 
 Clients never get `DATABASE_URL`. Membership checks run inside transactions on every private route. Supabase Storage (receipt images / avatars) stays separate; short-lived upload/read URLs are issued only after the API checks host/membership.
@@ -141,7 +141,7 @@ flowchart TD
 - Claims: `PUT /bills/:id/items/:itemId/claim` with exact fractions (not demo halves).
 - Polling hook (`useBillPoll`): 2s interval, pause in background, refetch on focus/mutation/409.
 - Show version conflicts with “Someone else updated — retry.”
-- Host-only controls for receipt edit / roster; payers claim only their shares (+ personal tip).
+- Host-only controls for receipt edit; every group member is a payer and claims their own shares (+ personal tip).
 
 ### Phase E — Cleanup / demo debt
 

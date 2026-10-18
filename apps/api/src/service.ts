@@ -81,24 +81,40 @@ export class CollaborationService {
       await this.profileRequired(tx, userId);
       const invite = (await tx.query('SELECT * FROM invites WHERE token_hash = $1 AND expires_at > now()', [hashToken(token)])).rows[0];
       requireThat(invite && (!invite.target_user_id || invite.target_user_id === userId), 404, 'INVITE_NOT_FOUND', 'Invitation is invalid or expired.');
-      // Link invitations are reusable until expiry. Joining is idempotent and never adds a payer implicitly.
+      // Link invitations are reusable until expiry. Joining is idempotent.
       await tx.query('INSERT INTO group_members(group_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [invite.group_id, userId]);
+      // Every group member is a payer on the active bill.
+      const active = (await tx.query(
+        `SELECT id FROM bills WHERE group_id = $1 AND state NOT IN ('PAID','CANCELLED')`,
+        [invite.group_id],
+      )).rows[0];
+      if (active) {
+        const inserted = await tx.query(
+          'INSERT INTO bill_participants(bill_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+          [active.id, userId],
+        );
+        if (inserted.rowCount) await tx.query('UPDATE bills SET version=version+1 WHERE id=$1', [active.id]);
+      }
       return { groupId: invite.group_id as string };
     });
   }
 
-  async createBill(userId: string, groupId: string, participantIds: string[]) {
+  async createBill(userId: string, groupId: string) {
     return this.db.transaction(async tx => {
       await this.groupAccess(tx, userId, groupId, true);
       // Serialize creation per group; the partial unique index is a second guard.
       await tx.query('SELECT id FROM groups WHERE id = $1 FOR UPDATE', [groupId]);
       const active = await tx.query('SELECT id FROM bills WHERE group_id = $1 AND state NOT IN (\'PAID\',\'CANCELLED\')', [groupId]);
       requireThat(!active.rows.length, 409, 'ACTIVE_BILL_EXISTS', 'This group already has an active bill.');
-      await this.validateRoster(tx, groupId, participantIds);
+      const members = await tx.query<{ user_id: string }>(
+        'SELECT user_id FROM group_members WHERE group_id = $1 ORDER BY user_id',
+        [groupId],
+      );
+      requireThat(members.rows.length, 422, 'INVALID_ROSTER', 'A bill needs at least one group member.');
       const id = randomUUID();
       await tx.query('INSERT INTO bills(id,group_id) VALUES ($1,$2)', [id, groupId]);
-      for (const participantId of participantIds)
-        await tx.query('INSERT INTO bill_participants(bill_id,user_id) VALUES ($1,$2)', [id, participantId]);
+      for (const member of members.rows)
+        await tx.query('INSERT INTO bill_participants(bill_id,user_id) VALUES ($1,$2)', [id, member.user_id]);
       return this.readBill(tx, id);
     });
   }
@@ -106,8 +122,12 @@ export class CollaborationService {
   async getBill(userId: string, billId: string) {
     return this.db.transaction(async tx => {
       await this.billAccess(tx, userId, billId);
+      const groupId = (await tx.query<{ group_id: string }>('SELECT group_id FROM bills WHERE id=$1', [billId])).rows[0]?.group_id;
+      if (groupId && await this.syncParticipantsFromGroup(tx, billId, groupId)) {
+        await tx.query('UPDATE bills SET version=version+1 WHERE id=$1', [billId]);
+      }
       return this.readBill(tx, billId);
-    }, true);
+    });
   }
 
   async saveItems(userId: string, billId: string, input: SaveItemsRequest) {
@@ -188,15 +208,8 @@ export class CollaborationService {
 
   async settings(userId: string, billId: string, input: UpdateSettingsRequest) {
     return this.edit(userId, billId, input.expectedVersion, true, async (tx, current) => {
-      if (input.participantIds) {
-        await this.validateRoster(tx, current.groupId, input.participantIds);
-        const removed = current.participants.filter(p => !input.participantIds!.includes(p.userId));
-        requireThat(!current.claims.some(c => removed.some(p => p.userId === c.userId)), 409, 'PAYER_HAS_CLAIMS',
-          'A payer must remove their claims before the host can remove them from the roster.');
-        requireThat(!removed.some(p => p.tipCents > 0), 409, 'PAYER_HAS_TIP', 'A payer must clear their tip before removal.');
-        for (const p of removed) await tx.query('DELETE FROM bill_participants WHERE bill_id=$1 AND user_id=$2', [billId, p.userId]);
-        for (const id of input.participantIds) await tx.query('INSERT INTO bill_participants(bill_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [billId, id]);
-      }
+      requireThat(!input.participantIds, 422, 'ROSTER_AUTOMATIC',
+        'Every group member is a payer automatically. The payer roster cannot be edited.');
       const settings = { ...current.settings, ...input };
       await tx.query('UPDATE bills SET tax_mode=$1,service_charge_mode=$2 WHERE id=$3',
         [settings.taxMode, settings.serviceChargeMode, billId]);
@@ -243,10 +256,16 @@ export class CollaborationService {
     await this.groupAccess(tx, userId, result.group_id, host);
   }
 
-  private async validateRoster(tx: Sql, groupId: string, ids: string[]) {
-    requireThat(ids.length && new Set(ids).size === ids.length, 422, 'INVALID_ROSTER', 'Select at least one payer, without duplicates.');
-    const result = await tx.query('SELECT user_id FROM group_members WHERE group_id=$1 AND user_id = ANY($2::uuid[])', [groupId, ids]);
-    requireThat(result.rows.length === ids.length, 422, 'INVALID_ROSTER', 'Every payer must be a group member.');
+  /** Insert any group members missing from bill_participants. Returns true when rows were added. */
+  private async syncParticipantsFromGroup(tx: Sql, billId: string, groupId: string) {
+    const result = await tx.query(
+      `INSERT INTO bill_participants(bill_id, user_id)
+       SELECT $1, m.user_id FROM group_members m
+       WHERE m.group_id = $2
+       ON CONFLICT DO NOTHING`,
+      [billId, groupId],
+    );
+    return Boolean(result.rowCount);
   }
 
   private async readBill(tx: Sql, billId: string): Promise<BillResponse> {
