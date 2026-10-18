@@ -591,6 +591,8 @@ const paperStyles = StyleSheet.create({
     maxWidth: '100%',
     minWidth: 0,
     alignSelf: 'stretch',
+    borderRadius: 20,
+    overflow: 'hidden',
     paddingHorizontal: 14,
     paddingBottom: 8,
     ...Platform.select({
