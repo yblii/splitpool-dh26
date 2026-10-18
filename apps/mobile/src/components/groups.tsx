@@ -62,14 +62,18 @@ export function GroupCard({ id, name, members, recent, editing, selected, onPres
           if (motion.dragging) return;
           onPress();
         }}
-        style={{ backgroundColor: PAPER, paddingHorizontal: 16, paddingVertical: 14, gap: 10 }}
+        style={{ backgroundColor: PAPER, paddingHorizontal: 16, paddingVertical: 14 }}
       >
-        <View style={[styles.row, { justifyContent: 'flex-start', gap: 10 }]}>
-          {editing ? <Text accessibilityElementsHidden importantForAccessibility="no" style={{ color: colors.muted, fontSize: 18, lineHeight: 20 }}>≡</Text> : null}
-          <Text style={styles.heading}>{name}</Text>
+        <View style={styles.row}>
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            {editing ? <Text accessibilityElementsHidden importantForAccessibility="no" style={{ color: colors.muted, fontSize: 18, lineHeight: 20 }}>≡</Text> : null}
+            <View style={{ flex: 1, gap: 4, minWidth: 0 }}>
+              <Text style={styles.heading} numberOfLines={1}>{name}</Text>
+              {recent ? <Text style={styles.small} numberOfLines={1}>{recent}</Text> : null}
+            </View>
+          </View>
+          <AvatarStack people={members} />
         </View>
-        <AvatarStack people={members} />
-        {recent ? <Text style={styles.small} numberOfLines={1}>{recent}</Text> : null}
       </Pressable>
     </View>
   </Animated.View>;
