@@ -67,6 +67,11 @@ test('PostgreSQL: groups, permissions, independent tips, receipt edits, and conc
     assert.equal((await request(member, 'PATCH', '/me', { username: 'PERSON_0' })).statusCode, 409);
     const group = (await request(host, 'POST', '/groups', { name: 'Dinner' })).json();
     assert.equal((await request(outsider, 'GET', `/groups/${group.id}`)).statusCode, 404);
+    const creation = await request(host, 'POST', `/groups/${group.id}/bills`, {});
+    assert.equal(creation.statusCode, 201, creation.body);
+    let bill: BillResponse = creation.json();
+    assert.equal(bill.participants.length, 1);
+    assert.equal(bill.participants[0].userId, host);
     const invite = (await request(host, 'POST', `/groups/${group.id}/invites`, {})).json();
     for (const user of [member, third, fourth, member])
       assert.equal((await request(user, 'POST', `/invites/${invite.token}/accept`)).statusCode, 200);
@@ -75,11 +80,10 @@ test('PostgreSQL: groups, permissions, independent tips, receipt edits, and conc
     assert.equal((await request(member, 'POST', `/invites/${targeted.token}/accept`)).statusCode, 404);
     await db.query('UPDATE invites SET expires_at=now() - interval \'1 second\' WHERE target_user_id=$1', [outsider]);
     assert.equal((await request(outsider, 'POST', `/invites/${targeted.token}/accept`)).statusCode, 404);
-    const creation = await request(host, 'POST', `/groups/${group.id}/bills`, { participantIds: users.slice(0, 4) });
-    assert.equal(creation.statusCode, 201, creation.body);
-    let bill: BillResponse = creation.json();
+    // Invite accept adds joiners as payers on the active bill.
+    bill = (await request(host, 'GET', `/bills/${bill.id}`)).json();
     assert.equal(bill.participants.length, 4);
-    assert.equal((await request(host, 'POST', `/groups/${group.id}/bills`, { participantIds: [host] })).statusCode, 409);
+    assert.equal((await request(host, 'POST', `/groups/${group.id}/bills`, {})).statusCode, 409);
     assert.equal((await request(outsider, 'GET', `/bills/${bill.id}`)).statusCode, 404);
     assert.equal((await request(member, 'PATCH', `/bills/${bill.id}/settings`, { expectedVersion: bill.version, taxMode: 'equal' })).statusCode, 403);
     assert.equal((await extract(member, bill.id)).statusCode, 403);
@@ -120,7 +124,10 @@ test('PostgreSQL: groups, permissions, independent tips, receipt edits, and conc
     assert.equal(bill.summary.totalCents, 1602);
     assert.equal(bill.summary.shares.find(p => p.userId === member)!.tipCents, 300);
     assert.equal((await request(host, 'PUT', `/bills/${bill.id}/tip`, { expectedVersion: bill.version, tipCents: 0, userId: member })).statusCode, 400);
-    assert.equal((await request(host, 'PATCH', `/bills/${bill.id}/settings`, { expectedVersion: bill.version, participantIds: [host, third, fourth] })).statusCode, 409);
+    assert.equal(
+      (await request(host, 'PATCH', `/bills/${bill.id}/settings`, { expectedVersion: bill.version, participantIds: [host, third, fourth] })).json().error.code,
+      'ROSTER_AUTOMATIC',
+    );
     // Price corrections retain claims; identity/quantity corrections clear the affected item's claims.
     bill = (await request(host, 'PUT', `/bills/${bill.id}/items`, { expectedVersion: bill.version, ...receipt,
       items: [{ ...bill.items[0], netLineTotalCents: 1002 }], printedTotalCents: 1303 })).json();
@@ -129,7 +136,6 @@ test('PostgreSQL: groups, permissions, independent tips, receipt edits, and conc
       items: [{ ...bill.items[0], quantity: 2 }], printedTotalCents: 1303 })).json();
     assert.equal(bill.claims.length, 0);
     assert.equal(bill.summary.complete, false);
-    assert.equal((await request(host, 'PATCH', `/bills/${bill.id}/settings`, { expectedVersion: bill.version, participantIds: [host, third, fourth] })).json().error.code, 'PAYER_HAS_TIP');
     // Failed writes must roll back earlier deletes/updates in the transaction.
     const failed = await request(host, 'PUT', `/bills/${bill.id}/items`, { expectedVersion: bill.version, ...receipt,
       items: [{ ...bill.items[0], id: randomUUID() }] });

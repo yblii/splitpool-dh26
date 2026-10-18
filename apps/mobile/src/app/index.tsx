@@ -41,7 +41,7 @@ export default function LandingScreen() {
     setMessage('');
     try {
       const group = await createGroup(name);
-      const bill = await createBill(group.id, [appProfile.userId]);
+      const bill = await createBill(group.id);
       setGroupName('');
       setShowCreate(false);
       router.push({ pathname: '/bill/[billId]', params: { billId: bill.id } });

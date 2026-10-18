@@ -62,6 +62,19 @@ export async function buildApp(options: BuildAppOptions = {}) {
     if (failure.validation || failure.statusCode === 400)
       return reply.code(400).send({ error: { code: 'INVALID_REQUEST', message: 'Request does not match the API schema.' } });
     if (failure.code === '23505') return reply.code(409).send({ error: { code: 'CONFLICT', message: 'Username, membership, or active bill already exists.' } });
+    // Connection / TLS / timeout failures from pg — treat as unavailable, not opaque 500s.
+    if (failure.code && [
+      'ECONNREFUSED', 'ENOTFOUND', 'ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN',
+      '57P01', '57P03', '08000', '08001', '08003', '08006', '08004',
+    ].includes(failure.code)) {
+      request.log.error({ code: failure.code, requestId: request.id }, 'Database unavailable');
+      return reply.code(503).send({
+        error: {
+          code: 'DATABASE_UNAVAILABLE',
+          message: 'Cannot reach Tiger Data PostgreSQL. Check DATABASE_URL, TLS settings, and that the database is running.',
+        },
+      });
+    }
     if (failure.statusCode && failure.statusCode >= 400 && failure.statusCode < 500)
       return reply.code(failure.statusCode).send({ error: { code: 'INVALID_REQUEST', message: 'Request could not be accepted.' } });
     // Avoid logging SQL parameters, receipt contents, invitation tokens, or auth tokens.

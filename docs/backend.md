@@ -49,17 +49,17 @@ All paths below are relative to `/api/v1`. Shared TypeScript types live in `pack
 | `GET /groups/:id` | Group, member profiles, active bill ID |
 | `POST /groups/:id/invites` | `{}` for reusable link token, or `{ username }`; returns `{ token, expiresAt, groupId }` (201) |
 | `POST /invites/:token/accept` | No body; returns `{ groupId }` |
-| `POST /groups/:id/bills` | `{ participantIds: [userId, ...] }`; returns bill (201) |
+| `POST /groups/:id/bills` | `{}`; creates active bill with **every current group member** as a payer (201) |
 | `GET /bills/:id` | Authoritative bill, claims, personal tips, totals, and blockers |
 | `POST /bills/:id/receipt-extractions` | Host-only multipart field `image`; stores bytes under `data/receipts/`, upserts `receipts`, returns OCR `{ draft, usedFallback, imageKey, … }` |
 | `PUT /bills/:id/items` | `SaveItemsRequest`; full replacement of reviewed items/receipt totals; marks matching `receipts.parsing_status` as `verified` when present |
 | `PUT /bills/:id/items/:itemId/claim` | `{ expectedVersion, fraction: { numerator, denominator } }` |
-| `PATCH /bills/:id/settings` | `{ expectedVersion, participantIds?, taxMode?, serviceChargeMode? }` |
+| `PATCH /bills/:id/settings` | `{ expectedVersion, taxMode?, serviceChargeMode? }` (payer roster is automatic; `participantIds` is rejected) |
 | `PUT /bills/:id/tip` | `{ expectedVersion, tipCents }`; sets only the caller's optional tip |
 
-Usernames are unique, case-insensitive through lowercase normalization, and contain 3–30 letters/digits/underscores. Display names are not unique. Link tokens are random, stored as SHA-256 hashes, reusable for 24 hours, and accepted only after sign-in/profile creation. Username invites bind to the resolved user ID, even if that user later renames their profile. Deliver/share tokens through the mobile app; this backend does not send notifications. Joining twice is safe and never implicitly adds someone to an existing bill's payer roster.
+Usernames are unique, case-insensitive through lowercase normalization, and contain 3–30 letters/digits/underscores. Display names are not unique. Link tokens are random, stored as SHA-256 hashes, reusable for 24 hours, and accepted only after sign-in/profile creation. Username invites bind to the resolved user ID, even if that user later renames their profile. Deliver/share tokens through the mobile app; this backend does not send notifications. Joining twice is safe. Accepting an invite also adds the member as a payer on the group's active bill.
 
-There is one active bill per group, enforced by a partial unique index and a group-row lock during creation. Group members can read bills; only the host manages receipt items, invitations, or the payer roster. A host need not be a payer. Only payers can change their own claims/tips. Group deletion, leaving/removing members, invite revocation, and host transfer are not implemented in this milestone.
+There is one active bill per group, enforced by a partial unique index and a group-row lock during creation. Every group member is a bill payer (synced on create, invite accept, and bill read). Group members can read bills; only the host manages receipt items and invitations. Only members can change their own claims/tips. Group deletion, leaving/removing members, invite revocation, and host transfer are not implemented in this milestone.
 
 Example receipt save:
 
