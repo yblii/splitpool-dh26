@@ -123,6 +123,8 @@ apps/api/migrations/         Versioned Tiger Data/PostgreSQL schema
 apps/api/test/               Backend unit/HTTP and optional PostgreSQL integration tests
 packages/contracts/src/     Shared types, sample bill, exact-cent demo calculations
 docs/design.md              Four-component product/technical design
+docs/backend.md             Collaboration API already on main
+docs/groups-bills-implementation-plan.md  Plan to wire groups/bills on mobile
 docs/backend.md             Backend setup, endpoint contracts, and teammate integration
 ```
 
