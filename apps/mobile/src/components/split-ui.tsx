@@ -672,8 +672,9 @@ const cardStyles = StyleSheet.create({
     flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center',
   },
   percentInput: {
-    minWidth: 96, minHeight: 44, borderWidth: 1.5, borderColor: colors.ink, borderRadius: 8,
-    paddingHorizontal: 10, fontSize: 16, color: colors.ink, backgroundColor: '#FFFFFF',
+    width: 72, maxWidth: 72, flexGrow: 0, flexShrink: 0,
+    minHeight: 44, borderWidth: 1, borderColor: colors.ink, borderRadius: 8,
+    paddingHorizontal: 10, fontSize: 17, fontWeight: '600', color: colors.ink, backgroundColor: '#FFFFFF',
   },
   sharePrice: { fontFamily: monoFamily, color: colors.ink, fontSize: 16, lineHeight: 22, fontWeight: '700' },
   setButton: {
