@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 import type { Profile } from '@splitpool/contracts';
-import { ApiClientError, formatApiError, getMe, isApiConfigured, saveAppProfile } from '../lib/apiClient';
+import { formatApiError, getApiReadyHint, getMe, isApiConfigured, saveAppProfile } from '../lib/apiClient';
 import { useAuth } from './auth';
 
 export type AppProfileStatus = 'loading' | 'needsSetup' | 'ready' | 'unavailable';
@@ -68,16 +68,16 @@ export function AppProfileProvider({ children }: PropsWithChildren) {
           error: null,
         });
       })
-      .catch((error: unknown) => {
+      .catch(async (error: unknown) => {
         if (!active) return;
-        const message = error instanceof ApiClientError
-          ? error.message
-          : 'Could not reach the API. Is it running and reachable from this device?';
+        const base = formatApiError(error);
+        const hint = await getApiReadyHint().catch(() => null);
+        if (!active) return;
         setRemote({
           loadId,
           status: 'unavailable',
           profile: null,
-          error: message,
+          error: hint ? `${base}\n\n${hint}` : base,
         });
       });
 

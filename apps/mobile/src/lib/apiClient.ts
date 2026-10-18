@@ -132,6 +132,27 @@ export async function getMe({ signal }: { signal?: AbortSignal } = {}) {
   return data.profile;
 }
 
+/** Best-effort readiness probe for clearer setup errors (does not require auth). */
+export async function getApiReadyHint({ signal }: { signal?: AbortSignal } = {}): Promise<string | null> {
+  if (!apiUrl) return apiMissingConfiguredHint();
+  try {
+    const response = await fetch(`${apiUrl}/api/v1/ready`, { signal, headers: { Accept: 'application/json' } });
+    if (response.status === 503) {
+      return 'API is up but the database is not ready. From the repo root run: npm run migrate --workspace @splitpool/api — then restart npm run api.';
+    }
+    if (!response.ok) {
+      return `API readiness check failed (HTTP ${response.status}). Confirm DATABASE_URL / Supabase vars in apps/api/.env and that npm run api is running.`;
+    }
+    return null;
+  } catch {
+    return `Could not reach ${apiUrl}/api/v1/ready. Start the API with npm run api, and on a phone use your LAN IP (not localhost).`;
+  }
+}
+
+function apiMissingConfiguredHint() {
+  return 'Set EXPO_PUBLIC_API_URL in apps/mobile/.env (LAN IP on a phone), then restart Expo.';
+}
+
 export async function saveAppProfile(
   input: { username?: string; displayName?: string },
   { signal }: { signal?: AbortSignal } = {},
