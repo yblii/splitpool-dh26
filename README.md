@@ -99,8 +99,8 @@ The API currently exposes only public demo data. Add server-side token verificat
 Create a Supabase project, enable email/password authentication, then set these in `apps/mobile/.env` and restart Expo:
 
 ```dotenv
-EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
-EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
+SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 ```
 
 Open **Sign in** / **Sign up** from the profile icon on the bill screen (or Profile when signed out). Sign-up stores first name, last name, and phone in Supabase user metadata. Confirm signup by email if your project requires it, then sign in. Native session storage uses Expo SecureStore; the browser uses the SDK's browser storage.

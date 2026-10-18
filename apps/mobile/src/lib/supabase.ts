@@ -3,8 +3,8 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
-const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+const url = process.env.SUPABASE_URL;
+const key = process.env.SUPABASE_PUBLISHABLE_KEY;
 export const supabaseConfigured = Boolean(url && key);
 let client: SupabaseClient | undefined;
 
