@@ -96,7 +96,7 @@ export default function ProfileScreen() {
     </Card>
     <Card>
       <Text style={styles.heading}>Settings</Text>
-      <Button title={session ? 'Open connected groups' : 'Sign in for shared bills'} secondary onPress={() => router.push(session ? status === 'ready' ? '/connected' : '/profile-setup' : '/login')} />
+      <Button title={session ? 'Open shared groups' : 'Sign in for shared bills'} secondary onPress={() => router.push(session ? status === 'ready' ? '/connected' : '/profile-setup' : '/login')} />
       {session && status === 'ready' && <Button title="Edit connected account" secondary onPress={() => router.push('/account')} />}
       <Button title={showConnections ? 'Hide app connections' : 'App connections'} secondary onPress={() => setShowConnections((open) => !open)} />
       <Button title="Reset local demo" secondary onPress={() => { demo.reset(); setMessage('Demo reset. Groups, claims, and the sample bill are back to the start.'); }} />

@@ -37,6 +37,7 @@ const migrations: { version: number; file: string }[] = [
   { version: 1, file: '001_collaboration.sql' },
   { version: 2, file: '002_receipts.sql' },
   { version: 3, file: '003_one_bill_per_group.sql' },
+  { version: 4, file: '004_preserve_group_bills.sql' },
 ];
 
 export async function migrate(db: Database) {

@@ -305,7 +305,7 @@ export default function BillPaymentScreen() {
 
   if (!billId || !userId) {
     return (
-      <Screen header={<AppHeader title="Payment" onBack={() => router.replace('/')} />}>
+      <Screen header={<AppHeader title="Payment" onBack={() => router.replace('/connected')} />}>
         <Text style={styles.subtitle}>Sign in and open a bill to continue payment.</Text>
       </Screen>
     );
@@ -314,8 +314,8 @@ export default function BillPaymentScreen() {
   if (settled) {
     return (
       <Screen
-        header={<AppHeader title="Complete" onBack={() => router.replace('/')} />}
-        footer={<Button title="Return to groups" onPress={() => router.replace('/')} />}
+        header={<AppHeader title="Complete" onBack={() => router.replace('/connected')} />}
+        footer={<Button title="Return to groups" onPress={() => router.replace('/connected')} />}
       >
         <View style={{ gap: 6 }}>
           <Text style={styles.title}>Settled together.</Text>

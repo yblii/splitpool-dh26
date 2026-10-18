@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { formatMoney, type BillItem, type BillResponse, type Fraction } from '@splitpool/contracts';
-import { Button, Card, DemoNote, Screen, SegmentedControl, colors, styles } from '../../../components/ui';
+import { AppHeader, Button, Card, ErrorBanner, Screen, SegmentedControl, colors, styles } from '../../../components/ui';
 import { useBillPoll } from '../../../hooks/useBillPoll';
 import {
   formatApiError,
@@ -158,31 +158,65 @@ export default function BillScreen() {
 
   if (!billId) {
     return (
-      <Screen>
+      <Screen header={<AppHeader title="Bill" onBack={() => router.replace('/connected')} />}>
         <Text style={styles.subtitle}>Missing bill id.</Text>
       </Screen>
     );
   }
 
   return (
-    <Screen>
-      <View style={{ gap: 10 }}>
+    <Screen
+      header={(
+        <AppHeader
+          title={group?.name ?? 'Bill'}
+          onBack={() => (bill
+            ? router.push({ pathname: '/group/[groupId]', params: { groupId: bill.groupId } })
+            : router.replace('/connected'))}
+        />
+      )}
+      footer={(
+        <>
+          {canScan && bill && (
+            <Button
+              title={bill.items.length ? 'Rescan receipt' : 'Scan receipt'}
+              disabled={busy}
+              onPress={() => router.push({
+                pathname: '/bill/[billId]/receipt',
+                params: { billId: bill.id, expectedVersion: String(bill.version) },
+              } as unknown as Href)}
+            />
+          )}
+          {bill && bill.state !== 'PAID' && bill.state !== 'CANCELLED' && bill.summary.complete && (
+            <Button
+              title={isHost ? 'Confirm Payment' : 'Continue to payment'}
+              disabled={busy}
+              onPress={() => router.push({
+                pathname: '/bill/[billId]/payment',
+                params: { billId: bill.id },
+              } as unknown as Href)}
+            />
+          )}
+          <Button title="Refresh" secondary disabled={loading || busy} onPress={() => void refresh({ clearConflict: true })} />
+          <Button title="Return to groups" secondary onPress={() => router.replace('/connected')} />
+        </>
+      )}
+    >
+      <View style={{ gap: 6 }}>
         <Text style={styles.title}>{bill?.merchant || 'New bill'}</Text>
-        <Text style={styles.subtitle}>
+        <Text style={styles.subheading}>
           {loading && !bill
             ? 'Loading…'
             : bill
-              ? `${bill.state} · v${bill.version} · ${bill.participants.length} payer${bill.participants.length === 1 ? '' : 's'}`
+              ? `${bill.state.replace(/_/g, ' ')} · ${bill.participants.length} payer${bill.participants.length === 1 ? '' : 's'}`
               : 'Could not load bill'}
         </Text>
       </View>
 
       {conflict && (
-        <View style={local.banner}>
-          <Text style={[styles.label, { color: colors.warning }]}>Someone else updated — retry.</Text>
-          <Text style={styles.small}>Pull the latest bill state, then try your claim again.</Text>
-          <Button title="Refresh now" secondary disabled={busy} onPress={() => void refresh({ clearConflict: true })} />
-        </View>
+        <ErrorBanner
+          title="Someone else updated — retry"
+          message="Pull the latest bill state, then try your claim again."
+        />
       )}
 
       {bill && (
@@ -272,47 +306,15 @@ export default function BillScreen() {
         </>
       )}
 
-      {!!message && <Text style={[styles.small, { color: colors.warning }]}>{message}</Text>}
-
-      {canScan && bill && (
-        <Button
-          title={bill.items.length ? 'Rescan receipt' : 'Scan receipt'}
-          disabled={busy}
-          onPress={() => router.push({
-            pathname: '/bill/[billId]/receipt',
-            params: { billId: bill.id, expectedVersion: String(bill.version) },
-          } as unknown as Href)}
-        />
-      )}
+      {!!message && <ErrorBanner message={message} />}
       {bill?.state === 'PAID' && (
-        <Text style={styles.small}>This bill is paid and no longer open.</Text>
-      )}
-      {bill && bill.state !== 'PAID' && bill.state !== 'CANCELLED' && bill.summary.complete && (
-        <Button
-          title={isHost ? 'Confirm Payment' : 'Continue to payment'}
-          disabled={busy}
-          onPress={() => router.push({
-            pathname: '/bill/[billId]/payment',
-            params: { billId: bill.id },
-          } as unknown as Href)}
-        />
+        <Text style={styles.small}>This bill is paid. It stays in the group’s history.</Text>
       )}
       {bill && bill.state !== 'PAID' && bill.state !== 'CANCELLED' && !bill.summary.complete && bill.items.length > 0 && (
         <Text style={[styles.small, { color: colors.warning }]}>
           Claim every item before the host can confirm payment.
         </Text>
       )}
-      <Button title="Refresh" secondary disabled={loading || busy} onPress={() => void refresh({ clearConflict: true })} />
-      {bill && bill.state !== 'PAID' && bill.state !== 'CANCELLED' && (
-        <Button
-          title="Group details"
-          secondary
-          disabled={busy}
-          onPress={() => router.push({ pathname: '/group/[groupId]', params: { groupId: bill.groupId } })}
-        />
-      )}
-      <Button title="Back to groups" secondary onPress={() => router.replace('/connected')} />
-      <DemoNote />
     </Screen>
   );
 }
@@ -335,12 +337,5 @@ const local = StyleSheet.create({
     letterSpacing: -0.8,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
-  },
-  banner: {
-    backgroundColor: colors.light,
-    borderWidth: 1,
-    borderColor: colors.warning,
-    padding: 14,
-    gap: 8,
   },
 });

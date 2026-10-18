@@ -98,11 +98,15 @@ export default function GroupsScreen() {
         <AvatarStack people={demo.friends} size={28} />
         <Text style={dockLabel}>Friends</Text>
       </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Open shared groups" onPress={() => router.push('/connected')} style={dock}>
+        <Text style={dockLabel}>Shared</Text>
+      </Pressable>
     </View>}
   >
     <Pressable accessibilityRole="button" accessibilityLabel={`Your title, ${demo.you.title}`} onPress={() => router.push('/profile')} style={{ alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center' }}>
       <Text style={yourTitle}>{demo.you.title ? `“${demo.you.title}”` : 'Your next meal has a title'}</Text>
     </Pressable>
+    <Text style={styles.small}>Local demo groups stay on this device. Shared groups use your signed-in account.</Text>
     <View style={styles.row}>
       <Text style={groupsHeading}>Groups</Text>
       {editing ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>

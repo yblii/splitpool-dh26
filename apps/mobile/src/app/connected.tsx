@@ -1,49 +1,47 @@
 import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import type { Group } from '@splitpool/contracts';
-import { Button, Card, DemoNote, Screen, colors, styles } from '../components/ui';
-import { closeBill, createGroup, formatApiError, listGroups } from '../lib/apiClient';
-import { getBillPayment } from '../lib/paymentApi';
+import type { GroupListItem } from '@splitpool/contracts';
+import { GroupCard } from '../components/groups';
+import { MemberAvatar } from '../components/people';
+import { BottomSheet } from '../components/sheets';
+import { interFace, interItalic } from '../fonts';
+import { AppHeader, Button, ErrorBanner, Screen, colors, styles } from '../components/ui';
+import { createGroup, formatApiError, listGroups } from '../lib/apiClient';
+import { avatarFromProfile } from '../lib/peopleUi';
 import { useAppProfile } from '../state/appProfile';
+import { useAuth } from '../state/auth';
+import { useDemo } from '../state/demo';
 
-export default function LandingScreen() {
+/** Signed-in groups home — demo chrome, live collaboration data. */
+export default function ConnectedGroupsScreen() {
+  const { profile } = useAuth();
   const { appProfile } = useAppProfile();
-  const [groups, setGroups] = useState<Group[]>([]);
+  const demo = useDemo();
+  const [groups, setGroups] = useState<GroupListItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [groupName, setGroupName] = useState('');
-  const [message, setMessage] = useState('');
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const you = avatarFromProfile(
+    appProfile ?? { userId: 'you', username: 'you', displayName: profile?.firstName || 'You' },
+  );
+  const yourFoodTitle = demo.you.title;
 
   const loadGroups = useCallback(async () => {
     setLoading(true);
-    setMessage('');
+    setMessage(null);
     try {
-      let next = await listGroups();
-      const userId = appProfile?.userId;
-      if (userId) {
-        for (const group of next) {
-          if (!group.activeBillId) continue;
-          try {
-            const payment = await getBillPayment(group.activeBillId, userId);
-            const phase = payment?.session?.phase;
-            if (phase === 'paid' || phase === 'canceled') {
-              await closeBill(group.activeBillId, phase === 'paid' ? 'PAID' : 'CANCELLED');
-            }
-          } catch {
-            // Ignore per-group payment reads; listing still renders.
-          }
-        }
-        next = await listGroups();
-      }
-      setGroups(next);
+      setGroups(await listGroups());
     } catch (error) {
       setMessage(formatApiError(error));
     } finally {
       setLoading(false);
     }
-  }, [appProfile]);
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -52,123 +50,124 @@ export default function LandingScreen() {
   );
 
   async function onCreateGroup() {
-    if (!appProfile) return;
     const name = groupName.trim();
-    if (!name) return;
+    if (!name) {
+      setCreateError('Enter a group name.');
+      return;
+    }
     setBusy(true);
-    setMessage('');
+    setCreateError(null);
     try {
       const group = await createGroup(name);
-      if (!group.activeBillId) throw new Error('Group was created without a bill.');
       setGroupName('');
-      setShowCreate(false);
-      router.push({ pathname: '/bill/[billId]', params: { billId: group.activeBillId } });
+      setCreating(false);
+      router.push({ pathname: '/group/[groupId]', params: { groupId: group.id } });
     } catch (error) {
-      setMessage(formatApiError(error));
+      setCreateError(formatApiError(error));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Screen>
-      <View style={styles.row}>
-        <Button title="Back to demo" secondary onPress={() => router.replace('/')} />
-        <Button title="Account" secondary onPress={() => router.push('/account')} />
-      </View>
-      <View style={{ gap: 10 }}>
-        <Text style={styles.title}>Your groups.</Text>
-        <Text style={styles.subtitle}>
-          {appProfile
-            ? `Signed in as @${appProfile.username}. Each group is one open bill.`
-            : 'Create a group to open a bill.'}
-        </Text>
-      </View>
-
-      {!showCreate ? (
-        <Button title="New group" onPress={() => { setShowCreate(true); setMessage(''); }} />
-      ) : (
-        <Card>
-          <Text style={styles.heading}>New group</Text>
-          <Text style={styles.label}>Group name</Text>
-          <TextInput
-            accessibilityLabel="Group name"
-            value={groupName}
-            onChangeText={setGroupName}
-            placeholder="e.g. Friday dinner"
-            style={styles.input}
-            maxLength={100}
-            autoFocus
-          />
-          <Button
-            title={busy ? 'Creating…' : 'Create group & bill'}
-            disabled={busy || !groupName.trim() || !appProfile}
-            onPress={() => void onCreateGroup()}
-          />
-          <Button
-            title="Cancel"
-            secondary
-            disabled={busy}
-            onPress={() => { setShowCreate(false); setGroupName(''); }}
-          />
-        </Card>
+    <Screen
+      header={(
+        <AppHeader
+          title="SplitPool"
+          right={(
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="New group"
+              hitSlop={8}
+              onPress={() => { setCreateError(null); setCreating(true); }}
+              style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}
+            >
+              <Text style={styles.link}>+ New</Text>
+            </Pressable>
+          )}
+        />
       )}
-
-      {!!message && <Text style={[styles.small, { color: colors.warning }]}>{message}</Text>}
-
-      <View style={{ gap: 12 }}>
-        <View style={styles.row}>
-          <Text style={styles.heading}>Open bills</Text>
-          <Pressable accessibilityRole="button" hitSlop={12} onPress={() => void loadGroups()}>
-            <Text style={styles.link}>{loading ? 'Loading…' : 'Refresh'}</Text>
+      footer={(
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Open your account" onPress={() => router.push('/account')} style={dock}>
+            <MemberAvatar person={you} size={36} />
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Open local demo" onPress={() => router.push('/')} style={dock}>
+            <Text style={dockLabel}>Demo</Text>
           </Pressable>
         </View>
+      )}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Your title, ${yourFoodTitle || 'none yet'}`}
+        onPress={() => router.push('/account')}
+        style={{ alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center' }}
+      >
+        <Text style={yourTitle}>{yourFoodTitle ? `“${yourFoodTitle}”` : 'Your next meal has a title'}</Text>
+      </Pressable>
 
-        {!loading && groups.length === 0 && (
-          <Text style={styles.small}>No open bills. Tap New group to start one.</Text>
-        )}
+      <View style={styles.row}>
+        <Text style={groupsHeading}>Groups</Text>
+        <Pressable accessibilityRole="button" hitSlop={12} onPress={() => void loadGroups()} style={{ minHeight: 44, justifyContent: 'center' }}>
+          <Text style={styles.link}>{loading ? 'Loading…' : 'Refresh'}</Text>
+        </Pressable>
+      </View>
+      <Text style={styles.small}>
+        Shared bills stay with the group. Close one, start another — history is preserved.
+      </Text>
 
+      {message && <ErrorBanner message={message} />}
+
+      {!loading && groups.length === 0 && (
+        <Text style={styles.small}>No groups yet. Tap + New to create one and open a bill.</Text>
+      )}
+
+      <View style={{ gap: 18 }}>
         {groups.map((group) => (
-          <Pressable
+          <GroupCard
             key={group.id}
-            accessibilityRole="button"
-            accessibilityLabel={`Open bill ${group.name}`}
-            onPress={() => {
-              if (!group.activeBillId) return;
-              router.push({ pathname: '/bill/[billId]', params: { billId: group.activeBillId } });
-            }}
-            style={({ pressed }) => [local.groupRow, pressed && { opacity: 0.75 }]}
-          >
-            <View style={{ flex: 1, gap: 4 }}>
-              <Text style={local.groupName}>{group.name}</Text>
-              <Text style={styles.small}>
-                Open bill
-                {group.hostId === appProfile?.userId ? ' · You are host' : ''}
-              </Text>
-            </View>
-            <Text style={styles.link}>Open</Text>
-          </Pressable>
+            id={group.id}
+            name={group.name}
+            members={group.members.map((member) => avatarFromProfile(member))}
+            recent={group.recentMerchant ?? undefined}
+            onPress={() => router.push({ pathname: '/group/[groupId]', params: { groupId: group.id } })}
+          />
         ))}
       </View>
 
-      <DemoNote />
+      <BottomSheet
+        visible={creating}
+        title="New group"
+        onClose={() => setCreating(false)}
+        footer={<Button title={busy ? 'Creating…' : 'Create group'} disabled={busy} onPress={() => void onCreateGroup()} />}
+      >
+        <Text style={styles.small}>Creates a shared group and its first open bill on the server.</Text>
+        <Text style={styles.label}>Group name</Text>
+        <TextInput
+          accessibilityLabel="Group name"
+          value={groupName}
+          onChangeText={setGroupName}
+          placeholder="Friday dinner"
+          placeholderTextColor={colors.muted}
+          style={styles.input}
+          maxLength={100}
+        />
+        {createError && <ErrorBanner message={createError} />}
+      </BottomSheet>
     </Screen>
   );
 }
 
-const local = StyleSheet.create({
-  groupRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderColor: colors.border,
-  },
-  groupName: {
-    color: colors.ink,
-    fontSize: 16,
-    lineHeight: 22,
-    fontWeight: '700',
-  },
-});
+const yourTitle = {
+  fontSize: 21,
+  lineHeight: 26,
+  color: colors.ink,
+  ...Platform.select({
+    web: { fontFamily: 'Inter', fontWeight: '400' as const, fontStyle: 'italic' as const },
+    default: { fontFamily: interItalic, fontWeight: 'normal' as const, fontStyle: 'normal' as const },
+  }),
+};
+const groupsHeading = { fontFamily: 'Inter', fontSize: 22, lineHeight: 28, fontWeight: '600' as const, color: colors.ink };
+const dock = { minHeight: 44, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 };
+const dockLabel = { ...interFace(600), fontSize: 14, color: colors.ink };
