@@ -335,7 +335,10 @@ export default function BillScreen() {
           } as unknown as Href)}
         />
       )}
-      {bill?.summary.complete && (
+      {bill?.state === 'PAID' && (
+        <Text style={styles.small}>This bill is paid and no longer open.</Text>
+      )}
+      {bill && bill.state !== 'PAID' && bill.state !== 'CANCELLED' && bill.summary.complete && (
         <Button
           title={isHost ? 'Confirm Payment' : 'Continue to payment'}
           disabled={busy}
@@ -345,7 +348,7 @@ export default function BillScreen() {
           } as unknown as Href)}
         />
       )}
-      {!bill?.summary.complete && bill && bill.items.length > 0 && (
+      {bill && bill.state !== 'PAID' && bill.state !== 'CANCELLED' && !bill.summary.complete && bill.items.length > 0 && (
         <Text style={[styles.small, { color: colors.warning }]}>
           Claim every item before the host can confirm payment.
         </Text>

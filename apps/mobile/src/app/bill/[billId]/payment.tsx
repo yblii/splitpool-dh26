@@ -255,18 +255,24 @@ export default function BillPaymentScreen() {
         <Button title="Cancel collection" secondary disabled={busy} onPress={() => void onCancel()} />
       )}
       <Button
-        title="Back to bill"
+        title={session?.phase === 'paid' || bill?.state === 'PAID' ? 'Back to groups' : 'Back to bill'}
         secondary
-        onPress={() => router.replace({ pathname: '/bill/[billId]', params: { billId } } as Href)}
+        onPress={() => {
+          if (session?.phase === 'paid' || bill?.state === 'PAID') {
+            router.replace('/');
+            return;
+          }
+          router.replace({ pathname: '/bill/[billId]', params: { billId } } as Href);
+        }}
       />
       <DemoNote />
     </>}>
       <View style={{ gap: 10 }}>
-        <Text style={styles.title}>{session?.phase === 'paid' ? 'All settled.' : 'Confirm payment.'}</Text>
+        <Text style={styles.title}>{session?.phase === 'paid' || bill?.state === 'PAID' ? 'All settled.' : 'Confirm payment.'}</Text>
         <Text style={styles.subtitle}>
           {bill?.merchant || 'Bill'}
           {session ? ` · ${session.phase.replace(/_/g, ' ')}` : payment?.snapshotId ? ' · frozen' : ''}
-          {' · SIMULATED'}
+          {(session?.phase === 'paid' || bill?.state === 'PAID') ? ' · closed' : ' · SIMULATED'}
         </Text>
       </View>
 

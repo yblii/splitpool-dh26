@@ -119,6 +119,19 @@ export class CollaborationService {
     });
   }
 
+  /**
+   * Mirror payment-ledger progress onto the collaboration bill.
+   * PAID/CANCELLED clear `activeBillId` on group listings (partial unique index).
+   * Unknown bill ids are ignored so in-memory payment demos stay usable without Postgres rows.
+   */
+  async syncPaymentState(billId: string, state: Bill['state']) {
+    await this.db.query(
+      `UPDATE bills SET state = $1, version = version + 1
+       WHERE id = $2 AND state IS DISTINCT FROM $1`,
+      [state, billId],
+    );
+  }
+
   async getBill(userId: string, billId: string) {
     return this.db.transaction(async tx => {
       await this.billAccess(tx, userId, billId);

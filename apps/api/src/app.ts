@@ -6,7 +6,7 @@ import type { VerifyToken } from './auth.ts';
 import type { Database } from './db.ts';
 import { ApiError } from './errors.ts';
 import { loadApiEnv } from './load-env.ts';
-import { registerPaymentRoutes } from './payments/routes.ts';
+import { registerPaymentRoutes, type PaymentBillSync } from './payments/routes.ts';
 import type { StripePayments } from './payments/stripe.ts';
 import {
   createReceiptParser,
@@ -31,6 +31,8 @@ export type BuildAppOptions = {
   ledger?: PaymentLedger;
   simulation?: boolean;
   stripe?: StripePayments;
+  /** Test seam / override for mirroring payment phases onto collaboration bills. */
+  syncBillState?: PaymentBillSync;
 };
 
 function normalizeImageMimeType(mimeType: string): string {
@@ -147,9 +149,22 @@ export async function buildApp(options: BuildAppOptions = {}) {
     return reply.code(200).send(body);
   });
 
-  await registerPaymentRoutes(app, options.ledger ?? new PaymentLedger(), options.simulation !== false, options.stripe);
+  const collaboration = options.db && options.verifyToken
+    ? new CollaborationService(options.db)
+    : undefined;
+  const syncBillState = options.syncBillState
+    ?? (collaboration
+      ? (billId, state) => collaboration.syncPaymentState(billId, state)
+      : undefined);
+  await registerPaymentRoutes(
+    app,
+    options.ledger ?? new PaymentLedger(),
+    options.simulation !== false,
+    options.stripe,
+    syncBillState,
+  );
 
-  if (options.db && options.verifyToken) {
+  if (options.db && options.verifyToken && collaboration) {
     const db = options.db;
     const verify = options.verifyToken;
     app.get('/api/v1/ready', async (_request, reply) => {
@@ -163,7 +178,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     const parser = options.parser ?? createReceiptParser();
     await app.register(async privateApp => collaborationRoutes(
       privateApp,
-      new CollaborationService(db),
+      collaboration,
       verify,
       { parser, receiptRoot: options.receiptRoot },
     ), { prefix: '/api/v1' });

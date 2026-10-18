@@ -1,12 +1,28 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { LedgerError, PaymentLedger, type MerchantScenario, type ReviewDraft, type SessionProjection } from '@splitpool/contracts';
+import {
+  LedgerError,
+  PaymentLedger,
+  type BillProjection,
+  type MerchantScenario,
+  type ReviewDraft,
+  type SessionProjection,
+} from '@splitpool/contracts';
+import { collaborationStateFromPayment, type CollaborationBillState } from './billState.ts';
 import { collectionChanges, type CollectionStatus, type StripePayments } from './stripe.ts';
 
 const SCENARIOS = new Set<MerchantScenario>(['exact', 'under', 'incremental', 'wrong_merchant', 'reverse', 'late_capture']);
 export const WEBHOOK_SECRET = process.env.SIMULATION_WEBHOOK_SECRET ?? 'splitpool-demo-webhook';
 
-export async function registerPaymentRoutes(app: FastifyInstance, ledger: PaymentLedger, simulation = true, stripe?: StripePayments) {
+export type PaymentBillSync = (billId: string, state: CollaborationBillState) => Promise<void> | void;
+
+export async function registerPaymentRoutes(
+  app: FastifyInstance,
+  ledger: PaymentLedger,
+  simulation = true,
+  stripe?: StripePayments,
+  syncBillState?: PaymentBillSync,
+) {
   app.removeContentTypeParser('application/json');
   app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (request, body, done) => {
     const raw = Buffer.isBuffer(body) ? body : Buffer.from(body);
@@ -35,26 +51,44 @@ export async function registerPaymentRoutes(app: FastifyInstance, ledger: Paymen
       throw error;
     }
   }));
-  app.post('/api/v1/bills/:id/review', async (request, reply) => run(reply, () => ledger.review(actor(request), id(request), reviewDraft(request.body), now(request, simulation))));
-  app.post('/api/v1/bills/:id/reopen', async (request, reply) => run(reply, () => ledger.reopen(actor(request), id(request))));
+  app.post('/api/v1/bills/:id/review', async (request, reply) => run(reply, async () => {
+    const projection = ledger.review(actor(request), id(request), reviewDraft(request.body), now(request, simulation));
+    await mirrorBill(syncBillState, projection);
+    return projection;
+  }));
+  app.post('/api/v1/bills/:id/reopen', async (request, reply) => run(reply, async () => {
+    const projection = ledger.reopen(actor(request), id(request));
+    await mirrorBill(syncBillState, projection);
+    return projection;
+  }));
   app.post('/api/v1/bills/:id/acceptances', async (request, reply) => run(reply, () => ledger.accept(actor(request), id(request))));
-  app.post('/api/v1/bills/:id/confirm', async (request, reply) => run(reply, () => {
+  app.post('/api/v1/bills/:id/confirm', async (request, reply) => run(reply, async () => {
     const funding = header(request, 'x-simulation-funding');
     if (funding === 'unavailable') {
       if (!simulation) throw new LedgerError(403, 'Live mode cannot script funding.');
       ledger.useUnavailableFunding(actor(request), id(request));
     }
-    return ledger.confirm(actor(request), id(request), operationKey(request), now(request, simulation));
+    const session = ledger.confirm(actor(request), id(request), operationKey(request), now(request, simulation));
+    await mirrorSession(syncBillState, session);
+    return session;
   }));
   app.post('/api/v1/payment-sessions/:id/contributions/me', async (request, reply) => run(reply, async () => {
     const userId = actor(request);
     const sessionId = id(request);
     const key = operationKey(request);
     const clock = now(request, simulation);
-    if (!stripe) return ledger.authorize(userId, sessionId, key, clock);
+    if (!stripe) {
+      const session = ledger.authorize(userId, sessionId, key, clock);
+      await mirrorSession(syncBillState, session);
+      return session;
+    }
     const before = ledger.session(userId, sessionId, clock);
     const pending = before.seats.filter((seat) => seat.userId === userId && seat.status === 'pending');
-    if (pending.length === 0) return ledger.authorize(userId, sessionId, key, clock);
+    if (pending.length === 0) {
+      const session = ledger.authorize(userId, sessionId, key, clock);
+      await mirrorSession(syncBillState, session);
+      return session;
+    }
     const paymentMethodId = paymentMethod(request.body);
     const results: CollectionStatus[] = [];
     for (const seat of pending) {
@@ -70,7 +104,9 @@ export async function registerPaymentRoutes(app: FastifyInstance, ledger: Paymen
     if (outcome === 'fail') {
       await stripe.follow(pending.flatMap((seat, index) => results[index] === 'authorized' ? [{ obligationId: seat.obligationId, kind: 'cancel' as const }] : []));
     }
-    return ledger.authorize(userId, sessionId, key, clock, outcome);
+    const session = ledger.authorize(userId, sessionId, key, clock, outcome);
+    await mirrorSession(syncBillState, session);
+    return session;
   }));
   app.post('/api/v1/card-holds', async (request, reply) => run(reply, async () => {
     if (!stripe) throw new LedgerError(404, 'Stripe is not configured.');
@@ -125,17 +161,27 @@ export async function registerPaymentRoutes(app: FastifyInstance, ledger: Paymen
     if (status !== 'authorized') throw new LedgerError(409, 'The card hold was not approved.');
     const remaining = pending.some((entry) => entry.obligationId !== obligationId && !stripe.held(entry.obligationId));
     if (remaining) return ledger.session(userId, sessionId, clock);
-    return ledger.authorize(userId, sessionId, key, clock);
+    const session = ledger.authorize(userId, sessionId, key, clock);
+    await mirrorSession(syncBillState, session);
+    return session;
   }));
   app.post('/api/v1/payment-sessions/:id/contributions/me/retry', async (request, reply) => run(reply, async () => {
     const userId = actor(request);
     const sessionId = id(request);
     const key = operationKey(request);
     const clock = now(request, simulation);
-    if (!stripe) return ledger.retry(userId, sessionId, key, clock);
+    if (!stripe) {
+      const session = ledger.retry(userId, sessionId, key, clock);
+      await mirrorSession(syncBillState, session);
+      return session;
+    }
     const before = ledger.session(userId, sessionId, clock);
     const retryable = before.seats.filter((seat) => seat.userId === userId && (seat.status === 'action_needed' || seat.status === 'refunded'));
-    if (retryable.length === 0) return ledger.retry(userId, sessionId, key, clock);
+    if (retryable.length === 0) {
+      const session = ledger.retry(userId, sessionId, key, clock);
+      await mirrorSession(syncBillState, session);
+      return session;
+    }
     const paymentMethodId = paymentMethod(request.body);
     for (const seat of retryable) {
       const status = await stripe.collect({
@@ -147,7 +193,9 @@ export async function registerPaymentRoutes(app: FastifyInstance, ledger: Paymen
       });
       if (status !== 'authorized') throw new LedgerError(409, 'That share was not authorized.');
     }
-    return ledger.retry(userId, sessionId, key, clock);
+    const session = ledger.retry(userId, sessionId, key, clock);
+    await mirrorSession(syncBillState, session);
+    return session;
   }));
   app.post('/api/v1/payment-sessions/:id/seats/:seatId/cover', async (request, reply) => run(reply, () => {
     const params = request.params as { id: string; seatId: string };
@@ -159,20 +207,26 @@ export async function registerPaymentRoutes(app: FastifyInstance, ledger: Paymen
     const key = operationKey(request);
     const clock = now(request, simulation);
     const current = ledger.session(userId, sessionId, clock);
-    if (!stripe || current.spenderUserId !== userId || current.checkoutOpen || current.blockers.length > 0) return ledger.checkout(userId, sessionId, key, clock);
-    const card = await stripe.createCard({ sessionId, spenderUserId: userId, budgetCents: current.cardBudgetCents, idempotencyKey: `card:${sessionId}` });
-    return ledger.checkout(userId, sessionId, key, clock, card);
+    let card;
+    if (!stripe || current.spenderUserId !== userId || current.checkoutOpen || current.blockers.length > 0) {
+      card = ledger.checkout(userId, sessionId, key, clock);
+    } else {
+      const issued = await stripe.createCard({ sessionId, spenderUserId: userId, budgetCents: current.cardBudgetCents, idempotencyKey: `card:${sessionId}` });
+      card = ledger.checkout(userId, sessionId, key, clock, issued);
+    }
+    await mirrorSession(syncBillState, ledger.session(userId, sessionId, clock));
+    return card;
   }));
   app.get('/api/v1/payment-sessions/:id', async (request, reply) => run(reply, () => ledger.session(actor(request), id(request), now(request, simulation))));
   app.get('/api/v1/payment-sessions/:id/card', async (request, reply) => run(reply, () => ledger.card(actor(request), id(request), now(request, simulation))));
   app.post('/api/v1/payment-sessions/:id/card-access', async (request, reply) => run(reply, () => ledger.cardAccess(actor(request), id(request), now(request, simulation))));
-  app.post('/api/v1/payment-sessions/:id/cancel', async (request, reply) => run(reply, () => tracked(stripe, ledger, request, simulation, (userId, sessionId, key, clock) => ledger.cancel(userId, sessionId, key, clock))));
-  app.post('/api/v1/payment-sessions/:id/decline', async (request, reply) => run(reply, () => tracked(stripe, ledger, request, simulation, (userId, sessionId, key, clock) => ledger.declineCard(userId, sessionId, key, clock))));
+  app.post('/api/v1/payment-sessions/:id/cancel', async (request, reply) => run(reply, () => tracked(stripe, ledger, request, simulation, syncBillState, (userId, sessionId, key, clock) => ledger.cancel(userId, sessionId, key, clock))));
+  app.post('/api/v1/payment-sessions/:id/decline', async (request, reply) => run(reply, () => tracked(stripe, ledger, request, simulation, syncBillState, (userId, sessionId, key, clock) => ledger.declineCard(userId, sessionId, key, clock))));
   app.post('/api/v1/simulation/payment-sessions/:id/merchant-events', async (request, reply) => run(reply, () => {
     if (!simulation) throw new LedgerError(404, 'Simulation is disabled.');
     const scenario = (request.body as { scenario?: MerchantScenario } | undefined)?.scenario;
     if (!scenario || !SCENARIOS.has(scenario)) throw new LedgerError(400, 'Unknown merchant scenario.');
-    return tracked(stripe, ledger, request, simulation, (userId, sessionId, key, clock) => ledger.merchantEvent(userId, sessionId, scenario, key, clock));
+    return tracked(stripe, ledger, request, simulation, syncBillState, (userId, sessionId, key, clock) => ledger.merchantEvent(userId, sessionId, scenario, key, clock));
   }));
   app.post('/api/v1/webhooks/collections', async (request, reply) => {
     if (!simulation) return reply.code(404).send({ error: 'Simulation webhooks are disabled.' });
@@ -199,14 +253,41 @@ export async function registerPaymentRoutes(app: FastifyInstance, ledger: Paymen
   }));
 }
 
-async function tracked(stripe: StripePayments | undefined, ledger: PaymentLedger, request: FastifyRequest, simulation: boolean, apply: (userId: string, sessionId: string, key: string, clock: number) => SessionProjection) {
+async function tracked(
+  stripe: StripePayments | undefined,
+  ledger: PaymentLedger,
+  request: FastifyRequest,
+  simulation: boolean,
+  syncBillState: PaymentBillSync | undefined,
+  apply: (userId: string, sessionId: string, key: string, clock: number) => SessionProjection,
+) {
   const userId = actor(request);
   const sessionId = id(request);
   const clock = now(request, simulation);
   const before = stripe ? ledger.session(userId, sessionId, clock) : undefined;
   const after = apply(userId, sessionId, operationKey(request), clock);
   if (stripe && before) await stripe.follow(collectionChanges(before, after));
+  await mirrorSession(syncBillState, after);
   return after;
+}
+
+async function mirrorBill(syncBillState: PaymentBillSync | undefined, projection: BillProjection) {
+  if (!syncBillState) return;
+  await syncBillState(
+    projection.billId,
+    collaborationStateFromPayment({
+      phase: projection.session?.phase,
+      hasSnapshot: Boolean(projection.snapshotId),
+    }),
+  );
+}
+
+async function mirrorSession(syncBillState: PaymentBillSync | undefined, session: SessionProjection) {
+  if (!syncBillState) return;
+  await syncBillState(
+    session.billId,
+    collaborationStateFromPayment({ phase: session.phase, hasSnapshot: true }),
+  );
 }
 
 async function run(reply: FastifyReply, fn: () => unknown) {
