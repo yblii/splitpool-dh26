@@ -30,9 +30,9 @@ export default function HistoryScreen() {
         <Card>
           <Text style={styles.heading}>No meals yet</Text>
           <Text style={styles.small}>
-            Finish a demo payment and Gemini (or the local fallback) will invent titles for everyone based on what they ate.
+            Finish a group payment and Gemini (or the local fallback) will invent titles for everyone based on what they ate.
           </Text>
-          <Button title="Go to payment" secondary onPress={() => router.push('/payment')} />
+          <Button title="Back to groups" secondary onPress={() => router.replace('/')} />
         </Card>
       ) : (
         mealHistory.map((entry) => (

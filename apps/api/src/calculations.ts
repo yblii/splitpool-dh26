@@ -40,8 +40,6 @@ export function summarize(bill: Bill): BillSummary {
   const itemShares = new Map(ids.map(id => [id, 0]));
   const subtotalCents = bill.items.reduce((sum, item) => sum + item.netLineTotalCents, 0);
   const receiptTotalCents = subtotalCents + bill.taxCents + bill.serviceChargeCents;
-  const personalTips = new Map(bill.participants.map(p => [p.userId, p.tipCents]));
-  const addedTipCents = bill.participants.reduce((sum, p) => sum + p.tipCents, 0);
   if (!ids.length) blockers.push({ code: 'NO_PAYERS' });
   if (!bill.items.length) blockers.push({ code: 'NO_ITEMS' });
   if (bill.printedTotalCents === null) blockers.push({ code: 'RECEIPT_TOTAL_MISSING' });
@@ -60,20 +58,24 @@ export function summarize(bill: Bill): BillSummary {
     const amounts = allocate(item.netLineTotalCents, entries);
     for (const id of ids) itemShares.set(id, itemShares.get(id)! + (amounts.get(id) ?? 0));
   }
-  const extras = [
-    { amount: bill.taxCents, mode: bill.settings.taxMode },
-    { amount: bill.serviceChargeCents, mode: bill.settings.serviceChargeMode },
-  ];
-  if (subtotalCents === 0 && extras.some(e => e.amount > 0 && e.mode === 'proportional')) blockers.push({ code: 'ZERO_SUBTOTAL' });
+  // Tax and receipt tip/service are always split by claimed item cents once the bill is complete.
+  // Personal per-payer tips are not part of the bill total.
+  const extras = [bill.taxCents, bill.serviceChargeCents];
+  if (subtotalCents === 0 && extras.some(amount => amount > 0)) blockers.push({ code: 'ZERO_SUBTOTAL' });
   const complete = blockers.length === 0;
-  const [tax, service] = extras.map(extra => allocate(complete ? extra.amount : 0, ids.map(id => ({
-    id, weight: { n: BigInt(extra.mode === 'equal' ? 1 : itemShares.get(id)!), d: 1n },
+  const [tax, service] = extras.map(amount => allocate(complete ? amount : 0, ids.map(id => ({
+    id, weight: { n: BigInt(itemShares.get(id)!), d: 1n },
   }))));
   return {
-    subtotalCents, receiptTotalCents, addedTipCents, totalCents: receiptTotalCents + addedTipCents,
+    subtotalCents, receiptTotalCents, addedTipCents: 0, totalCents: receiptTotalCents,
     complete, blockers, remaining,
-    shares: ids.map(userId => ({ userId, itemsCents: itemShares.get(userId)!, taxCents: tax.get(userId) ?? 0,
-      serviceChargeCents: service.get(userId) ?? 0, tipCents: personalTips.get(userId)!,
-      totalCents: itemShares.get(userId)! + (tax.get(userId) ?? 0) + (service.get(userId) ?? 0) + personalTips.get(userId)! })),
+    shares: ids.map(userId => ({
+      userId,
+      itemsCents: itemShares.get(userId)!,
+      taxCents: tax.get(userId) ?? 0,
+      serviceChargeCents: service.get(userId) ?? 0,
+      tipCents: 0,
+      totalCents: itemShares.get(userId)! + (tax.get(userId) ?? 0) + (service.get(userId) ?? 0),
+    })),
   };
 }

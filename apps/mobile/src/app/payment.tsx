@@ -3,6 +3,7 @@ import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 import { router } from 'expo-router';
 import { demoMethods, formatMoney, isCardWallet, people, personItemLines, tipPercents, type PersonId, type TipPercent } from '@splitpool/contracts';
 import { CardWalletSheet } from '../components/CardWalletSheet';
+import { MealTitlesSummary } from '../components/MealTitlesSummary';
 import { PaymentMethods } from '../components/PaymentMethods';
 import { Button, Card, colors, DemoNote, Screen, SegmentedControl, styles } from '../components/ui';
 import { CardUnlock, VirtualCard } from '../components/VirtualCard';
@@ -103,6 +104,23 @@ export default function PaymentScreen() {
   }
 
   const presentingCard = biometric === 'scanning' || biometric === 'rising';
+
+  if (session?.phase === 'paid') {
+    return (
+      <Screen footer={<DemoNote />}>
+        <MealTitlesSummary
+          titles={mealTitles}
+          loading={mealTitlesLoading}
+          source={mealTitlesSource}
+          groupName={bill.groupName}
+          merchant={bill.merchant}
+          onReturnToGroups={() => router.replace('/')}
+          onViewHistory={() => router.push('/history')}
+        />
+      </Screen>
+    );
+  }
+
   return <Screen overlay={session && presentingCard ? <CardUnlock visible budgetCents={session.cardBudgetCents}
     last4={person === 'you' ? payment?.card?.last4 ?? null : null}
     onAuthenticate={() => setBiometric(openCheckout() ? 'rising' : 'idle')}
@@ -137,7 +155,7 @@ export default function PaymentScreen() {
       <Text style={local.total}>{formatMoney(myShare?.total ?? 0)}</Text>
     </View>
     <Button title={title} disabled={disabled} onPress={onPress} />
-    {session?.checkoutOpen && person === 'you' && session.phase !== 'paid' && session.phase !== 'canceled' && session.phase !== 'canceling' && <>
+    {session?.checkoutOpen && person === 'you' && session.phase !== 'canceled' && session.phase !== 'canceling' && <>
       {declineOpen && <View style={{ gap: 8 }}>
         <Text style={styles.small}>The restaurant declined the card. These amounts go back, then everyone authorizes again.</Text>
         {session.seats.filter((seat) => seat.merchantShareCents > 0).map((seat) => <View key={seat.seatId} style={local.detailRow}>
@@ -151,37 +169,13 @@ export default function PaymentScreen() {
       }} />
     </>}
     {payment?.snapshotId && !session && person === 'you' && <Button title="Reopen bill" secondary onPress={reopenBill} />}
-    {session && person === 'you' && session.phase !== 'paid' && session.phase !== 'canceled' && <Button title="Cancel collection" secondary onPress={cancelPayment} />}
+    {session && person === 'you' && session.phase !== 'canceled' && <Button title="Cancel collection" secondary onPress={cancelPayment} />}
     <DemoNote />
   </>}>
     <View style={{ gap: 10 }}>
-      <Text style={styles.title}>{session?.phase === 'paid' ? 'All settled.' : 'Review your split.'}</Text>
+      <Text style={styles.title}>Review your split.</Text>
       <Text style={styles.subtitle}>{bill.groupName} · {bill.merchant}</Text>
     </View>
-    {session?.phase === 'paid' && (
-      <Card>
-        <Text style={styles.heading}>Meal titles</Text>
-        <Text style={styles.small}>
-          Positive nicknames inspired by what each person ate
-          {mealTitlesSource ? ` · ${mealTitlesSource}` : ''}.
-        </Text>
-        {mealTitlesLoading && !mealTitles && (
-          <Text accessibilityLiveRegion="polite" style={styles.small}>Crafting titles…</Text>
-        )}
-        {mealTitles?.map((entry) => (
-          <View key={entry.id} style={local.titleBlock}>
-            <View style={styles.row}>
-              <Text style={[styles.text, { flex: 1 }]}>{entry.name}</Text>
-              <Text style={local.titleBadge}>{entry.title}</Text>
-            </View>
-            <Text style={styles.small}>
-              {entry.items.length ? entry.items.join(' · ') : 'No items claimed'}
-            </Text>
-          </View>
-        ))}
-        <Button title="View history" secondary onPress={() => router.push('/history')} />
-      </Card>
-    )}
     <View style={{ gap: 14 }}>
       {myItems.length === 0
         ? <Text style={styles.small}>No items claimed yet.</Text>
@@ -241,14 +235,4 @@ const local = StyleSheet.create({
   amount: { color: colors.ink, fontSize: 16, fontWeight: '700', fontVariant: ['tabular-nums'] },
   detailsContent: { gap: 14, paddingBottom: 8 },
   detailRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
-  titleBlock: { gap: 4 },
-  titleBadge: {
-    color: colors.success,
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    maxWidth: '58%',
-    textAlign: 'right',
-  },
 });

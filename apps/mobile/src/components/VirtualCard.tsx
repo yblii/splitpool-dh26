@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { formatMoney } from '@splitpool/contracts';
 import { colors } from './ui';
@@ -16,7 +16,7 @@ export function VirtualCard({ seats, budgetCents, unlocked, last4 }: {
 }) {
   const received = receivedSeats(seats);
   const loaded = received.reduce((sum, seat) => sum + seat.merchantShareCents, 0);
-  const scale = useRef(new Animated.Value(0.94)).current;
+  const [scale] = useState(() => new Animated.Value(0.94));
   const previous = useRef(0);
 
   useEffect(() => {
@@ -38,15 +38,18 @@ export function CardUnlock({ visible, last4, budgetCents, onAuthenticate, onDone
   visible: boolean; last4: string | null; budgetCents: number;
   onAuthenticate: () => void; onDone: () => void;
 }) {
-  const rise = useRef(new Animated.Value(480)).current;
-  const face = useRef(new Animated.Value(1)).current;
-  const pulse = useRef(new Animated.Value(1)).current;
-  const check = useRef(new Animated.Value(0)).current;
-  const scrim = useRef(new Animated.Value(1)).current;
+  const [rise] = useState(() => new Animated.Value(480));
+  const [face] = useState(() => new Animated.Value(1));
+  const [pulse] = useState(() => new Animated.Value(1));
+  const [check] = useState(() => new Animated.Value(0));
+  const [scrim] = useState(() => new Animated.Value(1));
   const authenticate = useRef(onAuthenticate);
   const finish = useRef(onDone);
-  authenticate.current = onAuthenticate;
-  finish.current = onDone;
+
+  useEffect(() => {
+    authenticate.current = onAuthenticate;
+    finish.current = onDone;
+  }, [onAuthenticate, onDone]);
 
   useEffect(() => {
     if (!visible) return;
@@ -102,7 +105,7 @@ function CardFace({ budgetCents, loaded, unlocked, last4 }: {
   budgetCents: number; loaded: number; unlocked: boolean; last4: string | null;
 }) {
   const portion = budgetCents > 0 ? Math.min(1, loaded / budgetCents) : 0;
-  const fill = useRef(new Animated.Value(0)).current;
+  const [fill] = useState(() => new Animated.Value(0));
   useEffect(() => {
     Animated.timing(fill, { toValue: portion, duration: 480, useNativeDriver: false }).start();
   }, [portion, fill]);

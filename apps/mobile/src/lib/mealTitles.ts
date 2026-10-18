@@ -1,5 +1,22 @@
-import type { MealHistoryEntry, MealTitlesRequest, MealTitlesResponse } from '@splitpool/contracts';
+import type {
+  BillResponse,
+  MealHistoryEntry,
+  MealTitleMemberInput,
+  MealTitlesRequest,
+  MealTitlesResponse,
+} from '@splitpool/contracts';
 import { apiUrl } from './api';
+
+/** Build Gemini title inputs from claimed items on a collaboration bill. */
+export function membersFromBill(bill: BillResponse): MealTitleMemberInput[] {
+  return bill.participants.map((participant) => ({
+    id: participant.userId,
+    name: participant.displayName,
+    items: bill.items
+      .filter((item) => bill.claims.some((claim) => claim.itemId === item.id && claim.userId === participant.userId))
+      .map((item) => item.name),
+  }));
+}
 
 /** Local keyword fallback when the API or Gemini is unavailable. */
 export function localFallbackTitles(request: MealTitlesRequest): MealTitlesResponse {

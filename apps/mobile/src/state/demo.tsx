@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
 import { Alert } from 'react-native';
 import {
   allocateCents, claimedHalves, defaultTipChoices, demoBillFromVerifiedReceipt, makeDemoBill, PaymentLedger, people, personItemLines, summarizeBill,
@@ -23,6 +23,7 @@ type DemoContextValue = {
   mealTitlesLoading: boolean;
   mealTitlesSource: string | null;
   mealHistory: MealHistoryEntry[];
+  appendMealHistory: (entry: MealHistoryEntry) => void;
   setPerson: (person: PersonId) => void; setTipChoice: (choice: TipChoice) => void;
   setProfileName: (name: string) => void; setLinked: (linked: boolean) => void;
   setPersonMethod: (patch: Partial<PersonMethod>) => void;
@@ -167,9 +168,14 @@ export function DemoProvider({ children }: PropsWithChildren) {
     await Promise.all(pending.map(([userId, paymentIntentId]) => releaseDemoCardHold(userId, paymentIntentId, action)));
     holdsRef.current = {};
   }
+
+  const appendMealHistory = useCallback((entry: MealHistoryEntry) => {
+    setMealHistory((current) => [entry, ...current.filter((existing) => existing.id !== entry.id)].slice(0, 40));
+  }, []);
+
   return <DemoContext.Provider value={{
     bill, person, tipChoices, phase, methods, profileName, linked, summary, payment, paymentError, pendingReceipt,
-    mealTitles, mealTitlesLoading, mealTitlesSource, mealHistory,
+    mealTitles, mealTitlesLoading, mealTitlesSource, mealHistory, appendMealHistory,
     setPerson, setProfileName, setLinked, setPendingReceipt, applyVerifiedReceipt,
     setPersonMethod: (patch) => {
       const seat = payment?.session?.seats.find((entry) => entry.userId === person);
