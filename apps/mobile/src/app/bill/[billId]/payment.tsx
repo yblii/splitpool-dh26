@@ -311,7 +311,7 @@ export default function BillPaymentScreen() {
       <Card>
         <Text style={styles.heading}>Your share</Text>
         <View style={styles.row}>
-          <Text style={styles.text}>Items + tax/service + tip</Text>
+          <Text style={styles.text}>Items + tax + tip</Text>
           <Text style={styles.text}>{formatMoney(myShare?.totalCents ?? 0)}</Text>
         </View>
         {payment?.snapshotId && (

@@ -14,7 +14,7 @@ function sampleBill(): BillResponse {
     currency: 'USD',
     participants: [
       { userId: host, username: 'host', displayName: 'Host', tipCents: 0 },
-      { userId: friend, username: 'friend', displayName: 'Friend', tipCents: 200 },
+      { userId: friend, username: 'friend', displayName: 'Friend', tipCents: 0 },
     ],
     items: [
       { id: '55555555-5555-4555-8555-555555555555', name: 'Pizza', quantity: 1, netLineTotalCents: 1000 },
@@ -32,13 +32,13 @@ function sampleBill(): BillResponse {
       },
     ],
     taxCents: 100,
-    serviceChargeCents: 0,
-    printedTotalCents: 1100,
-    settings: { taxMode: 'equal', serviceChargeMode: 'equal' },
+    serviceChargeCents: 200,
+    printedTotalCents: 1300,
+    settings: { taxMode: 'proportional', serviceChargeMode: 'proportional' },
     summary: {
       subtotalCents: 1000,
-      receiptTotalCents: 1100,
-      addedTipCents: 200,
+      receiptTotalCents: 1300,
+      addedTipCents: 0,
       totalCents: 1300,
       complete: true,
       blockers: [],
@@ -48,17 +48,17 @@ function sampleBill(): BillResponse {
           userId: host,
           itemsCents: 500,
           taxCents: 50,
-          serviceChargeCents: 0,
+          serviceChargeCents: 100,
           tipCents: 0,
-          totalCents: 550,
+          totalCents: 650,
         },
         {
           userId: friend,
           itemsCents: 500,
           taxCents: 50,
-          serviceChargeCents: 0,
-          tipCents: 200,
-          totalCents: 750,
+          serviceChargeCents: 100,
+          tipCents: 0,
+          totalCents: 650,
         },
       ],
     },
@@ -72,6 +72,7 @@ describe('reviewDraftFromBill', () => {
     expect(draft.merchantTotalCents).toBe(1300);
     expect(draft.itemSubtotalCents).toBe(1000);
     expect(draft.seats.reduce((sum, seat) => sum + seat.merchantShareCents, 0)).toBe(1300);
+    expect(draft.seats.every((seat) => seat.merchantShareCents === 650)).toBe(true);
     expect(draft.itemShares.reduce((sum, share) => sum + share.cents, 0)).toBe(1000);
     expect(draft.spenderUserId).toBe('11111111-1111-4111-8111-111111111111');
   });
