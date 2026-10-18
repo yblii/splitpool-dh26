@@ -287,7 +287,7 @@ export function ReceiptItemCard({
       }) }}>
         {percentOpen ? <View style={cardStyles.editRow}>
           <Text style={cardStyles.chevron}>›</Text>
-          <Text style={cardStyles.name} numberOfLines={1}>{item.name}</Text>
+          <Text style={[cardStyles.name, cardStyles.editName]} numberOfLines={1}>{item.name}</Text>
           <TextInput
             accessibilityLabel={`Percentage for ${item.name}`}
             autoFocus
@@ -305,9 +305,9 @@ export function ReceiptItemCard({
           </Pressable>
           {fieldError ? <View style={cardStyles.inlineAlert}>
             <Text style={cardStyles.alertMark}>!</Text>
-            <Text style={cardStyles.alertText}>{fieldError}</Text>
+            <Text style={cardStyles.alertText} numberOfLines={1}>{fieldError}</Text>
           </View> : null}
-          <Pressable accessibilityRole="button" hitSlop={8} onPress={onCancelPercent}><Text style={styles.link}>Cancel</Text></Pressable>
+          <Pressable accessibilityRole="button" hitSlop={8} onPress={onCancelPercent} style={cardStyles.cancelHit}><Text style={styles.link}>Cancel</Text></Pressable>
         </View> : <View style={[cardStyles.line, visual === 'error' && cardStyles.errorLine, visual !== 'unclaimed' && visual !== 'error' && cardStyles.claimedLine]}>
           {side ? <View accessibilityLabel={side.label} style={cardStyles.hatch}>
             <View style={{ flex: 1, backgroundColor: side.color }} />
@@ -668,22 +668,25 @@ const cardStyles = StyleSheet.create({
   percentChip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
   percentText: { color: colors.primary, fontSize: 12, lineHeight: 16, fontWeight: '800' },
   editRow: {
-    minHeight: 72, gap: 8, paddingVertical: 10, paddingRight: 4,
+    minHeight: 58, gap: 6, paddingRight: 8,
     borderBottomWidth: 1, borderColor: '#E4D5C2', backgroundColor: RECEIPT_PAPER,
-    flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center',
+    flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center',
   },
+  editName: { flexShrink: 1, minWidth: 0 },
   percentInput: {
-    width: 72, maxWidth: 72, flexGrow: 0, flexShrink: 0,
-    minHeight: 44, borderWidth: 1, borderColor: colors.ink, borderRadius: 8,
-    paddingHorizontal: 10, fontSize: 17, fontWeight: '600', color: colors.ink, backgroundColor: '#FFFFFF',
+    width: 72, maxWidth: 72, height: 36, minHeight: 36, flexGrow: 0, flexShrink: 0,
+    borderWidth: 1, borderColor: colors.ink, borderRadius: 8,
+    paddingHorizontal: 8, paddingVertical: 0, fontSize: 16, lineHeight: 20, fontWeight: '600',
+    color: colors.ink, backgroundColor: '#FFFFFF',
   },
-  sharePrice: { fontFamily: monoFamily, color: colors.ink, fontSize: 16, lineHeight: 22, fontWeight: '700' },
+  sharePrice: { fontFamily: monoFamily, color: colors.ink, fontSize: 16, lineHeight: 22, fontWeight: '700', flexShrink: 0 },
   setButton: {
-    minWidth: 52, minHeight: 44, borderRadius: 8, backgroundColor: colors.primary,
-    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12,
+    minWidth: 44, height: 36, minHeight: 36, flexShrink: 0, borderRadius: 8, backgroundColor: colors.primary,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10,
   },
   setText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
-  inlineAlert: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 8 },
+  cancelHit: { flexShrink: 0, minHeight: 36, justifyContent: 'center' },
+  inlineAlert: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1, minWidth: 0 },
   alertMark: {
     width: 22, height: 22, borderRadius: 4, textAlign: 'center', lineHeight: 22,
     backgroundColor: colors.danger, color: '#FFFFFF', fontWeight: '800', overflow: 'hidden',
