@@ -90,8 +90,8 @@ export function Screen({
 export function AppHeader({ title, onBack, right }: { title: string; onBack?: () => void; right?: ReactNode }) {
   const insets = useSafeAreaInsets();
   return <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
-    {onBack ? <Pressable accessibilityRole="button" accessibilityLabel="Go back" hitSlop={10} onPress={onBack} style={styles.headerSide}>
-      <Text style={styles.headerAction}>Back</Text>
+    {onBack ? <Pressable accessibilityRole="button" accessibilityLabel="Go back" hitSlop={10} onPress={onBack} style={styles.headerBack}>
+      <View style={styles.backIcon} />
     </Pressable> : <View style={styles.headerSide} />}
     <Text accessibilityRole="header" numberOfLines={1} style={styles.headerTitle}>{title}</Text>
     <View style={[styles.headerSide, styles.headerRight]}>{right}</View>
@@ -218,9 +218,14 @@ export const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   headerSide: { width: 76, minHeight: 44, justifyContent: 'center' },
+  headerBack: { width: 76, minHeight: 44, justifyContent: 'center', alignItems: 'flex-start' },
   headerRight: { alignItems: 'flex-end' },
   headerTitle: { ...interFace(600), flex: 1, textAlign: 'center', color: colors.ink, fontSize: 17, lineHeight: 22 },
-  headerAction: { ...typeScale.button, color: colors.primary, paddingHorizontal: 8 },
+  backIcon: {
+    width: 12, height: 12, marginLeft: 6,
+    borderLeftWidth: 2.5, borderBottomWidth: 2.5, borderColor: colors.primary,
+    transform: [{ rotate: '45deg' }],
+  },
   card: {
     backgroundColor: colors.paper, borderRadius: 16, padding: 12, gap: 8,
     borderWidth: StyleSheet.hairlineWidth, borderColor: colors.border,
