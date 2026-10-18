@@ -140,6 +140,7 @@ Inbound events and outbound jobs do not share a table. The synchronous decision,
 
 | Endpoint | Who |
 | --- | --- |
+| `GET /bills/:id/payment` | Member reads payment projection (`null` before freeze) |
 | `POST /bills/:id/review` | Host freezes the snapshot |
 | `POST /bills/:id/reopen` | Host, before collection |
 | `POST /bills/:id/acceptances` | Payer accepts their own seat |

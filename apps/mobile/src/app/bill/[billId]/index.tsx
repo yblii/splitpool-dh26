@@ -335,6 +335,21 @@ export default function BillScreen() {
           } as unknown as Href)}
         />
       )}
+      {bill?.summary.complete && (
+        <Button
+          title={isHost ? 'Confirm Payment' : 'Continue to payment'}
+          disabled={busy}
+          onPress={() => router.push({
+            pathname: '/bill/[billId]/payment',
+            params: { billId: bill.id },
+          } as unknown as Href)}
+        />
+      )}
+      {!bill?.summary.complete && bill && bill.items.length > 0 && (
+        <Text style={[styles.small, { color: colors.warning }]}>
+          Claim every item before the host can confirm payment.
+        </Text>
+      )}
       <Button title="Refresh" secondary disabled={loading || busy} onPress={() => void refresh({ clearConflict: true })} />
       {bill && (
         <Button

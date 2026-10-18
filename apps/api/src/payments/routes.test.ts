@@ -33,8 +33,15 @@ it('collects each share onto one simulated card and hides the card from other me
     const missing = await app.inject({ method: 'POST', url: '/api/v1/bills/dinner/review', payload: draft });
     expect(missing.statusCode).toBe(401);
 
+    const empty = await app.inject({ method: 'GET', url: '/api/v1/bills/dinner/payment', headers: headers('spender') });
+    expect(empty.statusCode).toBe(200);
+    expect(empty.json()).toBeNull();
+
     const review = await app.inject({ method: 'POST', url: '/api/v1/bills/dinner/review', headers: headers('spender'), payload: draft });
     expect(review.statusCode).toBe(200);
+    const peeked = await app.inject({ method: 'GET', url: '/api/v1/bills/dinner/payment', headers: headers('alex') });
+    expect(peeked.statusCode).toBe(200);
+    expect(peeked.json().snapshotId).toBeTruthy();
     for (const user of ['spender', 'alex', 'sam']) {
       const accepted = await app.inject({ method: 'POST', url: '/api/v1/bills/dinner/acceptances', headers: headers(user) });
       expect(accepted.statusCode).toBe(200);

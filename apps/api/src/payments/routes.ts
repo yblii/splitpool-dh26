@@ -27,6 +27,14 @@ export async function registerPaymentRoutes(app: FastifyInstance, ledger: Paymen
     done(null, body);
   });
 
+  app.get('/api/v1/bills/:id/payment', async (request, reply) => run(reply, () => {
+    try {
+      return ledger.billView(actor(request), id(request), now(request, simulation));
+    } catch (error) {
+      if (error instanceof LedgerError && error.statusCode === 404) return null;
+      throw error;
+    }
+  }));
   app.post('/api/v1/bills/:id/review', async (request, reply) => run(reply, () => ledger.review(actor(request), id(request), reviewDraft(request.body), now(request, simulation))));
   app.post('/api/v1/bills/:id/reopen', async (request, reply) => run(reply, () => ledger.reopen(actor(request), id(request))));
   app.post('/api/v1/bills/:id/acceptances', async (request, reply) => run(reply, () => ledger.accept(actor(request), id(request))));

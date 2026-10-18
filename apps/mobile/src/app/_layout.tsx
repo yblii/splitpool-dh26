@@ -54,6 +54,7 @@ function RootNavigator() {
         <Stack.Screen name="bill/[billId]/index" options={{ title: 'BILL' }} />
         <Stack.Screen name="bill/[billId]/receipt" options={{ title: 'RECEIPT' }} />
         <Stack.Screen name="bill/[billId]/receipt-review" options={{ title: 'REVIEW' }} />
+        <Stack.Screen name="bill/[billId]/payment" options={{ title: 'PAYMENT' }} />
         <Stack.Screen name="invite/[token]" options={{ title: 'JOIN GROUP' }} />
         <Stack.Screen name="receipt" options={{ title: 'RECEIPT' }} />
         <Stack.Screen name="receipt-review" options={{ title: 'REVIEW' }} />
