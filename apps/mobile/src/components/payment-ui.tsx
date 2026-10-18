@@ -64,14 +64,21 @@ export function ConfirmationDialog({
     <Text style={styles.small}>
       After collection starts, changing the split would mean canceling and handling refunds. This demo does not charge cards or pay a restaurant.
     </Text>
-    <View style={{ flexDirection: 'row', gap: 10 }}>
-      <View style={{ flex: 1 }}><Button title="Go back" secondary onPress={onBack} /></View>
-      <View style={{ flex: 1.35 }}><Button title="Confirm & collect" onPress={onConfirm} /></View>
+    <View style={payStyles.actions}>
+      <Button title="Go back" secondary onPress={onBack} style={payStyles.back} />
+      <Button title="Confirm & collect" onPress={onConfirm} style={payStyles.collect} />
     </View>
   </CenterDialog>;
 }
 
 const payStyles = StyleSheet.create({
+  actions: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+  },
+  back: { alignSelf: 'flex-start', flexGrow: 0, paddingHorizontal: 16 },
+  collect: {
+    alignSelf: 'flex-start', flexGrow: 0, flexShrink: 0, paddingHorizontal: 14,
+  },
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12,
     borderBottomWidth: 1, borderBottomColor: colors.border,

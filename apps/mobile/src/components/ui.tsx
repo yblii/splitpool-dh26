@@ -86,8 +86,8 @@ export function Card({ children, style }: PropsWithChildren<{ style?: StyleProp<
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
-export function Button({ title, onPress, secondary = false, disabled = false, compact = false }: {
-  title: string; onPress: () => void; secondary?: boolean; disabled?: boolean; compact?: boolean;
+export function Button({ title, onPress, secondary = false, disabled = false, compact = false, style }: {
+  title: string; onPress: () => void; secondary?: boolean; disabled?: boolean; compact?: boolean; style?: StyleProp<ViewStyle>;
 }) {
   return <Pressable
     accessibilityRole="button"
@@ -100,6 +100,7 @@ export function Button({ title, onPress, secondary = false, disabled = false, co
       secondary && styles.secondary,
       disabled && styles.buttonDisabled,
       pressed && !disabled && styles.pressed,
+      style,
     ]}
   >
     <Text style={[styles.buttonText, secondary && styles.secondaryText, disabled && styles.disabledText]}>{title}</Text>
