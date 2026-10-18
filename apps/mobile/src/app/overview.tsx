@@ -93,7 +93,6 @@ export default function OverviewScreen() {
             </Pressable>}
           </View>
           {unclaimed && bill.phase === 'editing' && <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
-            <Text style={styles.small}>Assign</Text>
             {demo.members.filter((person) => person.id !== demo.personId).map((person) => <Pressable
               key={person.id}
               accessibilityRole="button"
@@ -103,6 +102,7 @@ export default function OverviewScreen() {
             >
               <Text style={{ color: person.color, fontWeight: '700' }}>{person.name}</Text>
             </Pressable>)}
+            <Text style={[styles.small, { marginLeft: 'auto' }]}>Assign</Text>
           </View>}
         </View>;
       })}
