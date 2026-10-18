@@ -361,7 +361,6 @@ export function ReceiptItemCard({
             const yours = portion.personId === viewerId;
             return <View key={portion.personId} style={[cardStyles.payer, yours && cardStyles.payerYours]}>
               {person && <MemberAvatar person={person} size={28} />}
-              <Text style={[cardStyles.portionName, { color: person?.color ?? colors.ink }, yours && cardStyles.portionYours]}>{person?.name ?? 'Someone'}</Text>
               {yours && editable ? <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Remove ${person?.name ?? 'your'} claim`}
@@ -371,6 +370,7 @@ export function ReceiptItemCard({
               >
                 <Text style={cardStyles.removeMark}>−</Text>
               </Pressable> : null}
+              <Text style={[cardStyles.portionName, { color: person?.color ?? colors.ink }, yours && cardStyles.portionYours]}>{person?.name ?? 'Someone'}</Text>
               {yours && editable ? <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Your share is ${formatBasisPoints(portion.basisPoints)}. Change it.`}
