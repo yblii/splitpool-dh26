@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { formatMoney } from '@splitpool/contracts';
 import { MemberAvatar, type AvatarPerson } from './people';
 import { CenterDialog } from './sheets';
@@ -20,13 +20,15 @@ export function PaymentStatusRow({ person, status, amountCents }: {
 }
 
 export function VirtualCard({
-  locked, amountCents, groupName, status, detail,
+  locked, amountCents, groupName, status, detail, inWallet = false, onAddToWallet,
 }: {
   locked: boolean;
   amountCents: number;
   groupName: string;
   status: string;
   detail: string;
+  inWallet?: boolean;
+  onAddToWallet?: () => void;
 }) {
   const reduceMotion = useReduceMotion();
   const [lock] = useState(() => new Animated.Value(locked ? 1 : 0));
@@ -42,7 +44,17 @@ export function VirtualCard({
     <Text style={payStyles.group}>{groupName}</Text>
     <Text style={payStyles.status}>{status}</Text>
     <Text style={payStyles.detail}>{detail}</Text>
-    <Animated.View pointerEvents="none" style={[payStyles.lock, { opacity: lock }]}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={inWallet ? 'In your demo wallet' : 'Add to wallet'}
+      accessibilityState={{ disabled: locked || inWallet }}
+      disabled={locked || inWallet}
+      onPress={onAddToWallet}
+      style={payStyles.wallet}
+    >
+      <Text style={payStyles.walletText}>{inWallet ? 'In demo wallet' : 'Add to wallet'}</Text>
+    </Pressable>
+    <Animated.View pointerEvents={locked ? 'auto' : 'none'} style={[payStyles.lock, { opacity: lock }]}>
       <View style={payStyles.lockPill}><Text style={payStyles.lockText}>Locked</Text></View>
       <Text style={payStyles.lockHint}>Unlocks in this demo after every share is collected.</Text>
     </Animated.View>
@@ -97,6 +109,11 @@ const payStyles = StyleSheet.create({
   group: { color: 'rgba(255,255,255,0.86)', fontSize: 15, lineHeight: 20 },
   status: { color: '#FFFFFF', fontSize: 15, lineHeight: 20, fontWeight: '700', marginTop: 10 },
   detail: { color: 'rgba(255,255,255,0.78)', fontSize: 13, lineHeight: 18 },
+  wallet: {
+    alignSelf: 'stretch', marginTop: 12, minHeight: 40, borderRadius: 999,
+    backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14,
+  },
+  walletText: { color: colors.ink, fontSize: 14, lineHeight: 18, fontWeight: '800' },
   lock: {
     ...StyleSheet.absoluteFill, backgroundColor: 'rgba(18, 40, 58, 0.72)',
     alignItems: 'center', justifyContent: 'center', gap: 8, padding: 20,

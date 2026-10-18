@@ -46,6 +46,8 @@ export default function PaymentScreen() {
       groupName={demo.viewingGroup.name}
       status={cardStatus}
       detail={cardDetail}
+      inWallet={demo.inWallet}
+      onAddToWallet={demo.addToWallet}
     />
     <PersonSwitcher people={demo.members} value={demo.personId} onChange={demo.setPerson} />
     <View>

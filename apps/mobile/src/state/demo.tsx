@@ -175,6 +175,8 @@ type DemoContextValue = {
   simulateMerchant: () => void;
   completeMerchant: () => void;
   cancelCollection: () => void;
+  inWallet: boolean;
+  addToWallet: () => void;
   dismissNotice: (id: string) => void;
   quietNotices: { id: string; message: string }[];
   reset: () => void;
@@ -207,6 +209,7 @@ export function DemoProvider({ children }: PropsWithChildren) {
   const [pendingReceipt, setPendingReceipt] = useState<ExtractedReceipt | null>(null);
   const [receiptGroupId, setReceiptGroupId] = useState('fam');
   const [notices, setNotices] = useState<{ id: string; personId: string; message: string }[]>([]);
+  const [walletBillId, setWalletBillId] = useState<string | null>(null);
 
   const you = useMemo<DemoPerson>(() => ({
     id: HOST_ID,
@@ -519,7 +522,14 @@ export function DemoProvider({ children }: PropsWithChildren) {
     if (!currentBill) return;
     if (activePersonId !== HOST_ID) return;
     if (currentBill.phase === 'editing' || currentBill.phase === 'review' || currentBill.phase === 'paid') return;
+    setWalletBillId(null);
     setPhase('editing', { approvals: {}, failedPersonId: null });
+  }
+
+  function addToWallet() {
+    if (!currentBill) return;
+    if (currentBill.phase !== 'ready' && currentBill.phase !== 'merchant_pending' && currentBill.phase !== 'paid') return;
+    setWalletBillId(currentBill.id);
   }
 
   function addPayment(brand: string, last4: string) {
@@ -545,6 +555,7 @@ export function DemoProvider({ children }: PropsWithChildren) {
     setPendingReceipt(null);
     setReceiptGroupId('fam');
     setNotices([]);
+    setWalletBillId(null);
   }
 
   const value: DemoContextValue = {
@@ -560,6 +571,8 @@ export function DemoProvider({ children }: PropsWithChildren) {
     claimItem, assignItem, unclaimItem, customizeItem, resetItem, setSplitMode, applyVerifiedReceipt,
     startReview, reopenReview, approveShare, confirmCollect,
     simulateCollectionSuccess, simulateCollectionFailure, retryFailed, simulateMerchant, completeMerchant, cancelCollection,
+    inWallet: walletBillId !== null && walletBillId === currentBill?.id,
+    addToWallet,
     dismissNotice,
     quietNotices: notices.filter((notice) => notice.personId === activePersonId),
     reset,
