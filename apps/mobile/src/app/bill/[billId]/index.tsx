@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Alert, Text, View } from 'react-native';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
-import { type Fraction } from '@splitpool/contracts';
+import { formatMoney, type Fraction } from '@splitpool/contracts';
 import { AvatarStack } from '../../../components/people';
 import { BillSummary, ReceiptItemCard, ReceiptPaper } from '../../../components/split-ui';
-import { AppHeader, Button, ErrorBanner, ReadyReviewNote, Screen, colors, styles } from '../../../components/ui';
+import { AppHeader, Button, Card, ErrorBanner, ReadyReviewNote, Screen, colors, styles } from '../../../components/ui';
 import { useBillPoll } from '../../../hooks/useBillPoll';
 import {
   formatApiError,
@@ -46,7 +46,8 @@ export default function BillScreen() {
 
   const userId = appProfile?.userId;
   const isHost = Boolean(bill && group && userId && group.hostId === userId);
-  const canEdit = bill?.state === 'EDITING';
+  const closed = bill?.state === 'PAID' || bill?.state === 'CANCELLED';
+  const canEdit = bill?.state === 'EDITING' && !closed;
   const canScan = Boolean(isHost && canEdit);
   const people = useMemo(
     () => (bill ? bill.participants.map((participant) => avatarFromProfile(participant)) : []),
@@ -110,6 +111,7 @@ export default function BillScreen() {
     ? bill.items.filter((item) => resolveBillItem(bill, item).status === 'complete').length
     : 0;
   const yourCents = myShare?.totalCents ?? myShare?.itemsCents ?? 0;
+  const tipServiceCents = (myShare?.serviceChargeCents ?? 0) + (myShare?.tipCents ?? 0);
 
   return (
     <Screen
@@ -124,45 +126,62 @@ export default function BillScreen() {
       )}
       footer={(
         <View style={{ gap: 10 }}>
-          {bill?.summary.complete && <ReadyReviewNote />}
-          {bill && (
-            <BillSummary
-              yourLabel={bill.summary.complete ? 'Your total' : 'Your items'}
-              yourCents={yourCents}
-              totalCents={bill.summary.totalCents}
-              allocated={allocated}
-              partial={partial}
-              count={bill.items.length}
-              actionLabel={bill.summary.complete
-                ? (isHost ? 'Confirm Payment' : 'Continue to payment')
-                : canScan
-                  ? (bill.items.length ? 'Rescan receipt' : 'Scan receipt')
-                  : 'Refresh'}
-              onAction={() => {
-                if (bill.summary.complete) {
-                  router.push({
+          {closed ? (
+            <>
+              {bill?.state === 'PAID' && (
+                <Button
+                  title="View summary"
+                  onPress={() => router.push({
                     pathname: '/bill/[billId]/payment',
                     params: { billId: bill.id },
-                  } as unknown as Href);
-                  return;
-                }
-                if (canScan) {
-                  router.push({
-                    pathname: '/bill/[billId]/receipt',
-                    params: { billId: bill.id, expectedVersion: String(bill.version) },
-                  } as unknown as Href);
-                  return;
-                }
-                void refresh({ clearConflict: true });
-              }}
-              note={bill.summary.complete
-                ? undefined
-                : bill.items.length === 0
-                  ? (canScan ? 'Scan a receipt to add items.' : 'Waiting for the host to scan a receipt.')
-                  : undefined}
-            />
+                  } as unknown as Href)}
+                />
+              )}
+              <Button title="Return to groups" secondary onPress={() => router.replace('/connected')} />
+            </>
+          ) : (
+            <>
+              {bill?.summary.complete && <ReadyReviewNote />}
+              {bill && (
+                <BillSummary
+                  yourLabel={bill.summary.complete ? 'Your total' : 'Your items'}
+                  yourCents={yourCents}
+                  totalCents={bill.summary.totalCents}
+                  allocated={allocated}
+                  partial={partial}
+                  count={bill.items.length}
+                  actionLabel={bill.summary.complete
+                    ? (isHost ? 'Confirm Payment' : 'Continue to payment')
+                    : canScan
+                      ? (bill.items.length ? 'Rescan receipt' : 'Scan receipt')
+                      : 'Refresh'}
+                  onAction={() => {
+                    if (bill.summary.complete) {
+                      router.push({
+                        pathname: '/bill/[billId]/payment',
+                        params: { billId: bill.id },
+                      } as unknown as Href);
+                      return;
+                    }
+                    if (canScan) {
+                      router.push({
+                        pathname: '/bill/[billId]/receipt',
+                        params: { billId: bill.id, expectedVersion: String(bill.version) },
+                      } as unknown as Href);
+                      return;
+                    }
+                    void refresh({ clearConflict: true });
+                  }}
+                  note={bill.summary.complete
+                    ? 'Tax and tip are split in proportion to your items.'
+                    : bill.items.length === 0
+                      ? (canScan ? 'Scan a receipt to add items.' : 'Waiting for the host to scan a receipt.')
+                      : 'Tax and tip appear once every item is claimed.'}
+                />
+              )}
+              <Button title="Return to groups" secondary onPress={() => router.replace('/connected')} />
+            </>
           )}
-          <Button title="Return to groups" secondary onPress={() => router.replace('/connected')} />
         </View>
       )}
     >
@@ -170,9 +189,21 @@ export default function BillScreen() {
         {loading && !bill
           ? 'Loading…'
           : bill
-            ? `${stateLabel(bill.state)} · Tap a line to claim it. Slide it left, then enter your %.`
+            ? closed
+              ? `Closed · ${stateLabel(bill.state)}`
+              : `${stateLabel(bill.state)} · Tap a line to claim it. Slide it left, then enter your %.`
             : 'Could not load bill'}
       </Text>
+
+      {closed && bill && (
+        <ErrorBanner
+          tone={bill.state === 'PAID' ? 'success' : 'warning'}
+          title="Closed bill"
+          message={bill.state === 'PAID'
+            ? 'This bill is paid and can’t be reopened.'
+            : 'This bill was canceled and can’t be reopened.'}
+        />
+      )}
 
       {conflict && (
         <ErrorBanner
@@ -181,11 +212,43 @@ export default function BillScreen() {
         />
       )}
 
-      {!canEdit && bill && bill.state !== 'PAID' && bill.state !== 'CANCELLED' && (
+      {!canEdit && bill && !closed && (
         <ErrorBanner
           title="Claims are locked"
           message="This bill can’t be edited right now."
         />
+      )}
+
+      {myShare && bill && (
+        <Card>
+          <Text style={styles.heading}>Your share</Text>
+          <Text style={styles.small}>
+            {bill.summary.complete
+              ? 'Tax and tip follow your share of the claimed items.'
+              : 'Tax and tip appear here once every item is claimed.'}
+          </Text>
+          <View style={styles.row}>
+            <Text style={styles.text}>Items</Text>
+            <Text style={styles.text}>{formatMoney(myShare.itemsCents)}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.text}>Tax</Text>
+            <Text style={styles.text}>{formatMoney(myShare.taxCents)}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.text}>Tip / service</Text>
+            <Text style={styles.text}>{formatMoney(tipServiceCents)}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.heading}>You owe</Text>
+            <Text style={styles.heading}>{formatMoney(myShare.totalCents)}</Text>
+          </View>
+          {bill.summary.complete && (
+            <Text style={styles.small}>
+              Receipt tax {formatMoney(bill.taxCents)} · tip/service {formatMoney(bill.serviceChargeCents)}
+            </Text>
+          )}
+        </Card>
       )}
 
       {bill && userId && (
@@ -207,9 +270,9 @@ export default function BillScreen() {
                 roster={roster}
                 viewerId={userId}
                 editable={canEdit && !busy}
-                faded={false}
-                percentOpen={percentId === item.id}
-                expanded={openId === item.id && percentId !== item.id}
+                faded={closed}
+                percentOpen={!closed && percentId === item.id}
+                expanded={!closed && openId === item.id && percentId !== item.id}
                 onClaim={() => {
                   const next = claimJoinFraction(bill, item.id, userId);
                   if ('error' in next) {
@@ -260,7 +323,7 @@ export default function BillScreen() {
       )}
 
       {!!message && <ErrorBanner message={message} />}
-      {bill && bill.state !== 'PAID' && bill.state !== 'CANCELLED' && !bill.summary.complete && bill.items.length > 0 && (
+      {!closed && bill && !bill.summary.complete && bill.items.length > 0 && (
         <Text style={[styles.small, { color: colors.warning }]}>
           Claim every item before payment.
         </Text>

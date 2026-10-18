@@ -190,9 +190,12 @@ export class CollaborationService {
    * Unknown bill ids are ignored so in-memory payment demos stay usable without Postgres rows.
    */
   async syncPaymentState(billId: string, state: Bill['state']) {
+    // Terminal collaboration states are final — reopen/ledger resets must not revive them.
     const result = await this.db.query(
       `UPDATE bills SET state = $1, version = version + 1
-       WHERE id = $2 AND state IS DISTINCT FROM $1`,
+       WHERE id = $2
+         AND state IS DISTINCT FROM $1
+         AND state NOT IN ('PAID', 'CANCELLED')`,
       [state, billId],
     );
     return result.rowCount ?? 0;
@@ -207,12 +210,19 @@ export class CollaborationService {
         [billId],
       )).rows[0];
       requireThat(locked, 404, 'BILL_NOT_FOUND', 'Bill not found.');
-      if (locked.state !== state) {
-        await tx.query(
-          'UPDATE bills SET state = $1, version = version + 1 WHERE id = $2',
-          [state, billId],
+      if (locked.state === 'PAID' || locked.state === 'CANCELLED') {
+        requireThat(
+          locked.state === state,
+          409,
+          'BILL_CLOSED',
+          'This bill is closed and cannot be changed.',
         );
+        return this.readBill(tx, billId);
       }
+      await tx.query(
+        'UPDATE bills SET state = $1, version = version + 1 WHERE id = $2',
+        [state, billId],
+      );
       return this.readBill(tx, billId);
     });
   }

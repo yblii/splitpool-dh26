@@ -189,11 +189,18 @@ export default function ConnectedGroupScreen() {
           <Pressable
             key={entry.id}
             accessibilityRole="button"
-            accessibilityLabel={`${entry.merchant}, total ${formatMoney(entry.totalCents)}`}
+            accessibilityLabel={`Closed ${entry.merchant}, ${entry.state === 'PAID' ? 'paid' : 'canceled'}`}
             onPress={() => router.push({ pathname: '/bill/[billId]', params: { billId: entry.id } } as Href)}
             style={splitRow}
           >
-            <Text style={[styles.text, { flex: 1 }]} numberOfLines={1}>{entry.merchant}</Text>
+            <View style={{ flex: 1, justifyContent: 'center' }}>
+              <Text style={[styles.text, { fontWeight: '600' }]} numberOfLines={1}>
+                {entry.merchant || 'Bill'}
+              </Text>
+              <Text style={[styles.small, { color: entry.state === 'PAID' ? colors.success : colors.warning }]}>
+                Closed · {entry.state === 'PAID' ? 'paid' : 'canceled'}
+              </Text>
+            </View>
             <Text {...moneyMark} style={money}>{formatMoney(entry.totalCents)}</Text>
             <Text {...moneyMark} style={money}>{formatMoney(entry.yourShareCents)}</Text>
           </Pressable>

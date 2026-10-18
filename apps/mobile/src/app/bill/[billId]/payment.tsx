@@ -240,7 +240,7 @@ export default function BillPaymentScreen() {
   }
 
   async function onReopen() {
-    if (!billId || !userId) return;
+    if (!billId || !userId || settled) return;
     await run(() => reopenBillPayment(billId, userId));
   }
 
@@ -325,8 +325,8 @@ export default function BillPaymentScreen() {
         </View>
         <ErrorBanner
           tone="success"
-          title="Payment complete"
-          message="This bill is closed. Meal titles are for fun and never delay checkout."
+          title="Closed · paid"
+          message="This bill is closed and can’t be reopened."
         />
         <MealTitles result={mealTitles} loading={mealTitlesLoading} />
         {!!message && <ErrorBanner message={message} />}
@@ -344,10 +344,10 @@ export default function BillPaymentScreen() {
             <Text style={styles.heading}>{formatMoney(myShare?.totalCents ?? 0)}</Text>
           </View>
           <Button title={busy ? 'Working…' : title} disabled={disabled} onPress={onPress} />
-          {payment?.snapshotId && !session && isHost && (
+          {payment?.snapshotId && !session && isHost && !settled && bill?.state !== 'PAID' && bill?.state !== 'CANCELLED' && (
             <Button title="Reopen bill" secondary disabled={busy} onPress={() => void onReopen()} />
           )}
-          {session && isHost && session.phase !== 'paid' && session.phase !== 'canceled' && (
+          {session && isHost && session.phase !== 'paid' && session.phase !== 'canceled' && !settled && (
             <Button title="Cancel collection" secondary disabled={busy} onPress={() => void onCancel()} />
           )}
           <Button
@@ -367,9 +367,22 @@ export default function BillPaymentScreen() {
 
         <Card>
           <Text style={styles.heading}>Your share</Text>
+          <Text style={styles.small}>Tax and tip are split in proportion to your items.</Text>
           <View style={styles.row}>
-            <Text style={styles.text}>Items + tax + tip</Text>
-            <Text style={styles.text}>{formatMoney(myShare?.totalCents ?? 0)}</Text>
+            <Text style={styles.text}>Items</Text>
+            <Text style={styles.text}>{formatMoney(myShare?.itemsCents ?? 0)}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.text}>Tax</Text>
+            <Text style={styles.text}>{formatMoney(myShare?.taxCents ?? 0)}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.text}>Tip / service</Text>
+            <Text style={styles.text}>{formatMoney((myShare?.serviceChargeCents ?? 0) + (myShare?.tipCents ?? 0))}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.heading}>You owe</Text>
+            <Text style={styles.heading}>{formatMoney(myShare?.totalCents ?? 0)}</Text>
           </View>
           {payment?.snapshotId && (
             <Text style={styles.small}>

@@ -60,7 +60,21 @@ export async function registerPaymentRoutes(
     return projection;
   }));
   app.post('/api/v1/bills/:id/reopen', async (request, reply) => run(reply, async () => {
-    const projection = ledger.reopen(actor(request), id(request));
+    const billId = id(request);
+    // Reopen only undoes a frozen review snapshot. Paid/canceled collaboration bills stay closed.
+    const existing = (() => {
+      try {
+        return ledger.billView(actor(request), billId, now(request, simulation));
+      } catch (error) {
+        if (error instanceof LedgerError && error.statusCode === 404) return null;
+        throw error;
+      }
+    })();
+    const phase = existing?.session?.phase;
+    if (phase === 'paid' || phase === 'canceled' || phase === 'canceling') {
+      throw new LedgerError(409, 'This bill is closed and cannot be reopened.');
+    }
+    const projection = ledger.reopen(actor(request), billId);
     await mirrorBill(syncBillState, projection);
     return projection;
   }));
