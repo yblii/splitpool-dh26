@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AvatarStack, PersonSwitcher } from '../components/people';
 import { BillSummary, ReceiptItemCard, ReceiptPaper } from '../components/split-ui';

@@ -1,6 +1,6 @@
 # Collaboration backend
 
-Implemented scope: profiles, groups, invitations, manual/host-reviewed receipt items, payer rosters, exact fractional claims, personal tips, and authoritative bill reads. OCR and payment integration belong to other team members. The mobile screens still use local demo state until wired to these endpoints.
+Implemented scope: profiles, groups, invitations, manual/host-reviewed receipt items, payer rosters, exact fractional claims, personal tips, and authoritative bill reads. OCR and payment integration belong to other team members. The `/connected`, `/group/[groupId]`, and `/bill/[billId]` mobile screens use these endpoints for authenticated receipt review, claims, and personal tips. The home screen and `/split` through `/payment` remain a separate labeled local demo.
 
 ## How Fastify fits
 

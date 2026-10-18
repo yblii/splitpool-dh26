@@ -4,6 +4,7 @@ import { formatMoney } from '@splitpool/contracts';
 import { monoFamily } from '../fonts';
 import { AppHeader, Card, EmptyState, Screen, colors, moneyMark, styles } from '../components/ui';
 import { useDemo } from '../state/demo';
+import { MealTitles } from '../components/MealTitles';
 
 export default function HistoryScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
@@ -22,8 +23,9 @@ export default function HistoryScreen() {
         <View style={styles.row}><Text style={styles.text}>Group total</Text><Text {...moneyMark} style={[styles.heading, { fontFamily: monoFamily }]}>{formatMoney(bill.totalCents)}</Text></View>
         <View style={styles.row}><Text style={styles.text}>You paid</Text><Text {...moneyMark} style={[styles.heading, { fontFamily: monoFamily }]}>{formatMoney(bill.yourShareCents)}</Text></View>
         <Text style={{ color: colors.success, fontWeight: '700' }}>Paid</Text>
-        <Text style={styles.small}>This is sample history. It cannot be edited, and it was not a real charge.</Text>
+        <Text style={styles.small}>This is demo history. It cannot be edited, and it was not a real charge.</Text>
       </Card>
+      {bill.titles && <MealTitles result={bill.titles} />}
     </>}
   </Screen>;
 }

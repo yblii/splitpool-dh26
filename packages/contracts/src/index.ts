@@ -312,6 +312,7 @@ export function demoBillFromVerifiedReceipt(
 
 export * from './payment';
 export * from './ledger';
+export * from './titles';
 
 /** 100% expressed as basis points so splits stay in integers. */
 export const FULL_SPLIT_BASIS_POINTS = 10_000;

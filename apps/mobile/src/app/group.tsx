@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { formatMoney, summarizeSplitBill } from '@splitpool/contracts';
+import { formatMoney } from '@splitpool/contracts';
+import { summarizeWithPersonalTips } from '../lib/demoWorkflow';
 import { MemberAvatar } from '../components/people';
 import { BottomSheet } from '../components/sheets';
 import { ReceiptPaper } from '../components/split-ui';
@@ -27,14 +28,14 @@ export default function GroupDetailsScreen() {
   const members = group.memberIds.map((id) => demo.lookup(id));
   const bill = demo.billFor(group.id);
   const yourShareCents = bill
-    ? summarizeSplitBill({
+    ? summarizeWithPersonalTips({
       items: bill.items,
       taxCents: bill.taxCents,
       tipCents: bill.tipCents,
       serviceChargeCents: bill.serviceChargeCents,
       discountCents: bill.discountCents,
       printedTotalCents: bill.printedTotalCents,
-    }, group.memberIds, bill.splitMode).people.find((person) => person.id === 'you')?.totalCents ?? 0
+    }, group.memberIds, bill.splitMode, bill.personalTips).people.find((person) => person.id === 'you')?.totalCents ?? 0
     : 0;
   const past = demo.pastBills.filter((entry) => entry.groupId === group.id);
   const availableFriends = demo.friends.filter((friend) => !group.memberIds.includes(friend.id));

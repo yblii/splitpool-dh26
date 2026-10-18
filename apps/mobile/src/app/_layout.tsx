@@ -47,18 +47,18 @@ export default function RootLayout() {
   return <SafeAreaProvider>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-      <AppProfileProvider>
-      <DemoProvider>
-      <ReceiptSessionProvider>
-        <StatusBar style="dark" />
-        <View style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? '#D5DEE6' : colors.background, alignItems: 'center' }}>
-          <View style={{ flex: 1, width: '100%', maxWidth: Platform.OS === 'web' ? 430 : undefined, backgroundColor: colors.background }}>
-            <Navigator />
-          </View>
-        </View>
-      </ReceiptSessionProvider>
-      </DemoProvider>
-      </AppProfileProvider>
+        <AppProfileProvider>
+          <DemoProvider>
+            <ReceiptSessionProvider>
+              <StatusBar style="dark" />
+              <View style={{ flex: 1, backgroundColor: Platform.OS === 'web' ? '#D5DEE6' : colors.background, alignItems: 'center' }}>
+                <View style={{ flex: 1, width: '100%', maxWidth: Platform.OS === 'web' ? 430 : undefined, backgroundColor: colors.background }}>
+                  <Navigator />
+                </View>
+              </View>
+            </ReceiptSessionProvider>
+          </DemoProvider>
+        </AppProfileProvider>
       </AuthProvider>
     </QueryClientProvider>
   </SafeAreaProvider>;

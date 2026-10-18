@@ -101,7 +101,7 @@ export default function GroupsScreen() {
     </View>}
   >
     <Pressable accessibilityRole="button" accessibilityLabel={`Your title, ${demo.you.title}`} onPress={() => router.push('/profile')} style={{ alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center' }}>
-      <Text style={yourTitle}>“{demo.you.title}”</Text>
+      <Text style={yourTitle}>{demo.you.title ? `“${demo.you.title}”` : 'Your next meal has a title'}</Text>
     </Pressable>
     <View style={styles.row}>
       <Text style={groupsHeading}>Groups</Text>

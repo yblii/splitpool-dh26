@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type PropsWithChildren } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
 import { Alert } from 'react-native';
 import {
   extractedToEditable,
@@ -8,14 +8,17 @@ import {
   resetSplitToEqual,
   setCustomShare,
   splitLinesFromVerified,
-  summarizeSplitBill,
   verifyReceipt,
   type ExtractedReceipt,
   type SplitLine,
   type SplitMode,
   type SplitSummary,
   type VerifiedReceipt,
+  type MealTitlesResponse,
 } from '@splitpool/contracts';
+import { everyShareAuthorized, summarizeWithPersonalTips, titleRequestForBill } from '../lib/demoWorkflow';
+import { generateMealTitles } from '../lib/mealTitles';
+import { readTitles, writeTitles, type SavedTitles } from '../lib/titleStorage';
 
 export type DemoPerson = {
   id: string;
@@ -41,6 +44,7 @@ export type PastBill = {
   totalCents: number;
   yourShareCents: number;
   status: 'paid';
+  titles?: MealTitlesResponse;
 };
 
 export type BillPhase =
@@ -48,6 +52,7 @@ export type BillPhase =
   | 'review'
   | 'collecting'
   | 'failed'
+  | 'funding_pending'
   | 'ready'
   | 'merchant_pending'
   | 'paid';
@@ -66,6 +71,10 @@ export type ActiveBill = {
   approvals: Record<string, boolean>;
   failedPersonId: string | null;
   splitMode: SplitMode;
+  personalTips: Record<string, number>;
+  authorizedIds: string[];
+  titleLoading?: boolean;
+  mealTitles?: MealTitlesResponse;
 };
 
 export type DemoCard = { id: string; brand: string; last4: string };
@@ -117,6 +126,8 @@ function billFromReceipt(groupId: string, receipt: ExtractedReceipt, id: string)
     approvals: {},
     failedPersonId: null,
     splitMode: 'proportional',
+    personalTips: {},
+    authorizedIds: [],
   };
 }
 
@@ -166,12 +177,14 @@ type DemoContextValue = {
   customizeItem: (itemId: string, basisPoints: number) => string | null;
   resetItem: (itemId: string) => void;
   setSplitMode: (mode: SplitMode) => void;
+  setPersonalTip: (tipCents: number) => string | null;
   applyVerifiedReceipt: (receipt: VerifiedReceipt) => void;
   startReview: () => string | null;
   reopenReview: () => string | null;
   approveShare: () => string | null;
   confirmCollect: () => string | null;
   simulateCollectionSuccess: () => void;
+  authorizeMyShare: () => void;
   simulateCollectionFailure: () => void;
   retryFailed: () => void;
   simulateMerchant: () => void;
@@ -181,6 +194,11 @@ type DemoContextValue = {
   addToWallet: () => void;
   dismissNotice: (id: string) => void;
   quietNotices: { id: string; message: string }[];
+  titleSharingEnabled: boolean;
+  setTitleSharingEnabled: (enabled: boolean) => void;
+  dismissTitle: () => void;
+  titleStorageError: boolean;
+  yourTitleSource: string | null;
   reset: () => void;
 };
 
@@ -207,37 +225,70 @@ export function DemoProvider({ children }: PropsWithChildren) {
   const [personId, setPersonId] = useState(HOST_ID);
   const [viewingGroupId, setViewingGroupId] = useState('fam');
   const [cards, setCards] = useState<DemoCard[]>(DEMO_CARDS);
-  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [selectedCards, setSelectedCards] = useState<Record<string, string | null>>({});
   const [pendingReceipt, setPendingReceipt] = useState<ExtractedReceipt | null>(null);
   const [receiptGroupId, setReceiptGroupId] = useState('fam');
   const [notices, setNotices] = useState<{ id: string; personId: string; itemId?: string; kind?: 'hint'; message: string }[]>([]);
   const [walletBillId, setWalletBillId] = useState<string | null>(null);
+  const [savedTitles, setSavedTitles] = useState<SavedTitles>({});
+  const [titlesHydrated, setTitlesHydrated] = useState(false);
+  const [titleStorageError, setTitleStorageError] = useState(false);
+  const [titleSharingEnabled, setTitleSharingEnabled] = useState(true);
+  const titleRequests = useRef(new Map<string, AbortController>());
+  const resetEpoch = useRef(0);
+  const latestPaidByPerson = useRef<Record<string, string>>({});
+  const storageQueue = useRef(Promise.resolve());
+
+  useEffect(() => {
+    const epoch = resetEpoch.current;
+    let active = true;
+    void readTitles().then(saved => {
+      if (!active) return;
+      if (epoch === resetEpoch.current) setSavedTitles(current => ({ ...saved, ...current }));
+      setTitlesHydrated(true);
+    });
+    const requests = titleRequests.current;
+    return () => { active = false; requests.forEach(controller => controller.abort()); };
+  }, []);
+
+  useEffect(() => {
+    if (!titlesHydrated) return;
+    storageQueue.current = storageQueue.current.catch(() => {}).then(() => writeTitles(savedTitles))
+      .then(() => setTitleStorageError(false)).catch(() => setTitleStorageError(true));
+  }, [savedTitles, titlesHydrated]);
 
   const you = useMemo<DemoPerson>(() => ({
     id: HOST_ID,
     name: 'You',
     username: username.trim().replace(/^@/, '') || 'jamie',
-    title: 'rice lover',
+    title: savedTitles.you?.title ?? '',
     initial: (profileName.trim().charAt(0) || 'Y').toUpperCase(),
     color: YOU_COLOR,
-  }), [profileName, username]);
+  }), [profileName, username, savedTitles]);
 
   const lookup = useMemo(() => {
-    const all = new Map<string, DemoPerson>([[you.id, you], ...DIRECTORY.map((person) => [person.id, person] as const)]);
+    const all = new Map<string, DemoPerson>([[you.id, you], ...DIRECTORY.map((person) => [person.id, { ...person, title: savedTitles[person.id]?.title ?? '' }] as const)]);
     return (id: string): DemoPerson => all.get(id) ?? {
       id, name: 'Guest', username: id, title: '', initial: '?', color: colorsFallback,
     };
-  }, [you]);
+  }, [you, savedTitles]);
 
   const viewingGroup = groups.find((group) => group.id === viewingGroupId) ?? groups[0]!;
   const currentBill = bills[viewingGroup.id] ?? null;
   const summary = useMemo(
-    () => currentBill ? summarizeSplitBill(toInput(currentBill), viewingGroup.memberIds, currentBill.splitMode) : null,
+    () => currentBill ? summarizeWithPersonalTips(toInput(currentBill), viewingGroup.memberIds, currentBill.splitMode, currentBill.personalTips) : null,
     [currentBill, viewingGroup],
   );
   const members = viewingGroup.memberIds.map((id) => lookup(id));
-  const selectedCard = cards.find((card) => card.id === selectedCardId) ?? null;
   const activePersonId = viewingGroup.memberIds.includes(personId) ? personId : HOST_ID;
+  const selectedCardId = selectedCards[activePersonId] ?? null;
+  const selectedCard = cards.find((card) => card.id === selectedCardId) ?? null;
+
+  function selectCard(id: string | null) {
+    if (currentBill && currentBill.phase !== 'editing' && currentBill.phase !== 'paid'
+      && (currentBill.phase !== 'review' || currentBill.approvals[activePersonId])) return;
+    setSelectedCards(current => ({ ...current, [activePersonId]: id }));
+  }
 
   function updateEditing(groupId: string, recipe: (bill: ActiveBill) => ActiveBill) {
     setBills((current) => {
@@ -269,7 +320,7 @@ export function DemoProvider({ children }: PropsWithChildren) {
 
   function membershipLocked(groupId: string) {
     const phase = bills[groupId]?.phase;
-    return phase === 'review' || phase === 'collecting' || phase === 'failed' || phase === 'ready' || phase === 'merchant_pending';
+    return phase === 'review' || phase === 'collecting' || phase === 'failed' || phase === 'funding_pending' || phase === 'ready' || phase === 'merchant_pending';
   }
 
   function renameGroup(groupId: string, name: string) {
@@ -410,6 +461,14 @@ export function DemoProvider({ children }: PropsWithChildren) {
     updateEditing(currentBill.groupId, (bill) => ({ ...bill, splitMode: mode }));
   }
 
+  function setPersonalTip(tipCents: number) {
+    if (!currentBill || currentBill.phase !== 'editing') return 'Tips are locked after review starts.';
+    if (!Number.isSafeInteger(tipCents) || tipCents < 0 || tipCents > 100000000) return 'Enter a valid tip amount.';
+    const payerId = activePersonId;
+    updateEditing(currentBill.groupId, bill => ({ ...bill, personalTips: { ...bill.personalTips, [payerId]: tipCents } }));
+    return null;
+  }
+
   function applyVerifiedReceipt(receipt: VerifiedReceipt) {
     const existing = bills[receiptGroupId];
     if (existing && existing.phase !== 'editing' && existing.phase !== 'paid') {
@@ -444,11 +503,12 @@ export function DemoProvider({ children }: PropsWithChildren) {
     if (activePersonId !== HOST_ID) return 'Only the host can send this bill for approval.';
     if (!currentBill || currentBill.phase !== 'editing') return 'This bill is not open for changes.';
     if (!summary?.readyToFinalize) return 'Every item needs a full split, and the receipt total has to match, before approval.';
+    if (summary.computedTotalCents <= 0 || summary.people.some(person => person.totalCents < 0)) return 'The bill needs valid positive payment amounts.';
     const groupId = currentBill.groupId;
     setBills((current) => {
       const bill = current[groupId];
       if (!bill || bill.phase !== 'editing') return current;
-      return { ...current, [groupId]: { ...bill, phase: 'review', approvals: {}, failedPersonId: null } };
+      return { ...current, [groupId]: { ...bill, phase: 'review', approvals: {}, authorizedIds: [], failedPersonId: null } };
     });
     return null;
   }
@@ -489,7 +549,7 @@ export function DemoProvider({ children }: PropsWithChildren) {
     setBills((current) => {
       const bill = current[groupId];
       if (!bill || bill.phase !== 'review') return current;
-      return { ...current, [groupId]: { ...bill, phase: 'collecting', failedPersonId: null } };
+      return { ...current, [groupId]: { ...bill, phase: 'collecting', authorizedIds: [], failedPersonId: null } };
     });
     return null;
   }
@@ -505,38 +565,71 @@ export function DemoProvider({ children }: PropsWithChildren) {
   }
 
   function simulateCollectionSuccess() {
-    if (currentBill?.phase === 'collecting') setPhase('ready', { failedPersonId: null });
+    if (activePersonId === HOST_ID && currentBill?.phase === 'funding_pending' && summary
+      && everyShareAuthorized(summary, currentBill.authorizedIds)) setPhase('ready', { failedPersonId: null });
+  }
+
+  function authorizeMyShare() {
+    if (!currentBill || currentBill.phase !== 'collecting' || !summary || !currentBill.approvals[activePersonId]) return;
+    if (!summary.people.some(person => person.id === activePersonId && person.totalCents > 0)) return;
+    const authorizedIds = [...new Set([...currentBill.authorizedIds, activePersonId])];
+    setPhase(everyShareAuthorized(summary, authorizedIds) ? 'funding_pending' : 'collecting', { authorizedIds });
   }
 
   function simulateCollectionFailure() {
-    if (!currentBill || currentBill.phase !== 'collecting' || !summary) return;
+    if (activePersonId !== HOST_ID || !currentBill || currentBill.phase !== 'collecting' || !summary) return;
     const payers = summary.people.filter((person) => person.totalCents > 0).map((person) => person.id);
-    const failedPersonId = [...payers].reverse().find((id) => id !== HOST_ID) ?? payers[0] ?? HOST_ID;
+    const failedPersonId = [...payers].reverse().find(id => !currentBill.authorizedIds.includes(id));
+    if (!failedPersonId) return;
     setPhase('failed', { failedPersonId });
   }
 
   function retryFailed() {
-    if (currentBill?.phase === 'failed') setPhase('collecting', { failedPersonId: null });
+    if (currentBill?.phase === 'failed' && (activePersonId === HOST_ID || activePersonId === currentBill.failedPersonId)) setPhase('collecting', { failedPersonId: null });
   }
 
   function simulateMerchant() {
-    if (currentBill?.phase === 'ready') setPhase('merchant_pending');
+    if (activePersonId === HOST_ID && currentBill?.phase === 'ready') setPhase('merchant_pending');
   }
 
   function completeMerchant() {
-    if (!currentBill || currentBill.phase !== 'merchant_pending' || !summary) return;
+    if (activePersonId !== HOST_ID || !currentBill || currentBill.phase !== 'merchant_pending' || !summary) return;
     const yours = summary.people.find((person) => person.id === HOST_ID)?.totalCents ?? 0;
     const archived: PastBill = {
       id: `paid-${currentBill.id}`,
       groupId: currentBill.groupId,
       merchant: currentBill.merchant,
-      dateLabel: 'Oct 18',
+      dateLabel: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       totalCents: summary.computedTotalCents,
       yourShareCents: yours,
       status: 'paid',
     };
     setPastBills((current) => [archived, ...current.filter((entry) => entry.id !== archived.id)]);
-    setPhase('paid');
+    setPhase('paid', { titleLoading: titleSharingEnabled });
+    const billId = currentBill.id;
+    const groupId = currentBill.groupId;
+    const roster = [...viewingGroup.memberIds];
+    roster.forEach(id => { latestPaidByPerson.current[id] = billId; });
+    if (!titleSharingEnabled || titleRequests.current.has(currentBill.id)) return;
+    const request = titleRequestForBill(currentBill.items, summary, roster);
+    const controller = new AbortController();
+    titleRequests.current.set(billId, controller);
+    const epoch = resetEpoch.current;
+    void generateMealTitles(request, controller.signal).then(result => {
+      if (controller.signal.aborted || epoch !== resetEpoch.current) return;
+      const titles = result.titles.map(row => {
+        const index = request.members.findIndex(member => member.id === row.id);
+        const id = roster[index];
+        return { id, name: lookup(id).name, title: row.title, items: request.members[index].items };
+      });
+      const response = { ...result, titles };
+      setBills(current => current[groupId]?.id === billId
+        ? { ...current, [groupId]: { ...current[groupId], titleLoading: false, mealTitles: response } } : current);
+      setPastBills(current => current.map(entry => entry.id === archived.id ? { ...entry, titles: response } : entry));
+      setSavedTitles(current => ({ ...current, ...Object.fromEntries(titles.filter(row => latestPaidByPerson.current[row.id] === billId).map(row => [row.id, {
+        title: row.title, source: result.source, usedFallback: result.usedFallback,
+      }])) }));
+    });
   }
 
   function cancelCollection() {
@@ -544,7 +637,7 @@ export function DemoProvider({ children }: PropsWithChildren) {
     if (activePersonId !== HOST_ID) return;
     if (currentBill.phase === 'editing' || currentBill.phase === 'review' || currentBill.phase === 'paid') return;
     setWalletBillId(null);
-    setPhase('editing', { approvals: {}, failedPersonId: null });
+    setPhase('editing', { approvals: {}, authorizedIds: [], failedPersonId: null });
   }
 
   function addToWallet() {
@@ -560,11 +653,17 @@ export function DemoProvider({ children }: PropsWithChildren) {
     if (last4.trim() && digits.length !== 4) return 'Use 4 digits for the label, or leave it blank.';
     const id = `pay-${Date.now().toString(36)}`;
     setCards((current) => [...current, { id, brand: name, last4: digits }]);
-    setSelectedCardId(id);
+    selectCard(id);
     return null;
   }
 
   function reset() {
+    resetEpoch.current += 1;
+    titleRequests.current.forEach(controller => controller.abort());
+    titleRequests.current.clear();
+    latestPaidByPerson.current = {};
+    setSavedTitles({});
+    setTitleSharingEnabled(true);
     setBills(seedBills());
     setGroups(seedGroups());
     setFriends(DIRECTORY.filter((person) => person.id === 'alex' || person.id === 'sam'));
@@ -572,7 +671,7 @@ export function DemoProvider({ children }: PropsWithChildren) {
     setPersonId(HOST_ID);
     setViewingGroupId('fam');
     setCards(DEMO_CARDS);
-    setSelectedCardId(null);
+    setSelectedCards({});
     setPendingReceipt(null);
     setReceiptGroupId('fam');
     setNotices([]);
@@ -585,17 +684,25 @@ export function DemoProvider({ children }: PropsWithChildren) {
     linked: selectedCard !== null, pendingReceipt, receiptGroupId,
     setProfileName, setUsername, setPerson: setPersonId, selectGroup: setViewingGroupId,
     selectReceiptGroup: setReceiptGroupId,
-    setLinked: (linked) => setSelectedCardId(linked ? (selectedCardId ?? 'visa') : null),
-    selectCard: setSelectedCardId, addPayment, setPendingReceipt, lookup, activityLabel,
+    setLinked: (linked) => selectCard(linked ? (selectedCardId ?? 'visa') : null),
+    selectCard, addPayment, setPendingReceipt, lookup, activityLabel,
     billFor: (groupId) => bills[groupId] ?? null,
     createGroup, renameGroup, addGroupMember, removeGroupMember, addFriend,
-    claimItem, assignItem, hintItem, unclaimItem, customizeItem, resetItem, setSplitMode, applyVerifiedReceipt,
+    claimItem, assignItem, hintItem, unclaimItem, customizeItem, resetItem, setSplitMode, setPersonalTip, applyVerifiedReceipt,
     startReview, reopenReview, approveShare, confirmCollect,
-    simulateCollectionSuccess, simulateCollectionFailure, retryFailed, simulateMerchant, completeMerchant, cancelCollection,
+    simulateCollectionSuccess, authorizeMyShare, simulateCollectionFailure, retryFailed, simulateMerchant, completeMerchant, cancelCollection,
     inWallet: walletBillId !== null && walletBillId === currentBill?.id,
     addToWallet,
     dismissNotice,
     quietNotices: notices.filter((notice) => notice.personId === activePersonId),
+    titleSharingEnabled, setTitleSharingEnabled,
+    dismissTitle: () => setSavedTitles(current => {
+      const next = { ...current };
+      delete next[HOST_ID];
+      return next;
+    }),
+    titleStorageError,
+    yourTitleSource: savedTitles.you ? savedTitles.you.usedFallback ? 'Keyword fallback' : 'AI-generated food wordplay' : null,
     reset,
   };
 
@@ -615,6 +722,7 @@ export function payerStatus(phase: BillPhase, approved: boolean, failed: boolean
   if (phase === 'editing') return 'Still splitting';
   if (phase === 'review') return approved ? 'Approved' : 'Waiting for approval';
   if (phase === 'collecting') return 'Collecting payments';
+  if (phase === 'funding_pending') return 'Authorized · funding pending';
   if (phase === 'failed') return failed ? 'Payment failed' : 'Collected in this demo';
   if (phase === 'ready') return 'All contributions collected';
   if (phase === 'merchant_pending') return 'Merchant payment pending';
@@ -627,6 +735,7 @@ export function billStatusLabel(phase: BillPhase) {
     case 'review': return 'Waiting for approval';
     case 'collecting': return 'Collecting payments';
     case 'failed': return 'Payment failed';
+    case 'funding_pending': return 'Funding pending';
     case 'ready': return 'Virtual card ready';
     case 'merchant_pending': return 'Merchant payment pending';
     case 'paid': return 'Payment complete';

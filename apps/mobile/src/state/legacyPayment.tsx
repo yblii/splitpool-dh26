@@ -1,4 +1,4 @@
-﻿import { createContext, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
 import { Alert } from 'react-native';
 import {
   allocateCents, claimedHalves, defaultTipChoices, demoBillFromVerifiedReceipt, makeDemoBill, PaymentLedger, people, summarizeBill,

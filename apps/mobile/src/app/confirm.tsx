@@ -79,6 +79,11 @@ export default function ConfirmScreen() {
       <Text style={styles.subheading}>{demo.viewingGroup.name} · {bill.merchant}</Text>
     </View>
     <PersonSwitcher people={demo.members} value={demo.personId} onChange={demo.setPerson} />
+    {host && (bill.phase === 'editing' || bill.phase === 'review') && <Card>
+      <Text style={styles.heading}>A title for the table</Text>
+      <Text style={styles.small}>After simulated payment, send claimed food names and portions to Gemini for playful titles. Names and payment details are excluded. You can skip this for the whole group.</Text>
+      <Button title={demo.titleSharingEnabled ? 'Food titles on · Turn off' : 'Food titles off · Turn on'} secondary onPress={() => demo.setTitleSharingEnabled(!demo.titleSharingEnabled)} />
+    </Card>}
     {bill.phase === 'editing' && <ErrorBanner title="Still editing" message="The host sends the bill for approval after every item is fully allocated." />}
     <Card>
       <Text style={styles.label}>{approved ? 'Approved amount' : 'Amount to approve'}</Text>

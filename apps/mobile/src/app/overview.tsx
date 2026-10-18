@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { formatBasisPoints, formatMoney, itemVisualState, type SplitBlocker } from '@splitpool/contracts';
 import { PersonSwitcher } from '../components/people';
@@ -7,6 +7,7 @@ import { ProgressMeter } from '../components/split-ui';
 import { monoFamily } from '../fonts';
 import { AppHeader, Button, Card, ErrorBanner, FadingNotice, ReadyReviewNote, Screen, SegmentedControl, colors, moneyMark, styles } from '../components/ui';
 import { useDemo } from '../state/demo';
+import { moneyInputToCents } from '../lib/demoWorkflow';
 
 const STATE_LABEL = {
   unclaimed: 'Unclaimed',
@@ -30,6 +31,7 @@ export default function OverviewScreen() {
   const summary = demo.summary;
   const [message, setMessage] = useState<string | null>(null);
   const [hintFor, setHintFor] = useState<string | null>(null);
+  const [tipDraft, setTipDraft] = useState<{ personId: string; value: string } | null>(null);
   const viewer = summary?.people.find((person) => person.id === demo.personId);
   const host = demo.personId === 'you';
 
@@ -125,6 +127,19 @@ export default function OverviewScreen() {
     </View>}
     {message && <ErrorBanner message={message} />}
     <PersonSwitcher people={demo.members} value={demo.personId} onChange={demo.setPerson} />
+    <Card>
+      <Text style={styles.heading}>Your optional tip</Text>
+      <Text style={styles.small}>Only you pay this amount. It is added to any tip already printed on the receipt.</Text>
+      <TextInput accessibilityLabel="Your optional tip amount" keyboardType="decimal-pad" editable={bill.phase === 'editing'}
+        value={tipDraft?.personId === demo.personId ? tipDraft.value : ((bill.personalTips[demo.personId] ?? 0) / 100).toFixed(2)}
+        onChangeText={value => setTipDraft({ personId: demo.personId, value })} style={styles.input} />
+      <Button title="Save my tip" secondary disabled={bill.phase !== 'editing'} onPress={() => {
+        const value = tipDraft?.personId === demo.personId ? tipDraft.value : ((bill.personalTips[demo.personId] ?? 0) / 100).toFixed(2);
+        const cents = moneyInputToCents(value);
+        setMessage(cents === null ? 'Enter a tip in dollars with up to two decimal places.' : demo.setPersonalTip(cents) ?? 'Your tip was saved.');
+        if (cents !== null) setTipDraft(null);
+      }} />
+    </Card>
     <Card>
       <Text style={styles.heading}>Tax and tip</Text>
       <SegmentedControl

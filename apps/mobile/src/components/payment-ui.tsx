@@ -56,7 +56,7 @@ export function VirtualCard({
     </Pressable>
     <Animated.View pointerEvents={locked ? 'auto' : 'none'} style={[payStyles.lock, { opacity: lock }]}>
       <View style={payStyles.lockPill}><Text style={payStyles.lockText}>Locked</Text></View>
-      <Text style={payStyles.lockHint}>Unlocks in this demo after every share is collected.</Text>
+      <Text style={payStyles.lockHint}>Unlocks after each share is authorized and simulated funding is confirmed.</Text>
     </Animated.View>
   </Animated.View>;
 }

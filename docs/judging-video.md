@@ -1,205 +1,127 @@
-# SplitPool: three-minute virtual judging video
+# SplitPool: three-minute judging video and recording runbook
 
-Prepared from the repository on October 18, 2026. This is a production plan and script, not evidence that the configured app has been smoke-tested. Keep SplitPool as the name for the recording.
+Updated after merging `origin/cursor/mobile-split-ui-9e96` into `main` and completing the demo UI. The old unclaimed-salad blocker is gone. The main local demo now runs from receipt review through claims, individual approvals, individual simulated authorizations, funding confirmation, simulated restaurant checkout, and food-title reveal.
 
-## Positioning
+**Pitch:** SplitPool turns an itemized receipt into a shared checkout, then a shared memory.
 
-**SplitPool turns an itemized receipt into a shared checkout, then a shared memory.**
+## Scope to represent honestly
 
-Lead with a familiar problem, prove the receipt-to-share experience, show the payment prototype, and finish with the personality layer. Generative receipt extraction is already the substantive AI use case; titles add a memorable post-purchase interaction. The Visa fit is checkout, payments, and post-purchase engagement.
+- The home screen, `/group`, `/split`, `/overview`, `/confirm`, and `/payment` form one connected **local demonstration**. The participant switcher changes who you are playing on one device; it is not cross-device collaboration.
+- Real authenticated groups and collaborative bill claims remain available through **Profile → Sign in for shared bills / Open connected groups**. Finish app profile setup if prompted. The route is `/connected`; receipts and claims there use the existing PostgreSQL API. Use two separate accounts for the two-device clip.
+- Keep an explicit transition between the collaborative bill clip and the local payment prototype. No implemented database-bill-to-payment bridge is implied.
+- The local payment UI does not call a bank. Its virtual card, wallet, authorizations, funding, and merchant charge are simulated. Existing Stripe adapters remain separate; a card label in the new UI is not a Stripe integration.
+- Receipt extraction and post-checkout titles call the server when configured. `GEMINI_API_KEY` belongs in `apps/api/.env`; `EXPO_PUBLIC_API_URL` belongs in `apps/mobile/.env`. Without a working provider, the app visibly uses sample receipt data or keyword titles. Do not narrate those as live AI results.
+- Latest titles persist locally between reloads, using browser local storage or native SecureStore. Local groups, active bill progress, and receipt history reset when the app reloads. Titles update after a subsequent settled meal, unless titles were skipped; a profile action can hide your title. Reset local demo clears saved titles too.
+- The host can skip the title feature on the approval screen. The title request contains opaque diner labels and claimed food portions, excluding names, group names, merchant metadata, and payment details. Food text is still sent to Gemini; do not claim everything stays on-device.
 
-Avoid “addictive,” “encourages spending more,” “healthiest eater,” and claims that other apps cannot split items. Position titles as playful social connection and a hypothesis for repeat engagement. Item-level splitting alone is not a defensible uniqueness claim. Your proposed differentiation is the combination of receipt understanding, individual shares, coordinated payment, and item-aware social personalization.
+## Pre-recording setup
 
-## What the repository supports
+1. Install dependencies with `npm install`. Start the API with `npm run api` and Expo web with `npm run web` in separate terminals. On a phone, use `npm start` and the computer's reachable LAN API URL.
+2. For a fully offline/local rehearsal, use the sample receipt and accept clearly labeled keyword titles. For the AI clip, configure the server key and rehearse a genuine image extraction; confirm `usedFallback: false` and that the food matches the image.
+3. Main demo: open Profile → Reset local demo. Return home, open **Fam**, then use **Scan now**. On web, **Album** selects a real image; the capture button loads the labeled sample. Review and confirm the receipt to enter `/split`.
+4. Claim items using the participant switcher. A shared dish becomes an equal split when another person joins it. The expanded claim also supports a custom percentage. Leave one item unclaimed for the blocker shot, then claim it.
+5. Tap **Review split**. Add an optional personal tip if useful, then tap **Save my tip**. The optional tip belongs entirely to the current participant and is added to any printed receipt tip. Tax/printed-tip allocation can be proportional or equal.
+6. As **You**, tap **Send for approval**. For each participant, select their own demo payment method and approve their share. Switch back to **You**, tap **Confirm & collect**, and confirm the dialog.
+7. On payment, use each participant's **Authorize … (simulated)** button. The card remains locked. After the last authorization, switch to **You** and tap **Confirm simulated funding**. Then **Simulate merchant checkout → Finish the simulated checkout**.
+8. Show the title reveal. It says **AI-generated food wordplay** when successful and **Keyword fallback** when AI is unavailable or output was filtered. Go back to groups to show the new title; view the profile or completed bill for context. Do not reload before recording the bill's history, which is session-only.
+9. For the real collaboration clip, use Profile to open connected groups. Sign in and create/join the same group on two sessions. Upload/review a receipt on the host account. Make claims sequentially and allow the second session's two-second foreground polling to refresh.
 
-| Area | Evidence in current source | Recording treatment |
-| --- | --- | --- |
-| Accounts and groups | Supabase sign-in, app profiles, database-backed groups and invitations | Pre-sign-in; briefly show a real group. Do not spend video time entering credentials. |
-| Receipt AI | Gemini image-to-structured-JSON parser; authenticated upload; editable host review; reconciliation warnings | Record an actual extraction and confirm it is not the sample fallback. Show review before claims. |
-| Collaborative item claims | Current bill screen calls authenticated API, supports whole/half/equal claims, personal tips, and foreground polling every two seconds | Show two separately signed-in sessions sharing one bill. Call it a shared bill that updates across devices; do not imply instantaneous push synchronization. |
-| Bill correctness | Server calculations use exact integer/rational arithmetic, preserve cents, and return blockers | Show an unclaimed item preventing a Ready summary, then resolve it. This is not yet proof that connected payment routes enforce that same database bill. |
-| Payment experience | Separate local `PaymentLedger` demo, acceptance and authorization states, simulated pooled card and merchant event; API also has Stripe collection/card adapters | Label the segment **Payment prototype — simulated card and merchant**. The current authenticated bill screen has no payment navigation or bridge into this local state. |
-| Stripe wallet | Web-only conditional wallet path in the payment screen with configured API and publishable key | Optional test-mode insert after rehearsal. Never equate a successful participant hold with a funded merchant payment. |
-| Face ID | Timed animation in `VirtualCard.tsx` | Skip in the edit or label **Prototype unlock animation**. Do not claim device biometric authentication. |
-| AI titles | No title-generation/storage/display flow found in reviewed source | Use an explicitly labeled concept preview until it is implemented and recorded. |
+The default sample receipt is Pizza $30, Ice Cream $15, Drinks $12, Shared Appetizer $18, Tax $6, Printed Tip $13.50: total **$94.50**. Example claims: You and Alex share Pizza; You take Drinks; Alex takes Ice Cream; Sam takes Shared Appetizer. With a $3.15 optional tip from You, the group total is **$97.65**: You **$37.17**, Alex **$37.80**, Sam **$22.68**. Use the actual recorded receipt's amounts if extracting another image.
 
-The README and backend guide include stale statements about mobile claims and receipt wiring. Use current source and a real rehearsal to determine what can be shown.
+## Timed script
 
-## Three-minute edit and verbatim narration
+Use one narrator and approximately 125–135 words per minute. Record voiceover separately. The slots total exactly three minutes, including transitions and a final two-second end-card hold.
 
-Target roughly 125–135 spoken words per minute, allowing pauses for visible results. The slots below total exactly 180 seconds. Record voiceover separately; keep the transitions and pauses inside each slot.
+### 0:00–0:15 — The problem
 
-### Clip 1 — 0:00–0:15 — The problem
-
-**Frame:** Three friends at a table, one receipt in the center. Cut to one person staring at a calculator and a group chat. Use fictional chat text and no personal notifications. End with a close shot of the receipt.
-
-**Record:** One wide shot, one receipt close-up, one phone reaction. Keep the joke short; do not imitate or recreate another app's entire interface.
-
-**Say:**
+**Show:** Three friends and one receipt. Quick cuts to a calculator and fictional reminder messages. Keep real contact details out of frame.
 
 > Dinner with friends is fun until the bill arrives. Someone becomes the accountant. Everyone uses a different payment app. One friend fronts the whole check—and gets stuck sending reminders. Why does paying together feel so separate?
 
-**On-screen text:** “One meal. Too much payment friction.”
+**Overlay:** One meal. Too much payment friction.
 
-### Clip 2 — 0:15–0:28 — Introduce the product
+### 0:15–0:28 — Introduce SplitPool
 
-**Frame:** App name beside one large portrait screen showing the dinner group. Maintain the same group name throughout the connected demo.
+**Show:** Product name beside a large portrait capture of the dinner group. Start signed in for connected footage; do not spend time typing credentials.
 
-**Record:** Start signed in. Open the prepared group and its active bill. Capture a second participant already in the member list; invitation entry is unnecessary.
+> Meet SplitPool: an AI-assisted group checkout experience. Turn a receipt into individual shares, coordinate payment, and give the group something fun to remember afterward. Here's one dinner, from receipt to checkout.
 
-**Say:**
+**Overlay:** Scan → Claim → Coordinate payment → Celebrate.
 
-> Meet SplitPool: an AI-assisted group checkout experience. Turn a receipt into individual shares, coordinate payment, and give the group something fun to remember afterward. Here’s one dinner, from receipt to checkout.
+### 0:28–0:50 — Prove receipt AI
 
-**On-screen text:** “Scan → Claim → Coordinate payment → Celebrate”
-
-### Clip 3 — 0:28–0:50 — Prove generative AI
-
-**Frame:** Receipt photo on the left, live app capture on the right. Enlarge the extraction result rather than leaving tiny text inside a phone frame.
-
-**Record:** On the database-backed bill, tap Scan receipt; upload a clean photo; retain a brief real loading moment; show extracted items and totals; inspect or edit one actual field; save the reviewed receipt. If shortening a long wait, add “Processing time shortened.” Do not fabricate a recognition error for the correction shot.
-
-**Say:**
+**Show:** Real receipt photo beside the extracted result. Inspect an actual field and save the review. Keep one brief real processing moment; label a shortened wait. Use the connected host receipt flow if continuing directly into the two-session clip.
 
 > First, scan the receipt. Our Gemini integration turns the image into structured items, prices, and totals. The host reviews the draft before saving it. AI handles the messy input; people stay in control of what the group actually owes.
 
-**On-screen text:** “Generative AI extraction · Human review”
+**Overlay:** Generative AI extraction · Human review.
 
-### Clip 4 — 0:50–1:15 — Make fairness visible
+**Fallback:** If live AI cannot be recorded, keep the sample label visible and say: “This rehearsal uses a sample receipt. With Gemini configured, the same review flow accepts AI-extracted items and totals.” Do not substitute fixture output for evidence of an actual extraction.
 
-**Frame:** Two labeled portrait captures: “Jamie” and “Alex.” Zoom into the same shared item and then the resulting personal total.
+### 0:50–1:15 — Make fairness visible
 
-**Record:** Jamie claims half the pizza. After that write completes and the second session refreshes, Alex claims the other half. Show a whole-item claim and a personal tip. Finish with an unclaimed-item blocker disappearing and a Ready summary. Use normal sequential edits; an accidental concurrency conflict will consume the slot.
+**Show:** Two independently signed-in sessions, labeled with their names, on the same connected bill. Claim half the shared dish, let the other session refresh, and claim the other half. Show a personal tip and the final unclaimed item becoming complete.
 
-**Say:**
+> Claim your own dish, or split a shared pizza. Each person sees their items, tax, and personal tip. Watch the same bill update on another device. Unclaimed items keep the bill from being ready, and exact-cent calculations make sure everyone's shares add up.
 
-> Claim your own dish, or split a shared pizza. Each person sees their items, tax, and personal tip. Watch the same bill update on another device. Unclaimed items keep the bill from being ready, and exact-cent calculations make sure everyone’s shares add up.
+**Alternative if recording only the local UI:** Show the participant switcher and replace “Watch the same bill update on another device” with “Switch between diners in our local demo to see each person's share.”
 
-**On-screen text:** “Shared dishes. Individual totals. Every cent accounted for.”
+### 1:15–1:45 — Show the checkout payoff
 
-### Clip 5 — 1:15–1:45 — The checkout payoff
+**Show:** Explicit **Payment prototype** transition, then the local `/confirm` and `/payment` sequence. Edit repetitive approvals down to representative actions. Show the card locked before the final authorization and still locked while funding is pending. Confirm simulated funding, then finish simulated merchant checkout.
 
-**Frame:** Explicit transition card: “Payment prototype.” Then a large payment capture, with the simulation label readable throughout. End on the completed simulated merchant state.
+> Next is our payment prototype. Each diner reviews and authorizes their own share, with their own payment method. The pooled card stays locked until the required shares and simulated funding are ready. We then simulate one restaurant payment. The goal is individual contributions with one checkout, so one friend doesn't have to carry everyone's bill.
 
-**Record:** Capture `/payment` separately in the signed-in web preview. Select demo methods for all three demo participants; complete local claims before freezing. Freeze as the host, have each participant accept their share, return to the host to collect, then authorize each share. Show the locked card before the last authorization and the ready state after funding simulation completes. Open checkout and trigger the simulated restaurant charge. Capture the entire sequence, then edit acceptance/setup repetition down to a few representative taps.
+**Persistent overlay:** Payment prototype — simulated card and merchant.
 
-**Say:**
+### 1:45–2:05 — Reveal the shared memory
 
-> Next is our payment prototype. Each diner reviews and authorizes their own share, with their own payment method. The pooled card stays locked until the required shares and simulated funding are ready. We then simulate one restaurant payment. The goal is individual contributions with one checkout, so one friend doesn’t have to carry everyone’s bill.
+**Show:** Post-checkout title cards with the dishes that inspired them. Then briefly show the new title on home or profile. Use the actual generated wording; titles in the narration are examples.
 
-**Persistent label:** “Payment prototype — simulated card and merchant”
+> After payment, generative AI turns each person's claimed dishes into a playful title: “Rice Royalty” or “Noodle Knight.” Their title stays until the next restaurant visit. It turns the receipt into a shared memory—and gives friends another reason to return together.
 
-**Important:** This segment is a separate prototype today. Do not splice the database-backed bill into it as though an implemented checkout button transferred its state. Match the example food where practical, but preserve the explicit transition. A Stripe test-mode hold, if recorded, needs its own label and is not a real restaurant payment.
+**Fallback narration:** “After checkout, SplitPool creates playful titles from each person's claimed dishes. This run uses the labeled keyword fallback; with Gemini configured, the same moment becomes generative personalization.” Keep the fallback provenance readable. For precise reset behavior, say “until the next settled restaurant bill” if there is room.
 
-### Clip 6 — 1:45–2:05 — The memorable post-purchase layer
+### 2:05–2:25 — Explain the engineering
 
-**Frame:** A group title reveal: “Rice Royalty,” “Noodle Knight,” and “Pizza Diplomat.” Associate each title with a visible claimed dish. Do not show a health or body ranking.
+**Show:** Large diagram: Expo → Fastify → Gemini / PostgreSQL, with Supabase Auth attached to the API. Put the local payment simulation in a separate box.
 
-**Record:** If implemented, show the paid-state trigger and generated output in the running app. Otherwise use a concept board or storyboard with **Planned AI feature — concept preview** on screen throughout. Do not disguise a static concept as working UI.
+> Underneath, an Expo app connects to a TypeScript Fastify API, Supabase authentication, and PostgreSQL. Gemini structures receipts and creates titles. Money calculations use deterministic code, and the collaboration backend uses bill versions to protect concurrent edits. Payment states remain clearly separated in our prototype.
 
-**Default narration for the current repo:**
+**Overlay:** AI understands the meal. Deterministic code calculates the money.
 
-> Our next step adds a shared memory: playful AI titles inspired by each person’s claimed dishes. Think “Rice Royalty” or “Noodle Knight,” refreshed after the next restaurant visit. It’s a post-purchase moment designed to give friends another reason to return together.
+### 2:25–2:46 — Earn trust
 
-**Replacement only after implementation and successful recording:**
+**Show:** Receipt review, incomplete-bill blocker, title opt-out, and simulation label. Use product evidence instead of generic shields suggesting certification.
 
-> After payment, generative AI turns each person’s claimed dishes into a playful title: “Rice Royalty” or “Noodle Knight.” Their title stays until the next restaurant visit. It turns the receipt into a shared memory—and gives friends another reason to return together.
+> Trust matters when friends and money mix. The collaboration API verifies sign-in and group permissions. Receipt drafts are reviewable, and incomplete bills are flagged. Titles use food-based wordplay, with a skip option and no payment details in the AI request. Payment simulation stays clearly labeled.
 
-If persistence across restaurants is not implemented, retain the planned-feature wording even if one title can be generated.
+Keep the authentication claim scoped to collaboration. The older payment API's caller headers are not production authorization. Receipt images are stored by the connected upload flow; do not claim automatic deletion. The main demo has no actual biometric unlock or native wallet provisioning.
 
-### Clip 7 — 2:05–2:25 — Explain the engineering
+### 2:46–3:00 — Commerce impact and close
 
-**Frame:** Four simple boxes: “Expo app → Fastify API → Gemini / PostgreSQL,” with “Supabase Auth” connected to the API. A separate smaller box says “Payment prototype: shared TypeScript ledger.” Keep text large enough to read.
-
-**Record:** Animate or highlight each box in the order spoken. Use real app screenshots as small anchors. A terminal dump is unnecessary. Do not draw an implemented end-to-end payment pipeline from the collaboration database.
-
-**Say:**
-
-> Underneath, an Expo app connects to a TypeScript Fastify API, Supabase authentication, and PostgreSQL. Gemini structures receipt data. The server calculates shares deterministically, and bill versions protect concurrent edits. A separate payment ledger models acceptance, authorization, funding, and merchant-payment states.
-
-**On-screen text:** “AI understands the receipt. Deterministic code calculates the money.”
-
-### Clip 8 — 2:25–2:46 — Earn trust
-
-**Frame:** Three evidence cards over actual captures: receipt review; personal claims/totals; simulation disclosure. Avoid generic shield icons implying a certification.
-
-**Record:** Reuse close-ups of the review screen and share breakdown. Briefly show a blocked incomplete bill. If there is time, use a recorded conflict response as a silent insert; it is not essential.
-
-**Say:**
-
-> Trust matters when friends and money mix. The collaboration API verifies sign-in and group permissions. Receipt drafts are reviewable, incomplete bills are flagged, and payment simulation is clearly labeled. For the title feature, our design principle is playful food-based language, without health judgments or pressure to spend.
-
-**On-screen text:** “Reviewable AI · Permission-checked collaboration · Transparent prototype”
-
-Do not extend the collaboration API security claim to payments. Payment routes currently identify callers using `x-user-id`; the local payment ledger and those routes are not evidence of production payment authorization. Receipt images are saved to server storage; do not claim automatic deletion, no storage, or a retention policy that is not implemented. Receipt images are sent to Gemini for extraction, so do not claim all data stays on-device.
-
-### Clip 9 — 2:46–3:00 — Commerce impact and close
-
-**Frame:** Return to the friends at the table, then an app close-up and clean end card. Let the final card hold for two seconds inside this slot.
-
-**Record:** One relaxed group shot; no extra feature montage. Use the product name and track name on the end card.
-
-**Say:**
+**Show:** Friends enjoying the evening, a brief app close-up, then the final card.
 
 > For diners, less arithmetic and fewer reminders. For merchants, a path toward smoother group checkout and repeat engagement. SplitPool reimagines checkout and post-purchase connection—so friends can share the meal, and the moment after it.
 
-**End card:** “SplitPool · Share the meal. Settle together.”
+**End card:** SplitPool · Share the meal. Settle together.
 
-## Recording setup and rehearsal
+## Rubric and editing priorities
 
-- Export a 1920×1080 landscape video. Keep portrait app footage large; use the empty side for one short explanation. For collaboration, two portrait captures can sit side by side. Leave room for captions without covering totals or buttons.
-- Use one narrator and record voiceover separately in a quiet room. Caption the final narration. Keep music quiet enough that every word is intelligible, or omit it. Test audio on a laptop speaker.
-- Hide notifications, emails, phone numbers, invite tokens, dashboard identifiers, credentials, and browser chrome that exposes private data. Use test accounts and a receipt photo without payment details. Show only masked card data.
-- Prepare two separately authenticated sessions with completed app profiles, the same group, and an active bill. A phone plus a browser works if both can reach the configured API. Two isolated browser profiles are also suitable for a web capture.
-- Rehearse the connected sequence: upload → actual extraction → review → save → claim on device A → observe on device B → second claim → finish allocation → inspect personal totals and Ready status.
-- Confirm the extraction response reports `usedFallback: false` and that parsed food matches the photographed receipt. The parser deliberately falls back to a labeled fixture when the provider is missing or fails. A configured key alone is not proof of live AI success. The configured model name is a runtime dependency to verify in rehearsal.
-- Capture the payment prototype separately. Verify how to enter `/payment` before filming: it is registered behind the signed-in/profile-ready guard, but the current bill screen has no payment button. The local payment demo starts with three demo personas, its own receipt, and no selected methods.
-- On `/payment`, use the participant selector to prepare each demo persona. If its current UI cannot complete the desired sequence, fix or simplify the demo before recording. Do not plan to invent missing states in the editor.
-- Native camera footage demonstrates the mobile experience. Web footage is suitable for the conditional Stripe wallet integration; native wallet functionality is not established by the current web-only path.
-- Use simulation or confirmed test-mode credentials. The wallet code can create provider holds and later capture/release them; a “demo” name does not itself guarantee test mode. Avoid introducing live money movement for the recording.
-- Record each clip with three seconds of padding at both ends. Preserve an uncut source take of the connected receipt/claims workflow, plus an uncut take of the payment prototype. Edit navigation and long waits, keeping labels and outcomes truthful.
-- Record the prototype both before and after the final contribution so the locked-to-ready change is clear. Skip the Face ID animation unless it is explicitly labeled as an animation.
-- Watch the final export at normal speed. Confirm exactly three minutes or less, legible totals, audible narration, truthful labels, no temporary desktop notifications, and a usable submitted video link. No new app tests are required just to edit this document; run the repo checks for any last-minute code changes.
+| Category | Evidence to prioritize |
+| --- | --- |
+| Innovation — 25% | The combination of receipt understanding, individual contributions, coordinated checkout, and food-aware social personalization. Do not claim item splitting alone is unique. |
+| User experience — 25% | Readable personal totals, one shared-item interaction, a clear review action, and locked-to-ready feedback. Avoid spending time on registration or repetitive approvals. |
+| Technical execution — 20% | Actual live extraction/title generation when configured, deterministic cent calculations, a second-session update, and a concise architecture diagram. |
+| Commerce impact — 15% | Less payment friction and a plausible repeat-engagement loop. Do not invent measured increases in conversion, spending, or restaurant turnover. |
+| Trust — 15% | Reviewable AI, group permissions on collaboration, blockers, optional title sharing, provenance labels, and transparent simulation. |
 
-## A consistent demo receipt
+Use “social connection” and “repeat engagement,” not “addictive” or pressure to spend more. Prefer food wordplay to health rankings such as “healthiest eater.” Titles are not nutrition advice.
 
-Use three diners and three simple line items. For example: pizza $24, mushroom pasta $22, house salad $12, tax $4.64, printed total $62.64, no mandatory service charge. Jamie and Alex each claim half the pizza, Sam claims the pasta, and Jamie claims the salad. With optional personal tips left at zero, final shares should be Jamie $25.92, Alex $12.96, and Sam $23.76.
+Export at 1920×1080 with large portrait captures and captions. For two sessions, use two portrait views side by side. Leave three seconds of source padding around every take; keep uncut source recordings. Hide notifications, invite tokens, credentials, personal contacts, and full card details. Watch the final export at normal speed and verify that it is at most three minutes and the submission link works.
 
-Those are prepared demonstration amounts, not evidence of an actual restaurant transaction. Use a receipt image that genuinely contains the chosen example. If using the existing local payment demo, its default percentage tips differ from this example; set the tips deliberately or present its own totals under the prototype label. Do not splice together mismatched amounts as one completed transaction.
+## Verification and remaining configuration
 
-For title footage, use titles grounded in the actual recorded food: “Pizza Diplomat,” “Mushroom Maven,” or “Salad Sidekick.” “Rice Royalty” and “Noodle Knight” are narration examples, not outputs you should assign to unrelated items.
+`npm run check` runs typechecking, lint, and unit/backend tests. Database integration is skipped without `TEST_DATABASE_URL`. `npm run test:e2e` runs the isolated browser workflow using headless Edge by default (`PLAYWRIGHT_CHANNEL=chrome` selects Chrome). It launches its own sample-only API on port 3901 and Expo on 8091; no live bank, database, or paid AI service is needed. Browser artifacts go under `.artifacts/`.
 
-## Rubric strategy
-
-| Category | What judges should remember | Evidence to prioritize |
-| --- | --- | --- |
-| Innovation — 25% | One receipt powers financial coordination and item-aware post-purchase personality | Scan → claims → payment prototype → title concept, all in one clearly explained story. Treat the integration as the differentiator, without unsupported competitor claims. |
-| User experience — 25% | Friends can understand what they owe without becoming accountants | Large readable screen captures, shared-dish claim, personal total, minimal taps, and one clear before/after state. Avoid spending time on registration. |
-| Technical execution — 20% | Real multimodal AI plus robust deterministic calculations and collaboration | Successful actual extraction, structured review, second-device update, exact-cent math, and a concise architecture diagram. Label the separate payment ledger accurately. |
-| Commerce impact — 15% | Less group-payment friction, with a plausible repeat-engagement loop | Explain the diner and merchant hypotheses. Do not state unmeasured increases in conversion, spending, or restaurant table turnover. |
-| Trust and responsibility — 15% | AI is reviewable, financial calculations are deterministic, and prototype limits are visible | Host review, blockers, permission-checked collaboration, simulated-payment label, and nonjudgmental title design. Avoid blanket security or privacy claims. |
-
-If you have time for one small usability rehearsal, time receipt selection through a Ready bill and count corrections and taps. Report the actual result as “one team demo run” with its scope, not a measured customer benefit. Future pilot metrics: time to settle, completion rate, failed/retried contributions, and repeat group use. These are evaluation plans, not current outcomes.
-
-## Final-hours priorities
-
-1. **Prove live receipt extraction and the two-session claim flow.** This is the strongest current evidence for both AI and usefulness.
-2. **Make the payment prototype filmable and unmistakably labeled.** Either implement a genuine bridge from the reviewed database bill or preserve the explicit prototype transition. Do not attempt a rushed production payment launch.
-3. **If adding titles, finish one small vertical slice.** Trigger after the appropriate paid-state confirmation, use each person's claimed item names and fractions, generate a short title on the server, validate the output, store it per user, and display it. Keep the previous title until the next successfully paid restaurant bill replaces it; if choosing another reset rule, explain and implement it consistently. Keep title errors from affecting payment status or retrying a charge.
-4. **Give the title slice a responsible boundary.** Send only the item information needed to generate the title, using opaque member identifiers; keep names, account details, card data, and the receipt image out of this second AI request. Make titles dismissible or optional if you can complete that behavior. Treat receipt text as untrusted data, and constrain output to harmless food wordplay rather than health, religion, body, or wealth judgments. These are proposed implementation requirements, not existing features.
-5. **Record and finish the edit.** A rehearsed end-to-end core and an honest title concept are stronger evidence than a late feature that cannot be demonstrated. Reserve time to verify the final export and submission.
-
-## Source anchors for teammates
-
-- `apps/api/src/receipt/parser.ts`: Gemini extraction, normalization, warnings, and fallback behavior.
-- `apps/mobile/src/app/bill/[billId]/receipt-review.tsx`: reviewed receipt editing and save.
-- `apps/mobile/src/app/bill/[billId]/index.tsx`: current API-backed claims, personal tips, blockers, Ready status; no checkout button.
-- `apps/mobile/src/hooks/useBillPoll.ts`: two-second foreground polling.
-- `apps/api/src/service.ts` and `apps/api/src/calculations.ts`: collaboration transactions and authoritative calculations.
-- `apps/mobile/src/app/payment.tsx` and `apps/mobile/src/state/demo.tsx`: separate local payment experience.
-- `apps/mobile/src/components/VirtualCard.tsx`: prototype card and timed Face ID animation.
-- `apps/mobile/src/lib/cardWallet.ts`: wallet hold requests and caller identity header.
-- `apps/api/src/payments/routes.ts`: payment routes, prototype actor header, simulation events, Stripe integration.
-- `docs/virtual-card.md`: explicit simulated-card/merchant scope and funding constraints.
-
-This plan was based on source inspection. No app runtime, live provider call, money movement, or test suite was executed for this writing task.
+A successful fallback/browser test does not verify Gemini credentials, receipt recognition quality, real Supabase sign-in on two phones, native SecureStore behavior, or hosted database connectivity. Rehearse those separately before choosing live narration. Never show keyword titles as evidence of a successful generative model call.

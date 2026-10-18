@@ -16,11 +16,13 @@ import {
 } from './receipt/parser.ts';
 import { collaborationRoutes } from './routes.ts';
 import { CollaborationService } from './service.ts';
+import { createTitleGenerator, generateMealTitlesWithFallback, normalizeMealTitlesRequest, type TitleGenerator } from './titles/generator.ts';
 
 const MAX_RECEIPT_BYTES = 8 * 1024 * 1024;
 
 export type BuildAppOptions = {
   parser?: ReceiptParser;
+  titleGenerator?: TitleGenerator;
   db?: Database;
   verifyToken?: VerifyToken;
   /** Local directory for receipt image bytes (defaults to data/receipts). */
@@ -145,6 +147,31 @@ export async function buildApp(options: BuildAppOptions = {}) {
     if (reason) body.reason = reason;
     if (errorDetail) body.errorDetail = errorDetail;
     return reply.code(200).send(body);
+  });
+
+  app.post('/api/v1/demo/meal-titles', {
+    bodyLimit: 32 * 1024,
+    schema: { body: {
+      type: 'object', additionalProperties: false, required: ['members'],
+      properties: {
+        members: { type: 'array', minItems: 1, maxItems: 20, items: {
+          type: 'object', additionalProperties: false, required: ['id', 'name', 'items'],
+          properties: {
+            id: { type: 'string', minLength: 1, maxLength: 80 },
+            name: { type: 'string', minLength: 1, maxLength: 80 },
+            items: { type: 'array', maxItems: 40, items: { type: 'string', maxLength: 120 } },
+          },
+        } },
+      },
+    } },
+  }, async (request, reply) => {
+    const body = normalizeMealTitlesRequest(request.body);
+    if (new Set(body.members.map(member => member.id)).size !== body.members.length) {
+      return reply.code(400).send({ error: 'Member ids must be unique.' });
+    }
+    loadApiEnv();
+    reply.header('Cache-Control', 'no-store');
+    return generateMealTitlesWithFallback(options.titleGenerator ?? createTitleGenerator(), body, request.log);
   });
 
   await registerPaymentRoutes(app, options.ledger ?? new PaymentLedger(), options.simulation !== false, options.stripe);

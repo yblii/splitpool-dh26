@@ -57,12 +57,15 @@ export default function ProfileScreen() {
 
   return <Screen header={<AppHeader title="Profile" onBack={() => router.back()} />}>
     <View style={{ alignItems: 'center', gap: 8, paddingTop: 8 }}>
-      <Text style={[styles.subheading, { textAlign: 'center' }]}>{demo.you.title}</Text>
+      <Text style={[styles.subheading, { textAlign: 'center' }]}>{demo.you.title || 'Your next meal has a title'}</Text>
+      {demo.yourTitleSource && <Text style={styles.small}>{demo.yourTitleSource} · Your latest settled meal</Text>}
       <MemberAvatar person={demo.you} size={88} />
       <Text style={styles.title}>{demo.profileName || 'You'}</Text>
       <Text style={styles.subtitle}>@{demo.username} · shown as You on bills</Text>
     </View>
     <Button title={editing ? 'Close editor' : 'Edit profile'} secondary onPress={() => setEditing((open) => !open)} />
+    {!!demo.you.title && <Button title="Hide my current title" secondary onPress={demo.dismissTitle} />}
+    {demo.titleStorageError && <Text style={styles.small}>Titles are available this session, but could not be saved on this device.</Text>}
     {editing && <Card>
       <Text style={styles.label}>Display name</Text>
       <TextInput accessibilityLabel="Display name" value={demo.profileName} onChangeText={demo.setProfileName} maxLength={30} style={styles.input} />

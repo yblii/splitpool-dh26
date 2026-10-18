@@ -147,7 +147,7 @@ export default function GroupScreen() {
 
       {!!message && <Text style={[styles.small, { color: colors.warning }]}>{message}</Text>}
 
-      <Button title="Back to groups" secondary onPress={() => router.replace('/')} />
+      <Button title="Back to groups" secondary onPress={() => router.replace('/connected')} />
       <DemoNote />
     </Screen>
   );

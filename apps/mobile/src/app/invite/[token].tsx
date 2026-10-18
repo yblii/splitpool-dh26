@@ -38,7 +38,7 @@ export default function AcceptInviteScreen() {
         />
         {!!message && <Text style={[styles.small, { color: colors.warning }]}>{message}</Text>}
       </Card>
-      <Button title="Back to groups" secondary onPress={() => router.replace('/')} />
+      <Button title="Back to groups" secondary onPress={() => router.replace('/connected')} />
       <DemoNote />
     </Screen>
   );
