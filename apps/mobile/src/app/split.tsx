@@ -60,6 +60,7 @@ export default function SplitScreen() {
         yourCents={yourCents}
         totalCents={summary.computedTotalCents}
         allocated={summary.fullyAllocated}
+        partial={summary.resolutions.filter((entry) => entry.resolution.status === 'incomplete').length}
         count={summary.itemCount}
         actionLabel="Review split"
         onAction={() => router.push('/overview')}
@@ -86,7 +87,6 @@ export default function SplitScreen() {
           faded={false}
           percentOpen={percentId === item.id}
           expanded={openId === item.id && percentId !== item.id}
-          emphasized={focusId === item.id}
           onClaim={() => {
             demo.claimItem(item.id);
             setOpenId(item.id);

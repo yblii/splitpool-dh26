@@ -17,6 +17,8 @@ import { MemberAvatar, type AvatarPerson } from './people';
 import { BottomSheet } from './sheets';
 import { Button, colors, moneyMark, styles, useReduceMotion } from './ui';
 
+const INCOMPLETE = '#C45C28';
+
 const STATE_LABEL: Record<ItemVisualState, string> = {
   unclaimed: 'Unclaimed',
   single: 'Claimed',
@@ -79,15 +81,19 @@ function BarSegment({ percent, color, reduceMotion }: { percent: number; color: 
   }} />;
 }
 
-export function ProgressMeter({ value, total }: { value: number; total: number }) {
-  const percent = total === 0 ? 0 : Math.min(100, (value / total) * 100);
+export function ProgressMeter({ value, total, partial = 0 }: { value: number; total: number; partial?: number }) {
+  const complete = total === 0 ? 0 : Math.min(100, (value / total) * 100);
+  const open = total === 0 ? 0 : Math.min(100 - complete, (partial / total) * 100);
   const done = total > 0 && value === total;
   return <View style={{ gap: 6 }}>
     <View style={barStyles.meterTrack}>
-      <View style={[barStyles.meterFill, { width: `${percent}%`, backgroundColor: done ? colors.success : colors.primary }]} />
+      <View style={barStyles.meterRow}>
+        <View style={[barStyles.meterFill, { width: `${complete}%`, backgroundColor: done ? colors.success : colors.primary }]} />
+        {open > 0 && <View style={[barStyles.meterFill, { width: `${open}%`, backgroundColor: INCOMPLETE }]} />}
+      </View>
     </View>
     <Text style={[styles.small, { color: done ? colors.success : colors.muted }]}>
-      {value} of {total} items fully allocated
+      {partial > 0 ? `${value} of ${total} fully allocated, ${partial} incomplete` : `${value} of ${total} items fully allocated`}
     </Text>
   </View>;
 }
@@ -164,7 +170,7 @@ export function ReceiptPaper({ title, dimTitle, alert, children }: {
 }
 
 export function ReceiptItemCard({
-  item, resolution, people, roster, viewerId, editable, faded, percentOpen, expanded, emphasized = false,
+  item, resolution, people, roster, viewerId, editable, faded, percentOpen, expanded,
   onClaim, onOpen, onEditPercent, onSavePercent, onCancelPercent, onLeave,
 }: {
   item: SplitLine;
@@ -176,7 +182,6 @@ export function ReceiptItemCard({
   faded: boolean;
   percentOpen: boolean;
   expanded: boolean;
-  emphasized?: boolean;
   onClaim: () => void;
   onOpen: () => void;
   onEditPercent: () => void;
@@ -245,13 +250,11 @@ export function ReceiptItemCard({
     ...(resolution.remainderBasisPoints > 0 ? [{
       key: 'open',
       basisPoints: resolution.remainderBasisPoints,
-      color: '#E7C9A4',
-      label: 'Unallocated',
+      color: INCOMPLETE,
+      label: 'Incomplete',
     }] : []),
   ];
-  const hatch = resolution.portions.length > 0
-    ? resolution.portions.map((portion) => personColor(people, portion.personId))
-    : ['#E4D8C8'];
+  const hatch = segments.length > 0 ? segments : [{ key: 'empty', basisPoints: 1, color: '#E4D8C8', label: 'Unclaimed' }];
   const payers = resolution.portions.map((portion) => personName(people, portion.personId)).join(', ');
   const status = claimStatus(visual, resolution, viewerId, item.quantity);
 
@@ -265,7 +268,7 @@ export function ReceiptItemCard({
     if (message) setDraft((current) => ({ ...current, error: message }));
   }
 
-  return <View style={[cardStyles.shell, emphasized && { borderWidth: 2, borderColor: colors.warning, borderRadius: 16 }]}>
+  return <View style={cardStyles.shell}>
     {editable && !percentOpen && !faded && <View style={cardStyles.reveal}>
       <Text style={cardStyles.revealText}>enter %</Text>
     </View>}
@@ -299,7 +302,7 @@ export function ReceiptItemCard({
           <Pressable accessibilityRole="button" hitSlop={8} onPress={onCancelPercent}><Text style={styles.link}>Cancel</Text></Pressable>
         </View> : <View style={[cardStyles.line, visual === 'error' && cardStyles.errorLine, visual !== 'unclaimed' && visual !== 'error' && cardStyles.claimedLine]}>
           <View style={cardStyles.hatch}>
-            {hatch.map((color, index) => <View key={`${color}-${index}`} style={{ flex: 1, backgroundColor: color }} />)}
+            {hatch.map((part) => <View key={part.key} style={{ flex: part.basisPoints, backgroundColor: part.color }} />)}
           </View>
           <Pressable
             accessibilityRole="button"
@@ -557,12 +560,13 @@ function PercentSlider({ value, max, onChange }: { value: number; max: number; o
 }
 
 export function BillSummary({
-  yourLabel, yourCents, totalCents, allocated, count, actionLabel, onAction, note,
+  yourLabel, yourCents, totalCents, allocated, partial = 0, count, actionLabel, onAction, note,
 }: {
   yourLabel: string;
   yourCents: number;
   totalCents: number;
   allocated: number;
+  partial?: number;
   count: number;
   actionLabel: string;
   onAction: () => void;
@@ -579,7 +583,7 @@ export function BillSummary({
         <Text {...moneyMark} style={summaryStyles.bill}>{formatMoney(totalCents)}</Text>
       </View>
     </View>
-    <ProgressMeter value={allocated} total={count} />
+    <ProgressMeter value={allocated} total={count} partial={partial} />
     {note ? <Text style={styles.small}>{note}</Text> : null}
     <Button title={actionLabel} onPress={onAction} />
   </View>;
@@ -588,7 +592,8 @@ export function BillSummary({
 const barStyles = StyleSheet.create({
   track: { height: 12, borderRadius: 999, overflow: 'hidden', backgroundColor: colors.border, flexDirection: 'row' },
   meterTrack: { height: 8, borderRadius: 999, backgroundColor: colors.border, overflow: 'hidden' },
-  meterFill: { height: '100%', borderRadius: 999 },
+  meterRow: { flexDirection: 'row', height: '100%', width: '100%' },
+  meterFill: { height: '100%' },
   sliderHit: { minHeight: 44, justifyContent: 'center' },
   sliderTrack: { height: 10, borderRadius: 999, backgroundColor: colors.border, overflow: 'hidden' },
   sliderFill: { height: '100%', backgroundColor: colors.primary },
@@ -636,6 +641,7 @@ const cardStyles = StyleSheet.create({
   revealText: { color: colors.ink, fontWeight: '800', fontSize: 14 },
   line: {
     minHeight: 58, flexDirection: 'row', alignItems: 'center',
+    borderTopWidth: 0, borderLeftWidth: 0, borderRightWidth: 0,
     borderBottomWidth: 1, borderStyle: 'dashed', borderBottomColor: '#E4D5C2',
     backgroundColor: RECEIPT_PAPER,
   },

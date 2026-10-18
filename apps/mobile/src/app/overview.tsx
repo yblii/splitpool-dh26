@@ -69,7 +69,11 @@ export default function OverviewScreen() {
           <Text {...moneyMark} style={{ fontFamily: monoFamily, fontSize: 18, fontWeight: '700', color: colors.ink }}>{formatMoney(summary.computedTotalCents)}</Text>
         </View>
       </View>
-      <ProgressMeter value={summary.fullyAllocated} total={summary.itemCount} />
+      <ProgressMeter
+        value={summary.fullyAllocated}
+        total={summary.itemCount}
+        partial={summary.resolutions.filter((entry) => entry.resolution.status === 'incomplete').length}
+      />
       {summary.itemsComplete && <ReadyReviewNote />}
     </Card>
     {summary.blockers.length > 0 && <View style={{ gap: 8 }}>
