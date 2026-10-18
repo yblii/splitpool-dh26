@@ -55,11 +55,14 @@ export class CollaborationService {
   async getGroup(userId: string, groupId: string) {
     return this.db.transaction(async tx => {
       const group = await this.groupAccess(tx, userId, groupId);
-      const active = (await tx.query('SELECT id FROM bills WHERE group_id = $1 AND state NOT IN (\'PAID\',\'CANCELLED\')', [groupId])).rows[0];
-      requireThat(active, 404, 'GROUP_CLOSED', 'This group’s bill is closed.');
+      // Closed bills leave listings, but members can still read the group (activeBillId null).
+      const active = (await tx.query(
+        `SELECT id FROM bills WHERE group_id = $1 AND state NOT IN ('PAID','CANCELLED')`,
+        [groupId],
+      )).rows[0];
       const members = (await tx.query<Profile>(`SELECT ${profileColumns} FROM profiles
         WHERE user_id IN (SELECT user_id FROM group_members WHERE group_id = $1) ORDER BY user_id`, [groupId])).rows;
-      return { ...group, activeBillId: active.id as string, members };
+      return { ...group, activeBillId: (active?.id as string | undefined) ?? null, members };
     }, true);
   }
 

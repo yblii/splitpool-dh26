@@ -60,6 +60,7 @@ export default function BillPaymentScreen() {
   const [mealTitlesLoading, setMealTitlesLoading] = useState(false);
   const [mealTitlesSource, setMealTitlesSource] = useState<string | null>(null);
   const titlesForKeyRef = useRef<string | null>(null);
+  const settledRef = useRef(false);
 
   const session = payment?.session ?? null;
   const isHost = Boolean(userId && hostId && userId === hostId);
@@ -74,15 +75,24 @@ export default function BillPaymentScreen() {
     && payers.every((share) => payment?.acceptedUserIds.includes(share.userId));
   const settled = session?.phase === 'paid' || bill?.state === 'PAID';
 
+  useEffect(() => {
+    settledRef.current = settled;
+  }, [settled]);
+
   const refresh = useCallback(async () => {
     if (!billId || !userId) return;
     setMessage('');
     try {
       const nextBill = await getBill(billId);
       setBill(nextBill);
-      const group = await getGroup(nextBill.groupId);
-      setHostId(group.hostId);
-      setGroupName(group.name);
+      const billClosed = nextBill.state === 'PAID' || nextBill.state === 'CANCELLED';
+      // Closed groups drop out of open listings; still readable with activeBillId null.
+      // Skip after settle so the summary does not poll a retired group for host metadata.
+      if (!billClosed) {
+        const group = await getGroup(nextBill.groupId);
+        setHostId(group.hostId);
+        setGroupName(group.name);
+      }
       const projection = await getBillPayment(billId, userId);
       setPayment(projection);
       const sessionId = projection?.session?.sessionId;
@@ -105,7 +115,10 @@ export default function BillPaymentScreen() {
     useCallback(() => {
       void refresh();
       const timer = setInterval(() => {
-        if (AppState.currentState === 'active') void refresh();
+        if (AppState.currentState !== 'active') return;
+        // Once paid, the summary is stable — stop the 2s refresh that was flashing GROUP_CLOSED.
+        if (settledRef.current) return;
+        void refresh();
       }, 2000);
       return () => clearInterval(timer);
     }, [refresh]),

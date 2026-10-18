@@ -29,6 +29,7 @@ export function useBillPoll({ billId }: UseBillPollOptions) {
     try {
       const nextBill = await getBill(billId);
       setBill(nextBill);
+      // Closed bills leave open listings; group remains readable with activeBillId null.
       setGroup(await getGroup(nextBill.groupId));
       return nextBill;
     } catch (error) {

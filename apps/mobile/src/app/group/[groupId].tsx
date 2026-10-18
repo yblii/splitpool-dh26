@@ -43,6 +43,10 @@ export default function GroupScreen() {
         } catch {
           // Keep the group view usable if payment status cannot be read.
         }
+      } else {
+        // Bill already closed — group is retired from open listings.
+        router.replace('/');
+        return;
       }
       setGroup(next);
     } catch (error) {

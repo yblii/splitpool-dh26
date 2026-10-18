@@ -94,7 +94,9 @@ export async function collaborationRoutes(
   app.get<{ Params: { id: string } }>('/groups/:id', { schema: { params } }, async (request) => {
     const actorId = user(request);
     const group = await service.getGroup(actorId, request.params.id);
+    if (!group.activeBillId) return group;
     await reconcileBill(actorId, group.activeBillId);
+    // Re-read after reconcile so a just-closed bill surfaces as activeBillId: null (not an error).
     return service.getGroup(actorId, request.params.id);
   });
   app.post<{ Params: { id: string }; Body: { username?: string } }>('/groups/:id/invites', {
