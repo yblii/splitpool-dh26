@@ -59,7 +59,7 @@ The preview profile produces an installable Android APK. For iOS, use `--platfor
 - Exact-cent totals with equal or proportional tax/tip splitting; incomplete claims block demo payment.
 - Native camera/photo selection, Gemini receipt parsing via the local API (sample fallback without a key), and a host review screen that writes verified items into the local demo bill.
 - A demo card toggle and simulated contribution/merchant payment states.
-- Optional real Supabase email/password sign-up/sign-in, once configured.
+- Auth-first launch: sign-in is the default screen; sign-up collects first name, last name, email, password, and phone, then opens a verify-email page. A profile icon on the bill screen supports photo and profile edits.
 - A read-only Fastify health endpoint and demo bill endpoint, with an in-app connection check.
 
 The mobile demo bill lives in memory and resets on reload. Participant switching simulates collaboration on one device. The backend now implements persistent profiles, groups/invites, manual bills, concurrent fractional claims, and personal tips using Tiger Data PostgreSQL and Supabase Auth; the mobile screens still need integration with these APIs. Receipt upload/OCR, real card linking, issuing, and collection/refunds belong to separate integrations. Supabase sign-in alone does not connect the demo bill to a database. No real money moves.
@@ -103,7 +103,11 @@ EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 ```
 
-Profile shows real sign-up/sign-in controls when both variables are present. Confirm signup by email if enabled in your project, then sign in. Native session storage uses Expo SecureStore; the browser uses the SDK's browser storage. Display names and bills remain local demo state until database tables and policies are implemented.
+Expo only exposes variables prefixed with `EXPO_PUBLIC_` to the app. Names like `SUPABASE_URL` without that prefix will not work. After editing `.env`, fully restart Expo.
+
+The app opens on **Sign in**. Create an account from there; after sign-up you are sent to a verify-email screen with a button back to login. A signed-in session is required to use the app. Sign-up stores first name, last name, and phone in Supabase user metadata. Native session storage uses Expo SecureStore; the browser uses the SDK's browser storage.
+
+For profile photos, create a public Storage bucket named `avatars` and allow authenticated users to upload to a folder matching their user id. Bills remain local demo state until database tables and policies are implemented.
 
 Only public configuration belongs in `EXPO_PUBLIC_*` variables: these values ship in the app. Never put Stripe secret keys or Supabase service-role keys there. Do not commit `.env` files.
 
