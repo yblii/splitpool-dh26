@@ -9,6 +9,7 @@ import { ProfileIconButton } from '../components/ProfileIcon';
 import { AuthProvider, useAuth } from '../state/auth';
 import { AppProfileProvider, useAppProfile } from '../state/appProfile';
 import { DemoProvider } from '../state/demo';
+import { ReceiptSessionProvider } from '../state/receiptSession';
 import { getSupabase, logSupabaseEnvStatus } from '../lib/supabase';
 
 function RootNavigator() {
@@ -50,7 +51,9 @@ function RootNavigator() {
           }}
         />
         <Stack.Screen name="group/[groupId]" options={{ title: 'GROUP' }} />
-        <Stack.Screen name="bill/[billId]" options={{ title: 'BILL' }} />
+        <Stack.Screen name="bill/[billId]/index" options={{ title: 'BILL' }} />
+        <Stack.Screen name="bill/[billId]/receipt" options={{ title: 'RECEIPT' }} />
+        <Stack.Screen name="bill/[billId]/receipt-review" options={{ title: 'REVIEW' }} />
         <Stack.Screen name="invite/[token]" options={{ title: 'JOIN GROUP' }} />
         <Stack.Screen name="receipt" options={{ title: 'RECEIPT' }} />
         <Stack.Screen name="receipt-review" options={{ title: 'REVIEW' }} />
@@ -98,8 +101,10 @@ export default function RootLayout() {
         <AuthProvider>
           <AppProfileProvider>
             <DemoProvider>
-              <StatusBar style="dark" />
-              <RootNavigator />
+              <ReceiptSessionProvider>
+                <StatusBar style="dark" />
+                <RootNavigator />
+              </ReceiptSessionProvider>
             </DemoProvider>
           </AppProfileProvider>
         </AuthProvider>

@@ -4,6 +4,7 @@ import {
   receiptFileMeta,
   type ReceiptExtractionResponse,
   type ReceiptImageUpload,
+  type ReceiptUploadOptions,
 } from './receiptUpload.shared';
 
 /**
@@ -13,16 +14,18 @@ import {
 export async function uploadReceiptImage(
   apiBaseUrl: string,
   image: ReceiptImageUpload,
-  { signal }: { signal?: AbortSignal } = {},
+  options: ReceiptUploadOptions = {},
 ): Promise<ReceiptExtractionResponse> {
   const { type } = receiptFileMeta(image);
+  const path = options.path ?? '/api/v1/demo/receipt-extractions';
   const file = new File(image.uri);
-  const result = await file.upload(`${apiBaseUrl}/api/v1/demo/receipt-extractions`, {
+  const result = await file.upload(`${apiBaseUrl}${path}`, {
     httpMethod: 'POST',
     uploadType: UploadType.MULTIPART,
     fieldName: 'image',
     mimeType: type,
-    signal,
+    signal: options.signal,
+    headers: options.headers,
   });
   return parseExtractionBody(result.body, result.status);
 }

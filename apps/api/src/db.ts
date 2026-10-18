@@ -33,15 +33,21 @@ export function postgresDatabase(connectionString: string): Database {
   };
 }
 
+const migrations: { version: number; file: string }[] = [
+  { version: 1, file: '001_collaboration.sql' },
+  { version: 2, file: '002_receipts.sql' },
+];
+
 export async function migrate(db: Database) {
-  const sql = readFileSync(new URL('../migrations/001_collaboration.sql', import.meta.url), 'utf8');
   await db.transaction(async (tx) => {
     await tx.query('SELECT pg_advisory_xact_lock(73618421)');
     await tx.query('CREATE TABLE IF NOT EXISTS schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
-    const applied = await tx.query('SELECT version FROM schema_migrations WHERE version = 1');
-    if (!applied.rows.length) {
+    for (const migration of migrations) {
+      const applied = await tx.query('SELECT version FROM schema_migrations WHERE version = $1', [migration.version]);
+      if (applied.rows.length) continue;
+      const sql = readFileSync(new URL(`../migrations/${migration.file}`, import.meta.url), 'utf8');
       await tx.query(sql);
-      await tx.query('INSERT INTO schema_migrations(version) VALUES (1)');
+      await tx.query('INSERT INTO schema_migrations(version) VALUES ($1)', [migration.version]);
     }
   });
 }

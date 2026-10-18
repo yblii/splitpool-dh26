@@ -11,6 +11,7 @@ npm-debug.log*
 .DS_Store
 apps/mobile/android/
 apps/mobile/ios/
+apps/api/data/receipts/
 *.jks
 *.keystore
 *.p12

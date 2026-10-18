@@ -1,15 +1,16 @@
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { formatMoney, type BillResponse } from '@splitpool/contracts';
-import { Button, Card, DemoNote, Screen, colors, styles } from '../../components/ui';
-import { formatApiError, getBill } from '../../lib/apiClient';
-import { useAppProfile } from '../../state/appProfile';
+import { router, useFocusEffect, useLocalSearchParams, type Href } from 'expo-router';
+import { formatMoney, type BillResponse, type GroupDetail } from '@splitpool/contracts';
+import { Button, Card, DemoNote, Screen, colors, styles } from '../../../components/ui';
+import { formatApiError, getBill, getGroup } from '../../../lib/apiClient';
+import { useAppProfile } from '../../../state/appProfile';
 
 export default function BillScreen() {
   const { billId } = useLocalSearchParams<{ billId: string }>();
   const { appProfile } = useAppProfile();
   const [bill, setBill] = useState<BillResponse | null>(null);
+  const [group, setGroup] = useState<GroupDetail | null>(null);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -18,10 +19,13 @@ export default function BillScreen() {
     setLoading(true);
     setMessage('');
     try {
-      setBill(await getBill(billId));
+      const nextBill = await getBill(billId);
+      setBill(nextBill);
+      setGroup(await getGroup(nextBill.groupId));
     } catch (error) {
       setMessage(formatApiError(error));
       setBill(null);
+      setGroup(null);
     } finally {
       setLoading(false);
     }
@@ -40,6 +44,9 @@ export default function BillScreen() {
       </Screen>
     );
   }
+
+  const isHost = Boolean(bill && group && appProfile && group.hostId === appProfile.userId);
+  const canScan = Boolean(isHost && bill?.state === 'EDITING');
 
   return (
     <Screen>
@@ -81,7 +88,9 @@ export default function BillScreen() {
             <Text style={styles.heading}>Items</Text>
             {bill.items.length === 0 ? (
               <Text style={styles.small}>
-                No items yet. Receipt scanning and host review will land in Phase C. Concurrent claims follow in Phase D.
+                {canScan
+                  ? 'No items yet. Scan a receipt to load a draft for host review.'
+                  : 'No items yet. The group host scans and confirms the receipt first. Concurrent claims follow in Phase D.'}
               </Text>
             ) : (
               bill.items.map((item) => (
@@ -111,6 +120,15 @@ export default function BillScreen() {
 
       {!!message && <Text style={[styles.small, { color: colors.warning }]}>{message}</Text>}
 
+      {canScan && bill && (
+        <Button
+          title={bill.items.length ? 'Rescan receipt' : 'Scan receipt'}
+          onPress={() => router.push({
+            pathname: '/bill/[billId]/receipt',
+            params: { billId: bill.id, expectedVersion: String(bill.version) },
+          } as unknown as Href)}
+        />
+      )}
       <Button title="Refresh" secondary disabled={loading} onPress={() => void load()} />
       {bill && (
         <Button

@@ -1,7 +1,13 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import type { SaveItemsRequest, SetClaimRequest, SetTipRequest, UpdateSettingsRequest } from '@splitpool/contracts';
+import type { ExtractedReceipt, SaveItemsRequest, SetClaimRequest, SetTipRequest, UpdateSettingsRequest } from '@splitpool/contracts';
 import type { VerifyToken } from './auth.ts';
 import { ApiError } from './errors.ts';
+import {
+  parseWithFallback,
+  type ReceiptFallbackReason,
+  type ReceiptParser,
+} from './receipt/parser.ts';
+import { writeReceiptImage } from './receipt/storage.ts';
 import { CollaborationService } from './service.ts';
 
 const id = { type: 'string', format: 'uuid' };
@@ -17,7 +23,22 @@ const object = (properties: Record<string, unknown>, required = Object.keys(prop
 const ids = { type: 'array', minItems: 1, uniqueItems: true, items: id };
 const params = object({ id });
 
-export async function collaborationRoutes(app: FastifyInstance, service: CollaborationService, verifyToken: VerifyToken) {
+function normalizeImageMimeType(mimeType: string): string {
+  if (mimeType === 'image/jpg') return 'image/jpeg';
+  return mimeType;
+}
+
+export type CollaborationRouteOptions = {
+  parser: ReceiptParser;
+  receiptRoot?: string;
+};
+
+export async function collaborationRoutes(
+  app: FastifyInstance,
+  service: CollaborationService,
+  verifyToken: VerifyToken,
+  options: CollaborationRouteOptions,
+) {
   const users = new WeakMap<FastifyRequest, string>();
   const user = (request: FastifyRequest) => users.get(request)!;
   // Encapsulated hook: health and demo routes outside this plugin remain public.
@@ -52,6 +73,49 @@ export async function collaborationRoutes(app: FastifyInstance, service: Collabo
   }, async (request, reply) => reply.code(201).send(await service.createBill(user(request), request.params.id, request.body.participantIds.map(id => id.toLowerCase()))));
   app.get<{ Params: { id: string } }>('/bills/:id', { schema: { params } },
     request => service.getBill(user(request), request.params.id));
+  app.post<{ Params: { id: string } }>('/bills/:id/receipt-extractions', { schema: { params } },
+    async (request, reply) => {
+      const file = await request.file();
+      if (!file) throw new ApiError(400, 'INVALID_REQUEST', 'Expected a multipart image field named "image".');
+      const mimeType = normalizeImageMimeType(file.mimetype || 'application/octet-stream');
+      if (!mimeType.startsWith('image/')) throw new ApiError(400, 'INVALID_REQUEST', 'Receipt upload must be an image.');
+      const bytes = await file.toBuffer();
+      if (!bytes.length) throw new ApiError(400, 'INVALID_REQUEST', 'Receipt image was empty.');
+
+      const billId = request.params.id;
+      await service.assertHostCanExtractReceipt(user(request), billId);
+      const imageKey = await writeReceiptImage(billId, bytes, mimeType, options.receiptRoot);
+      request.log.info({
+        billId,
+        parser: options.parser.name,
+        mimeType,
+        bytes: bytes.length,
+        imageKey,
+      }, 'Starting bill receipt extraction');
+
+      const { draft, usedFallback, reason, errorDetail } = await parseWithFallback(options.parser, {
+        bytes,
+        mimeType,
+        filename: file.filename,
+      }, request.log);
+
+      await service.saveReceiptExtraction(user(request), billId, {
+        imageKey,
+        parsingStatus: usedFallback ? 'fallback' : 'extracted',
+        extractedResult: draft,
+      });
+
+      const body: {
+        draft: ExtractedReceipt;
+        usedFallback: boolean;
+        imageKey: string;
+        reason?: ReceiptFallbackReason;
+        errorDetail?: string;
+      } = { draft, usedFallback, imageKey };
+      if (reason) body.reason = reason;
+      if (errorDetail) body.errorDetail = errorDetail;
+      return reply.code(200).send(body);
+    });
   app.put<{ Params: { id: string }; Body: SaveItemsRequest }>('/bills/:id/items', {
     schema: { params, body: object({ expectedVersion, merchant: { type: 'string', maxLength: 120 },
       items: { type: 'array', maxItems: 500, items: object({ id, name: text(200), quantity: integer(10000, 1), netLineTotalCents: cents },
