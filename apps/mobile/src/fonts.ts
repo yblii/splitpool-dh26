@@ -14,6 +14,7 @@ import {
   Inter_500Medium,
   Inter_600SemiBold,
   Inter_700Bold,
+  Inter_700Bold_Italic,
   Inter_800ExtraBold,
 } from '@expo-google-fonts/inter';
 
@@ -34,6 +35,7 @@ const MONO_FACES = [
 
 export const inter = { fontFamily: 'Inter' } as const;
 export const interItalic = 'Inter_400Regular_Italic';
+export const interBoldItalic = 'Inter_700Bold_Italic';
 export const monoFamily = 'IBM Plex Mono';
 export const mono = { fontFamily: monoFamily } as const;
 
@@ -73,6 +75,7 @@ async function loadInter() {
     const rules = await Promise.all([
       ...[...FACES, ...MONO_FACES].map(async ([weight, source]) => faceRule(weight, source, 'normal')),
       faceRule(400, Inter_400Regular_Italic, 'italic'),
+      faceRule(700, Inter_700Bold_Italic, 'italic'),
     ]);
     const style = document.createElement('style');
     style.setAttribute('data-splitpool-font', 'inter');
@@ -83,6 +86,7 @@ async function loadInter() {
   await Font.loadAsync({
     Inter: Inter_400Regular,
     [interItalic]: Inter_400Regular_Italic,
+    [interBoldItalic]: Inter_700Bold_Italic,
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,

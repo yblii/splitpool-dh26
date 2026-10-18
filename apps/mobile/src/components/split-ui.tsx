@@ -12,7 +12,7 @@ import {
   type ItemVisualState,
   type SplitLine,
 } from '@splitpool/contracts';
-import { interItalic, monoFamily } from '../fonts';
+import { interBoldItalic, interItalic, monoFamily } from '../fonts';
 import { MemberAvatar, type AvatarPerson } from './people';
 import { BottomSheet } from './sheets';
 import { Button, colors, moneyMark, styles, typeScale, useReduceMotion } from './ui';
@@ -622,7 +622,13 @@ const paperStyles = StyleSheet.create({
       },
     }),
   },
-  title: { ...typeScale.pageTitle, fontSize: 24, lineHeight: 30, textAlign: 'center', paddingTop: 2, paddingBottom: 6 },
+  title: {
+    ...typeScale.pageTitle, fontSize: 24, lineHeight: 30, textAlign: 'center', paddingTop: 2, paddingBottom: 6,
+    ...Platform.select({
+      web: { fontStyle: 'italic' as const },
+      default: { fontFamily: interBoldItalic, fontWeight: 'normal' as const, fontStyle: 'normal' as const },
+    }),
+  },
   subheading: { ...typeScale.subheading, textAlign: 'center', paddingTop: 2, paddingBottom: 6 },
   dimmed: { opacity: 0.25 },
   rule: { borderBottomWidth: 1, borderStyle: 'dashed', borderColor: '#D9CBB8', marginBottom: 4 },
