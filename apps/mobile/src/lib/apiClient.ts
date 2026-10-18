@@ -1,5 +1,15 @@
-import type { ApiFailure, BillResponse, Group, GroupDetail, Profile } from '@splitpool/contracts';
+import type {
+  ApiFailure,
+  BillResponse,
+  Group,
+  GroupDetail,
+  Profile,
+  SaveItemsRequest,
+  VerifiedReceipt,
+} from '@splitpool/contracts';
 import { apiUrl } from './api';
+import { uploadReceiptImage } from './receiptUpload';
+import type { ReceiptExtractionResponse, ReceiptImageUpload } from './receiptUpload.shared';
 import { getSupabase } from './supabase';
 
 export class ApiClientError extends Error {
@@ -163,6 +173,67 @@ export async function createBill(
 
 export async function getBill(billId: string, { signal }: { signal?: AbortSignal } = {}) {
   return apiRequest<BillResponse>(`/bills/${billId}`, { signal });
+}
+
+/** Host OCR upload for a bill; persists image_key + draft on the API. */
+export async function extractBillReceipt(
+  billId: string,
+  image: ReceiptImageUpload,
+  { signal }: { signal?: AbortSignal } = {},
+): Promise<ReceiptExtractionResponse> {
+  if (!apiUrl) {
+    throw new ApiClientError(
+      503,
+      'API_NOT_CONFIGURED',
+      'Set EXPO_PUBLIC_API_URL in apps/mobile/.env to parse receipts.',
+    );
+  }
+  const token = await getAccessToken();
+  if (!token) {
+    throw new ApiClientError(401, 'AUTH_REQUIRED', 'Sign in again to continue.');
+  }
+  try {
+    return await uploadReceiptImage(apiUrl, image, {
+      signal,
+      path: `/api/v1/bills/${billId}/receipt-extractions`,
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    });
+  } catch (error) {
+    if (error instanceof ApiClientError) throw error;
+    const message = error instanceof Error ? error.message : 'Could not parse receipt.';
+    throw new ApiClientError(503, 'RECEIPT_EXTRACT_FAILED', message);
+  }
+}
+
+/** Map host-verified OCR draft → SaveItemsRequest (omit non-UUID item ids; fold tip into service). */
+export function saveItemsFromVerifiedReceipt(
+  verified: VerifiedReceipt,
+  expectedVersion: number,
+): SaveItemsRequest {
+  return {
+    expectedVersion,
+    merchant: verified.merchant,
+    items: verified.items.map((item) => ({
+      name: item.name,
+      quantity: item.quantity,
+      netLineTotalCents: item.netLineTotalCents,
+    })),
+    taxCents: verified.taxCents,
+    serviceChargeCents: verified.tipCents + verified.serviceChargeCents,
+    printedTotalCents: verified.printedTotalCents,
+  };
+}
+
+export async function saveBillItems(
+  billId: string,
+  body: SaveItemsRequest,
+  { signal }: { signal?: AbortSignal } = {},
+) {
+  return apiRequest<BillResponse>(`/bills/${billId}/items`, {
+    method: 'PUT',
+    body,
+    signal,
+  });
 }
 
 export async function createInvite(

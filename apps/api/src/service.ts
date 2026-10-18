@@ -1,11 +1,13 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import type { Bill, BillResponse, Group, Profile, SaveItemsRequest, SetClaimRequest, SetTipRequest, UpdateSettingsRequest } from '@splitpool/contracts';
+import type { Bill, BillResponse, ExtractedReceipt, Group, Profile, SaveItemsRequest, SetClaimRequest, SetTipRequest, UpdateSettingsRequest } from '@splitpool/contracts';
 import type { Database, Sql } from './db.ts';
 import { ApiError, requireThat } from './errors.ts';
 import { addFractions, normalizeFraction, summarize } from './calculations.ts';
 
 const profileColumns = 'user_id AS "userId", username, display_name AS "displayName"';
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
+
+export type ReceiptParsingStatus = 'extracted' | 'fallback' | 'verified';
 
 export class CollaborationService {
   constructor(private db: Database) {}
@@ -131,6 +133,41 @@ export class CollaborationService {
       }
       await tx.query('UPDATE bills SET merchant=$1,tax_cents=$2,service_charge_cents=$3,printed_total_cents=$4 WHERE id=$5',
         [input.merchant.trim(), input.taxCents, input.serviceChargeCents, input.printedTotalCents, billId]);
+      await tx.query(
+        `UPDATE receipts SET parsing_status='verified', updated_at=now() WHERE bill_id=$1`,
+        [billId],
+      );
+    });
+  }
+
+  /** Host-only: bill must be EDITING before OCR bytes are accepted. */
+  async assertHostCanExtractReceipt(userId: string, billId: string) {
+    return this.db.transaction(async tx => {
+      await this.billAccess(tx, userId, billId, true);
+      const locked = (await tx.query('SELECT state FROM bills WHERE id=$1 FOR UPDATE', [billId])).rows[0];
+      requireThat(locked.state === 'EDITING', 409, 'BILL_NOT_EDITABLE', 'Reopen review before scanning a new receipt.');
+    });
+  }
+
+  async saveReceiptExtraction(
+    userId: string,
+    billId: string,
+    input: { imageKey: string; parsingStatus: Exclude<ReceiptParsingStatus, 'verified'>; extractedResult: ExtractedReceipt },
+  ) {
+    return this.db.transaction(async tx => {
+      await this.billAccess(tx, userId, billId, true);
+      const locked = (await tx.query('SELECT state FROM bills WHERE id=$1 FOR UPDATE', [billId])).rows[0];
+      requireThat(locked.state === 'EDITING', 409, 'BILL_NOT_EDITABLE', 'Reopen review before scanning a new receipt.');
+      await tx.query(
+        `INSERT INTO receipts(bill_id, image_key, parsing_status, extracted_result)
+         VALUES ($1,$2,$3,$4::jsonb)
+         ON CONFLICT (bill_id) DO UPDATE SET
+           image_key = EXCLUDED.image_key,
+           parsing_status = EXCLUDED.parsing_status,
+           extracted_result = EXCLUDED.extracted_result,
+           updated_at = now()`,
+        [billId, input.imageKey, input.parsingStatus, JSON.stringify(input.extractedResult)],
+      );
     });
   }
 

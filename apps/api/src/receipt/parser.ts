@@ -203,7 +203,7 @@ export function createGeminiReceiptParser(apiKey: string): ReceiptParser {
 
       const content = response.text?.trim();
       if (!content) throw new Error('Gemini returned an empty receipt extraction.');
-      return normalizeExtractedReceipt(JSON.parse(content), 'gemini-2.5-flash');
+      return normalizeExtractedReceipt(JSON.parse(content), GEMINI_RECEIPT_MODEL);
     },
   };
 }

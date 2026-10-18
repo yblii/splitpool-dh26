@@ -51,7 +51,8 @@ All paths below are relative to `/api/v1`. Shared TypeScript types live in `pack
 | `POST /invites/:token/accept` | No body; returns `{ groupId }` |
 | `POST /groups/:id/bills` | `{ participantIds: [userId, ...] }`; returns bill (201) |
 | `GET /bills/:id` | Authoritative bill, claims, personal tips, totals, and blockers |
-| `PUT /bills/:id/items` | `SaveItemsRequest`; full replacement of reviewed items/receipt totals |
+| `POST /bills/:id/receipt-extractions` | Host-only multipart field `image`; stores bytes under `data/receipts/`, upserts `receipts`, returns OCR `{ draft, usedFallback, imageKey, … }` |
+| `PUT /bills/:id/items` | `SaveItemsRequest`; full replacement of reviewed items/receipt totals; marks matching `receipts.parsing_status` as `verified` when present |
 | `PUT /bills/:id/items/:itemId/claim` | `{ expectedVersion, fraction: { numerator, denominator } }` |
 | `PATCH /bills/:id/settings` | `{ expectedVersion, participantIds?, taxMode?, serviceChargeMode? }` |
 | `PUT /bills/:id/tip` | `{ expectedVersion, tipCents }`; sets only the caller's optional tip |
@@ -87,7 +88,7 @@ Every bill mutation requires `expectedVersion` and runs inside a transaction loc
 
 Bill reads use repeatable-read transactions so items, claims, roster, and version come from one committed snapshot. Poll approximately every two seconds while the bill screen is active; refetch after writes, conflicts, reconnect, and foreground. Stop in background, back off on errors, and disable offline mutations. API responses are private and `no-store`.
 
-For the **OCR teammate**, extraction remains a draft outside these routes. The host reviews it and submits the result through `PUT /bills/:id/items` using the latest version. Receipt uploads/extraction jobs are not implemented here.
+For the **OCR teammate**, hosts upload via `POST /bills/:id/receipt-extractions` (authenticated multipart). Draft JSON is stored on `receipts` with a local `image_key`; the host reviews in the app and submits through `PUT /bills/:id/items` using the latest version. Without `GEMINI_API_KEY` the parser returns the labeled sample fallback (same as the public demo extract route).
 
 For the **payments teammate**, add review/freeze, reopen, acceptances, and payment routes on top of these tables. Transitions must lock the same bill row, validate `expectedVersion`, recompute the authoritative summary, and reject blockers before creating immutable snapshots. Snapshot personal tips along with all other amounts. This backend only mutates bills in `EDITING`; changing tips after freezing requires reopening and clearing acceptances. Once collection starts, follow the cancellation/refund rules in `design.md`. Do not bypass this lock/version protocol with direct client database writes.
 

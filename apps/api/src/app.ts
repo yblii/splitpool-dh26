@@ -21,6 +21,8 @@ export type BuildAppOptions = {
   parser?: ReceiptParser;
   db?: Database;
   verifyToken?: VerifyToken;
+  /** Local directory for receipt image bytes (defaults to data/receipts). */
+  receiptRoot?: string;
   /** Passed to @fastify/cors `origin`. */
   origins?: FastifyCorsOptions['origin'];
   logger?: boolean;
@@ -132,13 +134,19 @@ export async function buildApp(options: BuildAppOptions = {}) {
     const verify = options.verifyToken;
     app.get('/api/v1/ready', async (_request, reply) => {
       try {
-        const result = await db.query('SELECT version FROM schema_migrations WHERE version=1');
+        const result = await db.query('SELECT version FROM schema_migrations WHERE version=2');
         if (!result.rows.length) return reply.code(503).send({ status: 'unavailable' });
         return { status: 'ok' };
       }
       catch { return reply.code(503).send({ status: 'unavailable' }); }
     });
-    await app.register(async privateApp => collaborationRoutes(privateApp, new CollaborationService(db), verify), { prefix: '/api/v1' });
+    const parser = options.parser ?? createReceiptParser();
+    await app.register(async privateApp => collaborationRoutes(
+      privateApp,
+      new CollaborationService(db),
+      verify,
+      { parser, receiptRoot: options.receiptRoot },
+    ), { prefix: '/api/v1' });
     app.addHook('onClose', () => db.close());
   }
 

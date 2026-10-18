@@ -1,9 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { postgresDatabase, migrate } from '../src/db.ts';
 import { buildApp } from '../src/app.ts';
 import { ApiError } from '../src/errors.ts';
+import { createSampleFallbackParser } from '../src/receipt/parser.ts';
 import type { BillResponse } from '@splitpool/contracts';
 
 test('PostgreSQL: groups, permissions, independent tips, receipt edits, and concurrent claims', {
@@ -12,6 +16,7 @@ test('PostgreSQL: groups, permissions, independent tips, receipt edits, and conc
   const connectionString = process.env.TEST_DATABASE_URL!;
   const admin = postgresDatabase(connectionString);
   const schema = `splitpool_test_${randomUUID().replaceAll('-', '')}`;
+  const receiptRoot = await mkdtemp(join(tmpdir(), 'splitpool-receipts-'));
   // Only this newly generated test schema is removed during cleanup.
   await admin.query(`CREATE SCHEMA "${schema}"`);
   const scoped = new URL(connectionString);
@@ -19,12 +24,39 @@ test('PostgreSQL: groups, permissions, independent tips, receipt edits, and conc
   const db = postgresDatabase(scoped.toString());
   const users: string[] = Array.from({ length: 5 }, () => randomUUID());
   const [host, member, third, fourth, outsider] = users;
-  const app = await buildApp({ db, logger: false, verifyToken: async token => {
-    if (!users.includes(token)) throw new ApiError(401, 'INVALID_TOKEN', 'Unknown test identity.');
-    return token;
-  } });
+  const app = await buildApp({
+    db,
+    logger: false,
+    parser: createSampleFallbackParser(),
+    receiptRoot,
+    verifyToken: async token => {
+      if (!users.includes(token)) throw new ApiError(401, 'INVALID_TOKEN', 'Unknown test identity.');
+      return token;
+    },
+  });
   const request = (actor: string, method: 'GET' | 'POST' | 'PUT' | 'PATCH', url: string, payload?: object) =>
     app.inject({ method, url: `/api/v1${url}`, headers: { authorization: `Bearer ${actor}` }, payload });
+  const extract = (actor: string, billId: string) => {
+    const boundary = '----splitpoolboundary';
+    const payload = [
+      `--${boundary}`,
+      'Content-Disposition: form-data; name="image"; filename="receipt.jpg"',
+      'Content-Type: image/jpeg',
+      '',
+      'fakereceiptbytes',
+      `--${boundary}--`,
+      '',
+    ].join('\r\n');
+    return app.inject({
+      method: 'POST',
+      url: `/api/v1/bills/${billId}/receipt-extractions`,
+      headers: {
+        authorization: `Bearer ${actor}`,
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+      },
+      payload,
+    });
+  };
   try {
     await migrate(db);
     await migrate(db); // Migration reruns must not erase data or reapply DDL.
@@ -50,11 +82,20 @@ test('PostgreSQL: groups, permissions, independent tips, receipt edits, and conc
     assert.equal((await request(host, 'POST', `/groups/${group.id}/bills`, { participantIds: [host] })).statusCode, 409);
     assert.equal((await request(outsider, 'GET', `/bills/${bill.id}`)).statusCode, 404);
     assert.equal((await request(member, 'PATCH', `/bills/${bill.id}/settings`, { expectedVersion: bill.version, taxMode: 'equal' })).statusCode, 403);
+    assert.equal((await extract(member, bill.id)).statusCode, 403);
+    const extracted = await extract(host, bill.id);
+    assert.equal(extracted.statusCode, 200, extracted.body);
+    assert.equal(extracted.json().usedFallback, true);
+    assert.ok(extracted.json().imageKey?.startsWith(`${bill.id}/`));
+    const draftRow = (await db.query('SELECT parsing_status, image_key FROM receipts WHERE bill_id=$1', [bill.id])).rows[0];
+    assert.equal(draftRow.parsing_status, 'fallback');
+    assert.equal(draftRow.image_key, extracted.json().imageKey);
     const receipt = { merchant: 'Restaurant', items: [{ name: 'Pizza', quantity: 1, netLineTotalCents: 1001 }],
       taxCents: 101, serviceChargeCents: 200, printedTotalCents: 1302 };
     const saved = await request(host, 'PUT', `/bills/${bill.id}/items`, { expectedVersion: bill.version, ...receipt });
     assert.equal(saved.statusCode, 200, saved.body);
     bill = saved.json();
+    assert.equal((await db.query('SELECT parsing_status FROM receipts WHERE bill_id=$1', [bill.id])).rows[0].parsing_status, 'verified');
     const itemId = bill.items[0].id;
     const claimPath = `/bills/${bill.id}/items/${itemId}/claim`;
     const parallel = await Promise.all([host, member].map(actor => request(actor, 'PUT', claimPath,
@@ -102,5 +143,6 @@ test('PostgreSQL: groups, permissions, independent tips, receipt edits, and conc
     await app.close();
     await admin.query(`DROP SCHEMA "${schema}" CASCADE`);
     await admin.close();
+    await rm(receiptRoot, { recursive: true, force: true });
   }
 });

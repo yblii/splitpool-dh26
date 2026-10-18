@@ -5,6 +5,7 @@ import {
   createReceiptParser,
   createSampleFallbackParser,
   formatGeminiError,
+  GEMINI_RECEIPT_MODEL,
   normalizeExtractedReceipt,
   parseWithFallback,
 } from './parser.ts';
@@ -20,7 +21,7 @@ describe('receipt parser adapter', () => {
       discountCents: 0,
       printedTotalCents: 590,
       warnings: [],
-    }, 'gemini-2.5-flash');
+    }, GEMINI_RECEIPT_MODEL);
     expect(draft.schemaVersion).toBe(1);
     expect(draft.currency).toBe('USD');
     expect(draft.items[0].netLineTotalCents).toBe(450);
@@ -30,7 +31,7 @@ describe('receipt parser adapter', () => {
   it('falls back to the labeled sample when the primary parser fails and logs the error', async () => {
     const log = { warn: vi.fn(), error: vi.fn(), info: vi.fn() };
     const failing: Parameters<typeof parseWithFallback>[0] = {
-      name: 'gemini-2.5-flash',
+      name: GEMINI_RECEIPT_MODEL,
       async parseReceiptImage() {
         throw new Error('boom');
       },
@@ -51,7 +52,7 @@ describe('receipt parser adapter', () => {
   it('uses the sample parser when Gemini is not configured', async () => {
     expect(createReceiptParser({}).name).toBe('sample-fallback');
     expect(createReceiptParser({ GEMINI_API_KEY: '   ' }).name).toBe('sample-fallback');
-    expect(createReceiptParser({ GEMINI_API_KEY: 'AIza-test' }).name).toBe('gemini-2.5-flash');
+    expect(createReceiptParser({ GEMINI_API_KEY: 'AIza-test' }).name).toBe(GEMINI_RECEIPT_MODEL);
 
     const parser = createSampleFallbackParser();
     const draft = await parser.parseReceiptImage({

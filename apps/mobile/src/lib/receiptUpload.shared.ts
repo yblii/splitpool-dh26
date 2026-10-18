@@ -23,9 +23,30 @@ export function receiptFileMeta(image: ReceiptImageUpload): { name: string; type
   return { name, type };
 }
 
+export type ReceiptUploadOptions = {
+  signal?: AbortSignal;
+  /** Absolute API path including /api/v1 prefix. */
+  path?: string;
+  headers?: Record<string, string>;
+};
+
 export function parseExtractionBody(body: string, status: number): ReceiptExtractionResponse {
   if (status < 200 || status >= 300) {
-    throw new Error(body || `Receipt parse failed (${status}).`);
+    let message = body || `Receipt parse failed (${status}).`;
+    try {
+      const parsed: unknown = JSON.parse(body);
+      if (parsed && typeof parsed === 'object' && 'error' in parsed) {
+        const failure = parsed as { error?: { message?: string; code?: string } };
+        if (failure.error?.message) {
+          message = failure.error.code
+            ? `${failure.error.message} (${failure.error.code})`
+            : failure.error.message;
+        }
+      }
+    } catch {
+      // Keep raw body / status message.
+    }
+    throw new Error(message);
   }
   let data: unknown;
   try {

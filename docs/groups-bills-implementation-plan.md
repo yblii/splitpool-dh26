@@ -130,8 +130,9 @@ flowchart TD
   ```
 
 - API:
-  - `POST /bills/:id/receipt-upload` — host + member check → signed upload to Supabase private Storage (or API multipart proxy).
-  - Persist `image_key` / draft JSON on extract; finalize metadata when items are saved.
+  - `POST /bills/:id/receipt-extractions` — host + EDITING check → multipart proxy; store bytes under `data/receipts/{billId}/` (`image_key` relative path).
+  - Persist `image_key` / draft JSON on extract; set `parsing_status` to `verified` when items are saved.
+- Mobile: `bill/[billId]/receipt` → review → `PUT …/items` (omit OCR client ids; fold printed tip into `serviceChargeCents`).
 - Retire writing confirmed items only into `DemoProvider` for this path.
 
 ### Phase D — Concurrent claims UI
