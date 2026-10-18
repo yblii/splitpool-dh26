@@ -298,6 +298,22 @@ export function ReceiptItemCard({
           </View> : <Text style={cardStyles.editHint}>Your share updates from this percent. Everyone else splits what is left.</Text>}
           <Pressable accessibilityRole="button" hitSlop={8} onPress={onCancelPercent}><Text style={styles.link}>Cancel</Text></Pressable>
         </View> : <View style={[cardStyles.line, visual === 'error' && cardStyles.errorLine]}>
+          <View style={cardStyles.hatch}>
+            {hatch.map((color, index) => <View key={`${color}-${index}`} style={{ flex: 1, backgroundColor: color }} />)}
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={expanded ? `Close ${item.name}` : `Open ${item.name}`}
+            accessibilityHint="Shows who is paying. This does not claim the item."
+            hitSlop={6}
+            onPress={() => {
+              if (motion.swiped) return;
+              onOpen();
+            }}
+            style={cardStyles.chevronHit}
+          >
+            <Text style={cardStyles.chevron}>{expanded ? '⌄' : '›'}</Text>
+          </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={mine
@@ -312,10 +328,6 @@ export function ReceiptItemCard({
             }}
             style={cardStyles.lineMain}
           >
-            <View style={cardStyles.hatch}>
-              {hatch.map((color, index) => <View key={`${color}-${index}`} style={{ flex: 1, backgroundColor: color }} />)}
-            </View>
-            <Text style={cardStyles.chevron}>{expanded ? '⌄' : '›'}</Text>
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={cardStyles.name} numberOfLines={1}>{expanded && visual !== 'unclaimed' ? `✓ ${item.name}` : item.name}</Text>
               <Text style={cardStyles.meta}>
@@ -624,7 +636,8 @@ const cardStyles = StyleSheet.create({
   lineMain: { flex: 1, minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
   errorLine: { backgroundColor: '#FBF4EA' },
   hatch: { width: 10, alignSelf: 'stretch', borderRadius: 2, overflow: 'hidden' },
-  chevron: { color: colors.muted, fontSize: 18, lineHeight: 22, width: 14 },
+  chevronHit: { minWidth: 32, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  chevron: { color: colors.muted, fontSize: 18, lineHeight: 22, width: 14, textAlign: 'center' },
   name: { fontFamily: 'Inter', color: colors.ink, fontSize: 16, lineHeight: 21, fontWeight: '700' },
   meta: { color: colors.muted, fontSize: 12, lineHeight: 16 },
   metaMoney: { fontFamily: monoFamily, color: colors.muted, fontSize: 12, lineHeight: 16, fontWeight: '700' },
