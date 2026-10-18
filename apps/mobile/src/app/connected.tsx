@@ -92,7 +92,12 @@ export default function ConnectedGroupsScreen() {
           <Pressable accessibilityRole="button" accessibilityLabel="Open your account" onPress={() => router.push('/account')} style={dock}>
             <MemberAvatar person={you} size={36} />
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Open local demo" onPress={() => router.push('/')} style={dock}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open local demo"
+            onPress={() => router.push({ pathname: '/', params: { local: '1' } })}
+            style={dock}
+          >
             <Text style={dockLabel}>Demo</Text>
           </Pressable>
         </View>

@@ -1,15 +1,22 @@
 import { useState } from 'react';
 import { Platform, Pressable, Text, TextInput, View } from 'react-native';
-import { router } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { GroupCard } from '../components/groups';
 import { AvatarStack, MemberAvatar } from '../components/people';
 import { BottomSheet } from '../components/sheets';
 import { interFace, interItalic } from '../fonts';
 import { AppHeader, Button, ErrorBanner, Screen, colors, styles } from '../components/ui';
+import { useAppProfile } from '../state/appProfile';
+import { useAuth } from '../state/auth';
 import { useDemo } from '../state/demo';
 
 export default function GroupsScreen() {
   const demo = useDemo();
+  const { session, isLoading } = useAuth();
+  const { status } = useAppProfile();
+  const params = useLocalSearchParams<{ local?: string | string[] }>();
+  const localFlag = Array.isArray(params.local) ? params.local[0] : params.local;
+  const stayOnDemo = localFlag === '1' || localFlag === 'true';
   const [creating, setCreating] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [groupName, setGroupName] = useState('');
@@ -29,6 +36,17 @@ export default function GroupsScreen() {
     const kept = order.filter((id) => demo.groups.some((group) => group.id === id));
     const added = demo.groups.map((group) => group.id).filter((id) => !kept.includes(id));
     setOrder([...kept, ...added]);
+  }
+
+  // Connected (signed-in) groups are the default home. Opt into the local demo with ?local=1.
+  if (!stayOnDemo && (isLoading || (session && status === 'loading'))) {
+    return null;
+  }
+  if (!isLoading && session && status === 'ready' && !stayOnDemo) {
+    return <Redirect href="/connected" />;
+  }
+  if (!isLoading && session && status === 'needsSetup' && !stayOnDemo) {
+    return <Redirect href="/profile-setup" />;
   }
 
   function openGroup(id: string) {
@@ -98,7 +116,12 @@ export default function GroupsScreen() {
         <AvatarStack people={demo.friends} size={28} />
         <Text style={dockLabel}>Friends</Text>
       </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="Open shared groups" onPress={() => router.push('/connected')} style={dock}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Open shared groups"
+        onPress={() => router.replace('/connected')}
+        style={dock}
+      >
         <Text style={dockLabel}>Shared</Text>
       </Pressable>
     </View>}

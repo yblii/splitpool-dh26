@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Alert, Text, View } from 'react-native';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
-import { formatMoney, type BillItem, type BillResponse, type Fraction } from '@splitpool/contracts';
-import { AppHeader, Button, Card, ErrorBanner, Screen, SegmentedControl, colors, styles } from '../../../components/ui';
+import { type Fraction } from '@splitpool/contracts';
+import { AvatarStack } from '../../../components/people';
+import { BillSummary, ReceiptItemCard, ReceiptPaper } from '../../../components/split-ui';
+import { AppHeader, Button, ErrorBanner, ReadyReviewNote, Screen, colors, styles } from '../../../components/ui';
 import { useBillPoll } from '../../../hooks/useBillPoll';
 import {
   formatApiError,
@@ -10,96 +12,16 @@ import {
   setItemClaim,
 } from '../../../lib/apiClient';
 import {
-  claimForUser,
-  claimMinePlusRemaining,
-  equalPayerShare,
-  formatFraction,
-  fractionsEqual,
-  remainingForItem,
+  billItemToSplitLine,
+  claimJoinFraction,
+  customizeClaimFraction,
+  resolveBillItem,
 } from '../../../lib/claims';
+import { avatarFromProfile } from '../../../lib/peopleUi';
 import { useAppProfile } from '../../../state/appProfile';
 
-function ClaimControls({
-  bill,
-  item,
-  userId,
-  busy,
-  onClaim,
-}: {
-  bill: BillResponse;
-  item: BillItem;
-  userId: string;
-  busy: boolean;
-  onClaim: (fraction: Fraction) => void;
-}) {
-  const mine = claimForUser(bill.claims, item.id, userId)?.fraction;
-  const remaining = remainingForItem(bill, item.id);
-  const equal = equalPayerShare(bill.participants.length);
-  const takeRest = claimMinePlusRemaining(mine, remaining);
-  const others = bill.claims.filter((claim) => claim.itemId === item.id && claim.userId !== userId);
-
-  const selected: 'none' | 'half' | 'equal' | 'all' | 'custom' = !mine || mine.numerator === 0
-    ? 'none'
-    : fractionsEqual(mine, { numerator: 1, denominator: 2 })
-      ? 'half'
-      : fractionsEqual(mine, equal)
-        ? 'equal'
-        : fractionsEqual(mine, { numerator: 1, denominator: 1 })
-          ? 'all'
-          : 'custom';
-
-  return (
-    <View style={{ gap: 10 }}>
-      <View style={styles.row}>
-        <Text style={[styles.text, { flex: 1 }]}>
-          {item.name}
-          {item.quantity > 1 ? ` ×${item.quantity}` : ''}
-        </Text>
-        <Text style={styles.text}>{formatMoney(item.netLineTotalCents)}</Text>
-      </View>
-      <Text style={styles.small}>
-        Your claim · {mine && mine.numerator > 0 ? formatFraction(mine) : 'none'}
-        {' · '}
-        Left · {remaining.numerator}/{remaining.denominator}
-      </Text>
-      {others.length > 0 && (
-        <Text style={styles.small}>
-          Others · {others.map((claim) => {
-            const person = bill.participants.find((participant) => participant.userId === claim.userId);
-            return `${person?.displayName ?? 'Payer'} ${formatFraction(claim.fraction)}`;
-          }).join(' · ')}
-        </Text>
-      )}
-      <SegmentedControl
-        label={`Claim ${item.name}`}
-        disabled={busy || bill.state !== 'EDITING'}
-        value={selected === 'custom' ? '' : selected}
-        onChange={(value) => {
-          if (value === 'none') onClaim({ numerator: 0, denominator: 1 });
-          else if (value === 'half') onClaim({ numerator: 1, denominator: 2 });
-          else if (value === 'equal') onClaim(equal);
-          else if (value === 'all') onClaim({ numerator: 1, denominator: 1 });
-        }}
-        options={[
-          { value: 'none', label: 'None' },
-          { value: 'half', label: '½' },
-          { value: 'equal', label: `1/${bill.participants.length}` },
-          { value: 'all', label: 'All' },
-        ]}
-      />
-      {takeRest && takeRest.numerator > 0 && !(mine && fractionsEqual(mine, takeRest)) && (
-        <Button
-          title={`Take remaining (${formatFraction(takeRest)})`}
-          secondary
-          disabled={busy || bill.state !== 'EDITING'}
-          onPress={() => onClaim(takeRest)}
-        />
-      )}
-      {selected === 'custom' && mine && (
-        <Text style={styles.small}>Custom claim {formatFraction(mine)} is set. Choose a preset to change it.</Text>
-      )}
-    </View>
-  );
+function stateLabel(state: string) {
+  return state.replace(/_/g, ' ');
 }
 
 export default function BillScreen() {
@@ -118,11 +40,22 @@ export default function BillScreen() {
     refresh,
   } = useBillPoll({ billId });
   const [busy, setBusy] = useState(false);
+  const [percentId, setPercentId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [alert, setAlert] = useState<string | null>(null);
 
   const userId = appProfile?.userId;
   const isHost = Boolean(bill && group && userId && group.hostId === userId);
   const canEdit = bill?.state === 'EDITING';
   const canScan = Boolean(isHost && canEdit);
+  const people = useMemo(
+    () => (bill ? bill.participants.map((participant) => avatarFromProfile(participant)) : []),
+    [bill],
+  );
+  const roster = useMemo(
+    () => (bill ? bill.participants.map((participant) => participant.userId) : []),
+    [bill],
+  );
   const myShare = useMemo(
     () => (bill && userId ? bill.summary.shares.find((share) => share.userId === userId) : undefined),
     [bill, userId],
@@ -164,6 +97,20 @@ export default function BillScreen() {
     );
   }
 
+  const overflow = bill?.items
+    .map((item) => ({ item, resolution: resolveBillItem(bill, item) }))
+    .find((entry) => entry.resolution.status === 'overallocated' || entry.resolution.status === 'incomplete');
+  const overflowMessage = overflow
+    ? overflow.resolution.message ?? `${overflow.item.name} still has an open portion.`
+    : null;
+  const partial = bill
+    ? bill.items.filter((item) => resolveBillItem(bill, item).status === 'incomplete').length
+    : 0;
+  const allocated = bill
+    ? bill.items.filter((item) => resolveBillItem(bill, item).status === 'complete').length
+    : 0;
+  const yourCents = myShare?.totalCents ?? myShare?.itemsCents ?? 0;
+
   return (
     <Screen
       header={(
@@ -172,45 +119,62 @@ export default function BillScreen() {
           onBack={() => (bill
             ? router.push({ pathname: '/group/[groupId]', params: { groupId: bill.groupId } })
             : router.replace('/connected'))}
+          right={people.length > 0 ? <AvatarStack people={people} /> : undefined}
         />
       )}
       footer={(
-        <>
-          {canScan && bill && (
-            <Button
-              title={bill.items.length ? 'Rescan receipt' : 'Scan receipt'}
-              disabled={busy}
-              onPress={() => router.push({
-                pathname: '/bill/[billId]/receipt',
-                params: { billId: bill.id, expectedVersion: String(bill.version) },
-              } as unknown as Href)}
+        <View style={{ gap: 10 }}>
+          {bill?.summary.complete && <ReadyReviewNote />}
+          {bill && (
+            <BillSummary
+              yourLabel={bill.summary.complete ? 'Your total' : 'Your items'}
+              yourCents={yourCents}
+              totalCents={bill.summary.totalCents}
+              allocated={allocated}
+              partial={partial}
+              count={bill.items.length}
+              actionLabel={bill.summary.complete
+                ? (isHost ? 'Confirm Payment' : 'Continue to payment')
+                : canScan
+                  ? (bill.items.length ? 'Rescan receipt' : 'Scan receipt')
+                  : 'Refresh'}
+              onAction={() => {
+                if (bill.summary.complete) {
+                  router.push({
+                    pathname: '/bill/[billId]/payment',
+                    params: { billId: bill.id },
+                  } as unknown as Href);
+                  return;
+                }
+                if (canScan) {
+                  router.push({
+                    pathname: '/bill/[billId]/receipt',
+                    params: { billId: bill.id, expectedVersion: String(bill.version) },
+                  } as unknown as Href);
+                  return;
+                }
+                void refresh({ clearConflict: true });
+              }}
+              note={bill.summary.complete
+                ? undefined
+                : bill.items.length === 0
+                  ? (canScan
+                    ? 'Scan a receipt to load items for the group.'
+                    : 'Waiting for the host to scan a receipt.')
+                  : 'Tax and tip join your total once every item is fully claimed.'}
             />
           )}
-          {bill && bill.state !== 'PAID' && bill.state !== 'CANCELLED' && bill.summary.complete && (
-            <Button
-              title={isHost ? 'Confirm Payment' : 'Continue to payment'}
-              disabled={busy}
-              onPress={() => router.push({
-                pathname: '/bill/[billId]/payment',
-                params: { billId: bill.id },
-              } as unknown as Href)}
-            />
-          )}
-          <Button title="Refresh" secondary disabled={loading || busy} onPress={() => void refresh({ clearConflict: true })} />
           <Button title="Return to groups" secondary onPress={() => router.replace('/connected')} />
-        </>
+        </View>
       )}
     >
-      <View style={{ gap: 6 }}>
-        <Text style={styles.title}>{bill?.merchant || 'New bill'}</Text>
-        <Text style={styles.subheading}>
-          {loading && !bill
-            ? 'Loading…'
-            : bill
-              ? `${bill.state.replace(/_/g, ' ')} · ${bill.participants.length} payer${bill.participants.length === 1 ? '' : 's'}`
-              : 'Could not load bill'}
-        </Text>
-      </View>
+      <Text style={styles.subtitle}>
+        {loading && !bill
+          ? 'Loading…'
+          : bill
+            ? `${stateLabel(bill.state)} · Tap a line to claim it. Slide it left, then enter your %.`
+            : 'Could not load bill'}
+      </Text>
 
       {conflict && (
         <ErrorBanner
@@ -219,91 +183,84 @@ export default function BillScreen() {
         />
       )}
 
-      {bill && (
-        <>
-          <View style={local.totalRow}>
-            <View style={{ gap: 5 }}>
-              <Text style={styles.label}>Bill total</Text>
-              <Text style={local.total}>{formatMoney(bill.summary.totalCents)}</Text>
-            </View>
-            <Text style={[styles.label, { color: bill.summary.complete ? colors.success : colors.warning }]}>
-              {bill.summary.complete ? 'Ready' : `${bill.summary.blockers.length} blocker${bill.summary.blockers.length === 1 ? '' : 's'}`}
+      {!canEdit && bill && bill.state !== 'PAID' && bill.state !== 'CANCELLED' && (
+        <ErrorBanner
+          title="Claims are locked"
+          message="This bill is past editing. Reopen review before collection if you still need to change shares."
+        />
+      )}
+
+      {bill && userId && (
+        <ReceiptPaper title={bill.merchant || 'New bill'} alert={alert ?? overflowMessage}>
+          {bill.items.length === 0 ? (
+            <Text style={[styles.small, { paddingVertical: 12 }]}>
+              {canScan
+                ? 'No items yet. Scan a receipt to load a draft for host review.'
+                : 'No items yet. The group host scans and confirms the receipt first.'}
             </Text>
-          </View>
-
-          {myShare && (
-            <Card>
-              <Text style={styles.heading}>Your share</Text>
-              <Text style={styles.small}>
-                {bill.summary.complete
-                  ? 'Tax and tip are split from your claimed items.'
-                  : 'Tax and tip appear here once every item is claimed.'}
-              </Text>
-              <View style={styles.row}>
-                <Text style={styles.text}>Items</Text>
-                <Text style={styles.text}>{formatMoney(myShare.itemsCents)}</Text>
-              </View>
-              <View style={styles.row}>
-                <Text style={styles.text}>Tax</Text>
-                <Text style={styles.text}>{formatMoney(myShare.taxCents)}</Text>
-              </View>
-              <View style={styles.row}>
-                <Text style={styles.text}>Tip / service</Text>
-                <Text style={styles.text}>{formatMoney(myShare.serviceChargeCents)}</Text>
-              </View>
-              <View style={styles.row}>
-                <Text style={styles.heading}>You owe</Text>
-                <Text style={styles.heading}>{formatMoney(myShare.totalCents)}</Text>
-              </View>
-            </Card>
-          )}
-
-          <Card>
-            <Text style={styles.heading}>Items</Text>
-            {bill.items.length === 0 ? (
-              <Text style={styles.small}>
-                {canScan
-                  ? 'No items yet. Scan a receipt to load a draft for host review.'
-                  : 'No items yet. The group host scans and confirms the receipt first.'}
-              </Text>
-            ) : userId ? (
-              bill.items.map((item) => (
-                <View key={item.id} style={{ gap: 10, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: colors.border }}>
-                  <ClaimControls
-                    bill={bill}
-                    item={item}
-                    userId={userId}
-                    busy={busy}
-                    onClaim={(fraction) => void onClaim(item.id, fraction)}
-                  />
-                </View>
-              ))
-            ) : null}
-          </Card>
-
-          <Card>
-            <Text style={styles.heading}>Members</Text>
-            <Text style={styles.small}>Everyone in the group is a payer on this bill.</Text>
-            {bill.participants.map((participant) => (
-              <Text key={participant.userId} style={styles.text}>
-                {participant.displayName}
-                {participant.userId === userId ? ' · you' : ''}
-              </Text>
-            ))}
-          </Card>
-
-          {bill.summary.blockers.length > 0 && (
-            <Card>
-              <Text style={styles.heading}>Blockers</Text>
-              {bill.summary.blockers.map((blocker, index) => (
-                <Text key={`${blocker.code}-${index}`} style={[styles.small, { color: colors.warning }]}>
-                  {blocker.code}
-                  {blocker.itemId ? ` · ${bill.items.find((item) => item.id === blocker.itemId)?.name ?? blocker.itemId}` : ''}
-                </Text>
-              ))}
-            </Card>
-          )}
-        </>
+          ) : bill.items.map((item) => {
+            const line = billItemToSplitLine(bill, item);
+            const resolution = resolveBillItem(bill, item);
+            const mine = resolution.portions.some((portion) => portion.personId === userId);
+            return (
+              <ReceiptItemCard
+                key={item.id}
+                item={line}
+                resolution={resolution}
+                people={people}
+                roster={roster}
+                viewerId={userId}
+                editable={canEdit && !busy}
+                faded={false}
+                percentOpen={percentId === item.id}
+                expanded={openId === item.id && percentId !== item.id}
+                onClaim={() => {
+                  const next = claimJoinFraction(bill, item.id, userId);
+                  if ('error' in next) {
+                    setAlert(next.error);
+                    return;
+                  }
+                  setAlert(null);
+                  setOpenId(item.id);
+                  void onClaim(item.id, next);
+                }}
+                onOpen={() => setOpenId(openId === item.id ? null : item.id)}
+                onEditPercent={() => {
+                  if (!mine) {
+                    const next = claimJoinFraction(bill, item.id, userId);
+                    if ('error' in next) {
+                      setAlert(next.error);
+                      return;
+                    }
+                    void onClaim(item.id, next);
+                  }
+                  setOpenId(null);
+                  setAlert(null);
+                  setPercentId(item.id);
+                }}
+                onSavePercent={(basisPoints) => {
+                  const next = customizeClaimFraction(bill, item, userId, basisPoints);
+                  if ('error' in next) {
+                    setAlert(next.error);
+                    return next.error;
+                  }
+                  setAlert(null);
+                  setPercentId(null);
+                  setOpenId(item.id);
+                  void onClaim(item.id, next);
+                  return null;
+                }}
+                onCancelPercent={() => { setPercentId(null); setAlert(null); }}
+                onLeave={() => {
+                  setOpenId(null);
+                  setPercentId(null);
+                  setAlert(null);
+                  void onClaim(item.id, { numerator: 0, denominator: 1 });
+                }}
+              />
+            );
+          })}
+        </ReceiptPaper>
       )}
 
       {!!message && <ErrorBanner message={message} />}
@@ -315,27 +272,17 @@ export default function BillScreen() {
           Claim every item before the host can confirm payment.
         </Text>
       )}
+      {canScan && bill && bill.items.length > 0 && !bill.summary.complete && (
+        <Button
+          title="Rescan receipt"
+          secondary
+          disabled={busy}
+          onPress={() => router.push({
+            pathname: '/bill/[billId]/receipt',
+            params: { billId: bill.id, expectedVersion: String(bill.version) },
+          } as unknown as Href)}
+        />
+      )}
     </Screen>
   );
 }
-
-const local = StyleSheet.create({
-  totalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 20,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.border,
-    gap: 12,
-  },
-  total: {
-    color: colors.ink,
-    fontSize: 34,
-    lineHeight: 41,
-    letterSpacing: -0.8,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-  },
-});
