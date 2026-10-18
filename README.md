@@ -59,7 +59,7 @@ The preview profile produces an installable Android APK. For iOS, use `--platfor
 - Exact-cent totals with equal or proportional tax/tip splitting; incomplete claims block demo payment.
 - Native camera/photo selection, Gemini receipt parsing via the local API (sample fallback without a key), and a host review screen that writes verified items into the local demo bill.
 - A demo card toggle and simulated contribution/merchant payment states.
-- Optional real Supabase email/password sign-up/sign-in, once configured.
+- Dedicated Supabase email/password login and sign-up screens (first name, last name, email, password, phone), plus a profile icon on the bill screen for photo and profile edits.
 - A read-only Fastify health endpoint and demo bill endpoint, with an in-app connection check.
 
 The bill lives in memory and resets on reload. Participant switching simulates collaboration on one device. Live group creation/invites, persistent profiles, concurrent multi-device edits, receipt upload/OCR, real card linking, issuing, and collection/refunds are next implementation steps. Supabase sign-in alone does not connect the demo bill to a database. No real money moves.
@@ -103,7 +103,9 @@ EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 ```
 
-Profile shows real sign-up/sign-in controls when both variables are present. Confirm signup by email if enabled in your project, then sign in. Native session storage uses Expo SecureStore; the browser uses the SDK's browser storage. Display names and bills remain local demo state until database tables and policies are implemented.
+Open **Sign in** / **Sign up** from the profile icon on the bill screen (or Profile when signed out). Sign-up stores first name, last name, and phone in Supabase user metadata. Confirm signup by email if your project requires it, then sign in. Native session storage uses Expo SecureStore; the browser uses the SDK's browser storage.
+
+For profile photos, create a public Storage bucket named `avatars` and allow authenticated users to upload to a folder matching their user id. Bills remain local demo state until database tables and policies are implemented.
 
 Only public configuration belongs in `EXPO_PUBLIC_*` variables: these values ship in the app. Never put Stripe secret keys or Supabase service-role keys there. Do not commit `.env` files.
 
