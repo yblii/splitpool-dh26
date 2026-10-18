@@ -22,6 +22,7 @@ export type DemoPerson = {
   name: string;
   username: string;
   phone?: string;
+  title: string;
   initial: string;
   color: string;
 };
@@ -75,10 +76,10 @@ export const DEMO_CARDS: DemoCard[] = [
 ];
 
 const DIRECTORY: DemoPerson[] = [
-  { id: 'alex', name: 'Alex', username: 'alex', phone: '555-0101', initial: 'A', color: '#C4622D' },
-  { id: 'sam', name: 'Sam', username: 'sam', phone: '555-0102', initial: 'S', color: '#2F7D6D' },
-  { id: 'riley', name: 'Riley', username: 'riley', phone: '555-0148', initial: 'R', color: '#6D5BD0' },
-  { id: 'morgan', name: 'Morgan', username: 'morgan', phone: '555-0162', initial: 'M', color: '#B4536A' },
+  { id: 'alex', name: 'Alex', username: 'alex', phone: '555-0101', title: 'green witch', initial: 'A', color: '#C4622D' },
+  { id: 'sam', name: 'Sam', username: 'sam', phone: '555-0102', title: 'night owl', initial: 'S', color: '#2F7D6D' },
+  { id: 'riley', name: 'Riley', username: 'riley', phone: '555-0148', title: 'late bite', initial: 'R', color: '#6D5BD0' },
+  { id: 'morgan', name: 'Morgan', username: 'morgan', phone: '555-0162', title: 'soup season', initial: 'M', color: '#B4536A' },
 ];
 
 const YOU_COLOR = '#1F4E72';
@@ -216,6 +217,7 @@ export function DemoProvider({ children }: PropsWithChildren) {
     id: HOST_ID,
     name: 'You',
     username: username.trim().replace(/^@/, '') || 'jamie',
+    title: 'rice lover',
     initial: (profileName.trim().charAt(0) || 'Y').toUpperCase(),
     color: YOU_COLOR,
   }), [profileName, username]);
@@ -223,7 +225,7 @@ export function DemoProvider({ children }: PropsWithChildren) {
   const lookup = useMemo(() => {
     const all = new Map<string, DemoPerson>([[you.id, you], ...DIRECTORY.map((person) => [person.id, person] as const)]);
     return (id: string): DemoPerson => all.get(id) ?? {
-      id, name: 'Guest', username: id, initial: '?', color: colorsFallback,
+      id, name: 'Guest', username: id, title: '', initial: '?', color: colorsFallback,
     };
   }, [you]);
 

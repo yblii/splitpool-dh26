@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { formatMoney, summarizeSplitBill } from '@splitpool/contracts';
-import { AvatarStack, MemberAvatar } from '../components/people';
+import { MemberAvatar } from '../components/people';
 import { BottomSheet } from '../components/sheets';
 import { ReceiptPaper } from '../components/split-ui';
 import { monoFamily } from '../fonts';
@@ -59,8 +59,29 @@ export default function GroupDetailsScreen() {
     </Pressable>} />}
     footer={<Button title="Scan now" onPress={scan} />}
   >
-    <View style={[styles.row, { justifyContent: 'flex-start' }]}>
-      <AvatarStack people={members} size={36} />
+    {members.filter((member) => member.id === 'you').map((member) => <Pressable
+      key={member.id}
+      accessibilityRole="button"
+      accessibilityLabel={`Your profile, ${member.title}`}
+      onPress={() => router.push('/profile')}
+      style={youProfile}
+    >
+      <Text style={youTitle}>{member.title}</Text>
+      <MemberAvatar person={member} size={72} />
+      <Text style={styles.small}>{member.name}</Text>
+    </Pressable>)}
+    <View style={memberRow}>
+      {members.filter((member) => member.id !== 'you').map((member) => <Pressable
+        key={member.id}
+        accessibilityRole="button"
+        accessibilityLabel={`${member.name}, ${member.title}. Open profile.`}
+        onPress={() => router.push({ pathname: '/friend', params: { id: member.id } })}
+        style={memberProfile}
+      >
+        <MemberAvatar person={member} size={44} />
+        <Text style={memberName}>{member.name}</Text>
+        <Text style={[styles.small, { textAlign: 'center' }]}>{member.title}</Text>
+      </Pressable>)}
     </View>
     <ReceiptPaper title="Past splits" level="subheading">
       <View style={[styles.row, { paddingVertical: 6 }]}>
@@ -97,7 +118,10 @@ export default function GroupDetailsScreen() {
       {members.map((member) => <View key={member.id} style={[styles.row, { minHeight: 48 }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
           <MemberAvatar person={member} size={32} />
-          <Text style={styles.text}>{member.name}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.text}>{member.name}</Text>
+            {!!member.title && <Text style={styles.small}>{member.title}</Text>}
+          </View>
         </View>
         {member.id !== 'you' && <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${member.name}`} hitSlop={8} onPress={() => setMessage(demo.removeGroupMember(group.id, member.id) ?? `${member.name} was removed from this demo group.`)}>
           <Text style={[styles.link, { color: colors.danger }]}>Remove</Text>
@@ -113,5 +137,10 @@ export default function GroupDetailsScreen() {
   </Screen>;
 }
 
+const youProfile = { alignItems: 'center' as const, gap: 6, paddingTop: 4 };
+const youTitle = { fontFamily: 'Inter', fontSize: 21, lineHeight: 26, fontWeight: '600' as const, color: colors.ink, textAlign: 'center' as const };
+const memberRow = { flexDirection: 'row' as const, justifyContent: 'center' as const, gap: 28 };
+const memberProfile = { alignItems: 'center' as const, gap: 4, minWidth: 88, minHeight: 44 };
+const memberName = { fontFamily: 'Inter', fontSize: 16, lineHeight: 21, fontWeight: '600' as const, color: colors.ink };
 const splitRow = { minHeight: 48, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, borderTopWidth: 1, borderStyle: 'dashed' as const, borderColor: '#E4D5C2' };
 const money = { fontFamily: monoFamily, width: 80, textAlign: 'right' as const, color: colors.ink, fontWeight: '700' as const };

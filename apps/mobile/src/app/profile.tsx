@@ -53,6 +53,7 @@ export default function ProfileScreen() {
 
   return <Screen header={<AppHeader title="Profile" onBack={() => router.back()} />}>
     <View style={{ alignItems: 'center', gap: 8, paddingTop: 8 }}>
+      <Text style={[styles.subheading, { textAlign: 'center' }]}>{demo.you.title}</Text>
       <MemberAvatar person={demo.you} size={88} />
       <Text style={styles.title}>{demo.profileName || 'You'}</Text>
       <Text style={styles.subtitle}>@{demo.username} · shown as You on bills</Text>

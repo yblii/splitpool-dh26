@@ -15,6 +15,7 @@ export default function FriendScreen() {
   return <Screen header={<AppHeader title="Friend" onBack={() => router.back()} />}>
     {!friend || !known ? <EmptyState title="Friend not found" body="Add them from Groups with a demo username or phone number." /> : <>
       <View style={{ alignItems: 'center', gap: 8, paddingVertical: 8 }}>
+        {!!friend.title && <Text style={[styles.subheading, { textAlign: 'center' }]}>{friend.title}</Text>}
         <MemberAvatar person={friend} size={84} />
         <Text style={styles.title}>{friend.name}</Text>
         <Text style={styles.subtitle}>@{friend.username}{friend.phone ? ` · ${friend.phone}` : ''}</Text>
