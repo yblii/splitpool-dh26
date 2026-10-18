@@ -4,7 +4,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { formatMoney } from '@splitpool/contracts';
 import { AvatarStack, MemberAvatar } from '../components/people';
 import { BottomSheet } from '../components/sheets';
-import { AppHeader, Button, Card, ErrorBanner, Screen, colors, styles } from '../components/ui';
+import { ReceiptPaper } from '../components/split-ui';
+import { AppHeader, Button, ErrorBanner, Screen, colors, styles } from '../components/ui';
 import { billStatusLabel, useDemo } from '../state/demo';
 
 export default function GroupDetailsScreen() {
@@ -45,47 +46,38 @@ export default function GroupDetailsScreen() {
     header={<AppHeader title={group.name} onBack={() => router.back()} right={<Pressable accessibilityRole="button" accessibilityLabel="Edit group" hitSlop={8} onPress={() => { setMessage(null); setEditing(true); }} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}>
       <Text style={styles.link}>Edit</Text>
     </Pressable>} />}
-    footer={<Button title="New bill" onPress={scan} />}
+    footer={<Button title="Scan now" onPress={scan} />}
   >
-    <View style={{ gap: 8 }}>
-      <Text style={styles.title}>{group.name}</Text>
-      <View style={[styles.row, { justifyContent: 'flex-start' }]}>
-        <AvatarStack people={members} size={36} />
-        <Text style={styles.subtitle}>{members.length} {members.length === 1 ? 'member' : 'members'}</Text>
-      </View>
+    <View style={[styles.row, { justifyContent: 'flex-start' }]}>
+      <AvatarStack people={members} size={36} />
     </View>
-    <Button title="Add member" secondary onPress={() => { setMessage(null); setEditing(true); }} />
-
-    {bill && bill.phase !== 'paid' && <Pressable accessibilityRole="button" onPress={openBill} style={({ pressed }) => [{ opacity: pressed ? 0.86 : 1 }]}>
-      <Card>
-        <Text style={styles.label}>Continue</Text>
-        <Text style={styles.heading}>{bill.phase === 'editing' ? 'Continue splitting' : bill.phase === 'review' ? 'Review approvals' : 'View payment'}</Text>
-        <Text style={styles.text}>{bill.merchant}</Text>
-        <Text style={styles.small}>{billStatusLabel(bill.phase)} · {formatMoney(bill.printedTotalCents)}</Text>
-      </Card>
-    </Pressable>}
-
-    <View style={{ gap: 10 }}>
-      <Text style={styles.heading}>Previous bills</Text>
-      {past.length === 0 && <Text style={styles.small}>No earlier bills for this group.</Text>}
+    <ReceiptPaper title="Past splits">
+      <View style={[styles.row, { paddingVertical: 6 }]}>
+        <Text style={[styles.small, { flex: 1 }]} />
+        <Text style={[styles.small, { width: 72, textAlign: 'right' }]}>Total</Text>
+        <Text style={[styles.small, { width: 72, textAlign: 'right' }]}>You pay</Text>
+      </View>
+      {bill && bill.phase !== 'paid' && <Pressable accessibilityRole="button" accessibilityLabel={`Continue ${bill.merchant}, ${billStatusLabel(bill.phase)}`} onPress={openBill} style={splitRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.text, { fontWeight: '700' }]} numberOfLines={1}>{bill.merchant}</Text>
+          <Text style={styles.small}>{billStatusLabel(bill.phase)}</Text>
+        </View>
+        <Text style={money}>{formatMoney(bill.printedTotalCents)}</Text>
+        <Text style={[money, { color: colors.primary }]}>Open</Text>
+      </Pressable>}
+      {past.length === 0 && !bill && <Text style={styles.small}>No earlier bills yet.</Text>}
       {past.map((entry) => <Pressable
         key={entry.id}
         accessibilityRole="button"
-        accessibilityLabel={`${entry.merchant}, ${entry.dateLabel}, paid`}
+        accessibilityLabel={`${entry.merchant}, total ${formatMoney(entry.totalCents)}, you paid ${formatMoney(entry.yourShareCents)}`}
         onPress={() => router.push({ pathname: '/history', params: { id: entry.id } })}
-        style={{ backgroundColor: colors.paper, borderRadius: 18, borderWidth: 1, borderColor: colors.border, padding: 14, gap: 4 }}
+        style={splitRow}
       >
-        <View style={styles.row}>
-          <Text style={[styles.text, { fontWeight: '700', flex: 1 }]}>{entry.merchant}</Text>
-          <Text style={styles.small}>{entry.dateLabel}</Text>
-        </View>
-        <View style={styles.row}>
-          <Text style={styles.small}>Group total {formatMoney(entry.totalCents)}</Text>
-          <Text style={styles.small}>You paid {formatMoney(entry.yourShareCents)}</Text>
-        </View>
-        <Text style={[styles.small, { color: colors.success, fontWeight: '700' }]}>Paid</Text>
+        <Text style={[styles.text, { flex: 1 }]} numberOfLines={1}>{entry.merchant}</Text>
+        <Text style={money}>{formatMoney(entry.totalCents)}</Text>
+        <Text style={money}>{formatMoney(entry.yourShareCents)}</Text>
       </Pressable>)}
-    </View>
+    </ReceiptPaper>
 
     <BottomSheet visible={editing} title="Edit group" onClose={() => setEditing(false)} footer={<Button title="Done" onPress={() => setEditing(false)} />}>
       <Text style={styles.label}>Group name</Text>
@@ -110,3 +102,6 @@ export default function GroupDetailsScreen() {
     </BottomSheet>
   </Screen>;
 }
+
+const splitRow = { minHeight: 48, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, borderTopWidth: 1, borderStyle: 'dashed' as const, borderColor: '#E4D5C2' };
+const money = { width: 72, textAlign: 'right' as const, color: colors.ink, fontWeight: '700' as const };

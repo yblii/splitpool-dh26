@@ -10,7 +10,9 @@ import {
   type ExtractedReceipt,
   type ReceiptDraftInput,
 } from '@splitpool/contracts';
-import { AppHeader, Button, Card, ErrorBanner, Screen, colors, styles } from '../components/ui';
+import { CenterDialog } from '../components/sheets';
+import { ReceiptPaper } from '../components/split-ui';
+import { AppHeader, Button, Screen, colors, styles } from '../components/ui';
 import { useDemo } from '../state/demo';
 
 function centsToInput(cents: number) {
@@ -51,7 +53,9 @@ function ReviewEditor({ seed, onCancel, onSave }: {
 }) {
   const [draft, setDraft] = useState<ReceiptDraftInput>(() => extractedToEditable(seed));
   const [money, setMoney] = useState<MoneyFields>(() => moneyFieldsFromDraft(extractedToEditable(seed)));
-  const [openIndex, setOpenIndex] = useState(0);
+  const [openIndex, setOpenIndex] = useState(-1);
+  const [chargesOpen, setChargesOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const reconciliation = useMemo(() => reconcileReceipt(draft), [draft]);
   const sample = seed.source === 'sample-demo' || seed.source === 'sample-fallback' || seed.warnings.includes('provider_unavailable') || seed.warnings.includes('parse_failed');
 
@@ -81,72 +85,61 @@ function ReviewEditor({ seed, onCancel, onSave }: {
     setOpenIndex(0);
   }
 
+  const mismatch = !reconciliation.matchesPrintedTotal
+    ? `Items, tax, and tip come to ${formatMoney(reconciliation.computedTotalCents)}. The printed total is ${formatMoney(draft.printedTotalCents)}.`
+    : null;
+
   return <Screen
-    header={<AppHeader title="Review" onBack={onCancel} />}
-    footer={<Button title="Start splitting" disabled={draft.items.length === 0} onPress={() => onSave(draft)} />}
+    header={<AppHeader title="Receipt" onBack={onCancel} />}
+    footer={<Button title="Confirm" disabled={draft.items.length === 0 || !!mismatch} onPress={() => setConfirming(true)} />}
   >
-    <View style={{ gap: 6 }}>
-      <Text style={styles.title}>Check the items</Text>
-      <Text style={styles.subtitle}>Fix names and prices before anyone claims them.</Text>
-    </View>
-    {sample && <ErrorBanner title="Sample receipt" message="These rows are a demo fixture. They were not extracted by a scanner or an OCR service." />}
-    {!reconciliation.matchesPrintedTotal && <ErrorBanner
-      title="Total does not match"
-      message={`Items, tax, tip, and service come to ${formatMoney(reconciliation.computedTotalCents)}. The printed total is ${formatMoney(draft.printedTotalCents)}. You can still start splitting, but the bill cannot be finalized until they match.`}
-    />}
-    <Card>
-      <Text style={styles.label}>Restaurant</Text>
+    {sample && <Text style={styles.small}>Sample items for the demo. They were not read by a scanner.</Text>}
+    <ReceiptPaper title={draft.merchant || 'Receipt'} alert={mismatch}>
       <TextInput accessibilityLabel="Restaurant" value={draft.merchant} onChangeText={(merchant) => setDraft((current) => ({ ...current, merchant }))} style={styles.input} />
-    </Card>
-    <View style={{ gap: 10 }}>
       {draft.items.map((item, index) => {
         const open = openIndex === index;
-        return <View key={`${item.id ?? 'row'}-${index}`} style={{ backgroundColor: colors.paper, borderRadius: 18, borderWidth: 1, borderColor: colors.border, padding: 14, gap: 10 }}>
-          <View style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.text, { fontWeight: '700' }]}>{item.name || 'New item'}</Text>
-              <Text style={styles.small}>Qty {item.quantity} · {formatMoney(item.netLineTotalCents)}</Text>
-            </View>
-            <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${item.name || 'item'}`} hitSlop={8} onPress={() => setOpenIndex(open ? -1 : index)}>
-              <Text style={styles.link}>{open ? 'Close' : 'Edit'}</Text>
-            </Pressable>
-          </View>
-          {open && <>
+        return <View key={`${item.id ?? 'row'}-${index}`} style={line}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`${item.name || 'Item'}, ${formatMoney(item.netLineTotalCents)}. Edit.`} onPress={() => setOpenIndex(open ? -1 : index)} style={styles.row}>
+            <Text style={[styles.text, { flex: 1, fontWeight: '700' }]} numberOfLines={1}>{item.name || 'New item'}</Text>
+            <Text style={price}>{formatMoney(item.netLineTotalCents)}</Text>
+          </Pressable>
+          {open && <View style={{ gap: 8, paddingBottom: 8 }}>
             <TextInput accessibilityLabel={`Item ${index + 1} name`} value={item.name} onChangeText={(name) => patchItem(index, { name })} placeholder="Item name" placeholderTextColor={colors.muted} style={styles.input} />
             <View style={styles.row}>
-              <View style={{ flex: 1, gap: 6 }}>
-                <Text style={styles.label}>Quantity</Text>
-                <TextInput accessibilityLabel={`Item ${index + 1} quantity`} keyboardType="number-pad" value={money.itemQuantities[index] ?? '1'} onChangeText={(value) => {
-                  setMoney((current) => ({ ...current, itemQuantities: current.itemQuantities.map((entry, itemIndex) => itemIndex === index ? value : entry) }));
-                  patchItem(index, { quantity: inputToQuantity(value) });
-                }} style={styles.input} />
-              </View>
-              <View style={{ flex: 1.4, gap: 6 }}>
-                <Text style={styles.label}>Price</Text>
-                <TextInput accessibilityLabel={`Item ${index + 1} price`} keyboardType="decimal-pad" value={money.itemTotals[index] ?? '0.00'} onChangeText={(value) => {
-                  setMoney((current) => ({ ...current, itemTotals: current.itemTotals.map((entry, itemIndex) => itemIndex === index ? value : entry) }));
-                  patchItem(index, { netLineTotalCents: inputToCents(value) });
-                }} style={styles.input} />
-              </View>
+              <TextInput accessibilityLabel={`Item ${index + 1} quantity`} keyboardType="number-pad" value={money.itemQuantities[index] ?? '1'} onChangeText={(value) => {
+                setMoney((current) => ({ ...current, itemQuantities: current.itemQuantities.map((entry, itemIndex) => itemIndex === index ? value : entry) }));
+                patchItem(index, { quantity: inputToQuantity(value) });
+              }} style={[styles.input, { flex: 1 }]} />
+              <TextInput accessibilityLabel={`Item ${index + 1} price`} keyboardType="decimal-pad" value={money.itemTotals[index] ?? '0.00'} onChangeText={(value) => {
+                setMoney((current) => ({ ...current, itemTotals: current.itemTotals.map((entry, itemIndex) => itemIndex === index ? value : entry) }));
+                patchItem(index, { netLineTotalCents: inputToCents(value) });
+              }} style={[styles.input, { flex: 1.4 }]} />
             </View>
-            <Pressable accessibilityRole="button" onPress={() => removeItem(index)} hitSlop={8}><Text style={[styles.link, { color: colors.danger }]}>Delete item</Text></Pressable>
-          </>}
+            <Pressable accessibilityRole="button" onPress={() => removeItem(index)} hitSlop={8}><Text style={[styles.link, { color: colors.danger }]}>Delete</Text></Pressable>
+          </View>}
         </View>;
       })}
-      <Button title="Add missing item" secondary onPress={addItem} />
-    </View>
-    <Card>
-      <Text style={styles.heading}>Receipt totals</Text>
-      <MoneyRow label="Subtotal" value={formatMoney(reconciliation.itemsSubtotalCents)} />
+      <Pressable accessibilityRole="button" onPress={addItem} style={{ minHeight: 44, justifyContent: 'center' }}>
+        <Text style={styles.link}>Add item</Text>
+      </Pressable>
+      <View style={[styles.row, { paddingVertical: 8 }]}>
+        <Text style={styles.text}>Group total</Text>
+        <Text style={[styles.heading, { fontVariant: ['tabular-nums'] }]}>{formatMoney(reconciliation.computedTotalCents)}</Text>
+      </View>
+    </ReceiptPaper>
+    <Pressable accessibilityRole="button" accessibilityState={{ expanded: chargesOpen }} onPress={() => setChargesOpen((current) => !current)} style={{ minHeight: 44, justifyContent: 'center' }}>
+      <Text style={styles.text}>{chargesOpen ? '⌄' : '›'} Tax and tip</Text>
+    </Pressable>
+    {chargesOpen && <View style={{ gap: 10 }}>
       <LabeledMoney label="Tax" accessibilityLabel="Tax" value={money.tax} onChange={(value) => {
         setMoney((current) => ({ ...current, tax: value }));
         setDraft((current) => ({ ...current, taxCents: inputToCents(value) }));
       }} />
-      <LabeledMoney label="Tip already on the receipt" accessibilityLabel="Tip" value={money.tip} onChange={(value) => {
+      <LabeledMoney label="Tip" accessibilityLabel="Tip" value={money.tip} onChange={(value) => {
         setMoney((current) => ({ ...current, tip: value }));
         setDraft((current) => ({ ...current, tipCents: inputToCents(value) }));
       }} />
-      <LabeledMoney label="Service charge" accessibilityLabel="Service charge" value={money.service} onChange={(value) => {
+      <LabeledMoney label="Service" accessibilityLabel="Service charge" value={money.service} onChange={(value) => {
         setMoney((current) => ({ ...current, service: value }));
         setDraft((current) => ({ ...current, serviceChargeCents: inputToCents(value) }));
       }} />
@@ -154,22 +147,24 @@ function ReviewEditor({ seed, onCancel, onSave }: {
         setMoney((current) => ({ ...current, printedTotal: value }));
         setDraft((current) => ({ ...current, printedTotalCents: inputToCents(value) }));
       }} />
-      <MoneyRow label="Computed total" value={formatMoney(reconciliation.computedTotalCents)} strong />
-    </Card>
+    </View>}
+    <CenterDialog visible={confirming} title="Once confirmed" onClose={() => setConfirming(false)}>
+      <Text style={styles.text}>These prices lock. People in the group can start selecting items, and the receipt can’t be edited after that.</Text>
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <View style={{ flex: 1 }}><Button title="Go back" secondary onPress={() => setConfirming(false)} /></View>
+        <View style={{ flex: 1 }}><Button title="Confirm" onPress={() => { setConfirming(false); onSave(draft); }} /></View>
+      </View>
+    </CenterDialog>
   </Screen>;
 }
+
+const line = { borderTopWidth: 1, borderStyle: 'dashed' as const, borderColor: '#E4D5C2', paddingTop: 8 };
+const price = { color: colors.ink, fontWeight: '700' as const, fontSize: 16 };
 
 function LabeledMoney({ label, value, onChange, accessibilityLabel }: { label: string; value: string; onChange: (value: string) => void; accessibilityLabel: string }) {
   return <View style={{ gap: 6 }}>
     <Text style={styles.label}>{label}</Text>
     <TextInput accessibilityLabel={accessibilityLabel} keyboardType="decimal-pad" value={value} onChangeText={onChange} style={styles.input} />
-  </View>;
-}
-
-function MoneyRow({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
-  return <View style={styles.row}>
-    <Text style={strong ? styles.heading : styles.text}>{label}</Text>
-    <Text style={strong ? styles.heading : styles.text}>{value}</Text>
   </View>;
 }
 

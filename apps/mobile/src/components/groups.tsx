@@ -1,31 +1,56 @@
+import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { AvatarStack, type AvatarPerson } from './people';
 import { colors, styles } from './ui';
 
-export function GroupCard({ name, members, meta, detail, onPress }: {
+const PAPER = '#FFFDF8';
+const TOOTH = 22;
+
+export function GroupCard({ name, members, pinned, hideLabel = 'Hide', onPress, onPin, onHide }: {
   name: string;
   members: AvatarPerson[];
-  meta: string;
-  detail?: string;
+  pinned?: boolean;
+  hideLabel?: string;
   onPress: () => void;
+  onPin: () => void;
+  onHide: () => void;
 }) {
-  return <Pressable
-    accessibilityRole="button"
-    accessibilityLabel={`${name}, ${meta}${detail ? `, ${detail}` : ''}`}
-    onPress={onPress}
-    style={({ pressed }) => [{
-      backgroundColor: colors.paper, borderRadius: 20, borderWidth: 1, borderColor: colors.border,
-      padding: 16, gap: 12, opacity: pressed ? 0.86 : 1,
-    }]}
+  return <View>
+    <View style={{ backgroundColor: PAPER, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10, gap: 10 }}>
+      <View style={styles.row}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Open ${name}${pinned ? ', pinned' : ''}`} onPress={onPress} style={{ flex: 1, minHeight: 36, justifyContent: 'center' }}>
+          <Text style={styles.heading}>{name}</Text>
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={pinned ? `Unpin ${name}` : `Pin ${name}`} hitSlop={8} onPress={onPin} style={{ minHeight: 36, justifyContent: 'center', paddingHorizontal: 4 }}>
+          <Text style={{ color: pinned ? colors.primary : colors.muted, fontWeight: '700', fontSize: 13 }}>{pinned ? 'Pinned' : 'Pin'}</Text>
+        </Pressable>
+      </View>
+      <View style={[styles.row, { justifyContent: 'flex-start' }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Open ${name}`} onPress={onPress}>
+          <AvatarStack people={members} />
+        </Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={`${hideLabel} ${name}`} hitSlop={8} onPress={onHide}>
+          <Text style={[styles.small, { fontWeight: '700' }]}>{hideLabel}</Text>
+        </Pressable>
+      </View>
+    </View>
+    <ReceiptTeeth />
+  </View>;
+}
+
+function ReceiptTeeth() {
+  const [count, setCount] = useState(24);
+  return <View
+    onLayout={(event) => {
+      const next = Math.max(10, Math.floor(event.nativeEvent.layout.width / TOOTH));
+      setCount((current) => current === next ? current : next);
+    }}
+    style={{ flexDirection: 'row', height: 16, overflow: 'hidden', backgroundColor: '#E7D3B8' }}
   >
-    <View style={styles.row}>
-      <Text style={[styles.heading, { flex: 1 }]}>{name}</Text>
-      <Text style={{ color: colors.muted, fontSize: 22, lineHeight: 24 }} accessibilityElementsHidden importantForAccessibility="no">›</Text>
-    </View>
-    <View style={[styles.row, { justifyContent: 'flex-start' }]}>
-      <AvatarStack people={members} />
-      <Text style={styles.small}>{meta}</Text>
-    </View>
-    {detail ? <Text style={styles.text}>{detail}</Text> : null}
-  </Pressable>;
+    {Array.from({ length: count }, (_, index) => <View key={index} style={{
+      width: 0, height: 0,
+      borderLeftWidth: TOOTH / 2, borderRightWidth: TOOTH / 2, borderTopWidth: 16,
+      borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: PAPER,
+    }} />)}
+  </View>;
 }

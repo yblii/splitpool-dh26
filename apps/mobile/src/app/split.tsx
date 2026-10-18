@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Text } from 'react-native';
 import { router } from 'expo-router';
 import { AvatarStack, PersonSwitcher } from '../components/people';
-import { BillSummary, CustomSplitSheet, ReceiptItemCard } from '../components/split-ui';
+import { BillSummary, ReceiptItemCard, ReceiptPaper } from '../components/split-ui';
 import { AppHeader, EmptyState, ErrorBanner, Screen, styles } from '../components/ui';
 import { billStatusLabel, useDemo } from '../state/demo';
 
@@ -10,7 +10,15 @@ export default function SplitScreen() {
   const demo = useDemo();
   const bill = demo.currentBill;
   const summary = demo.summary;
-  const [customId, setCustomId] = useState<string | null>(null);
+  const [percentId, setPercentId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [alert, setAlert] = useState<string | null>(null);
+  const [scopedPerson, setScopedPerson] = useState(demo.personId);
+  if (scopedPerson !== demo.personId) {
+    setScopedPerson(demo.personId);
+    setPercentId(null);
+    setAlert(null);
+  }
   const editable = bill?.phase === 'editing';
   const viewerTotal = summary?.people.find((person) => person.id === demo.personId);
 
@@ -20,8 +28,12 @@ export default function SplitScreen() {
     </Screen>;
   }
 
-  const customItem = bill.items.find((item) => item.id === customId) ?? null;
   const yourCents = viewerTotal?.totalCents ?? 0;
+  const overflow = summary.resolutions.find((entry) => entry.resolution.status === 'overallocated' || entry.resolution.status === 'incomplete');
+  const overflowName = bill.items.find((item) => item.id === overflow?.itemId)?.name;
+  const overflowMessage = overflow
+    ? overflow.resolution.message ?? `${overflowName ?? 'An item'} still has an open portion.`
+    : null;
 
   return <Screen
     header={<AppHeader
@@ -40,39 +52,55 @@ export default function SplitScreen() {
       note={summary.itemsComplete ? undefined : 'Tax and tip join your total once every item is fully allocated.'}
     />}
   >
-    <View style={{ gap: 4 }}>
-      <Text style={styles.title}>{bill.merchant}</Text>
-      <Text style={styles.subtitle}>{billStatusLabel(bill.phase)} · Tap an item to claim it. Another person splits it evenly. Swipe left to customize your share.</Text>
-    </View>
+    <Text style={styles.subtitle}>{billStatusLabel(bill.phase)} · Tap a line to claim it. Slide it left, then enter your %.</Text>
     {!editable && <ErrorBanner title="Claims are locked" message="This bill is past editing. Reopen it from review, before collection, if you still need to change shares." />}
     <PersonSwitcher people={demo.members} value={demo.personId} onChange={demo.setPerson} />
-    <View style={{ gap: 12 }}>
+    <ReceiptPaper title={bill.merchant} dimTitle={!!percentId} alert={alert ?? overflowMessage}>
       {bill.items.map((item) => {
         const resolution = summary.resolutions.find((entry) => entry.itemId === item.id)?.resolution;
         if (!resolution) return null;
+        const mine = resolution.portions.some((portion) => portion.personId === demo.personId);
         return <ReceiptItemCard
           key={item.id}
           item={item}
           resolution={resolution}
           people={demo.members}
+          roster={demo.viewingGroup.memberIds}
           viewerId={demo.personId}
           editable={!!editable}
-          onClaim={() => demo.claimItem(item.id)}
-          onCustomize={() => setCustomId(item.id)}
-          onLeave={() => demo.unclaimItem(item.id)}
+          faded={!!percentId && percentId !== item.id}
+          percentOpen={percentId === item.id}
+          expanded={openId === item.id && percentId !== item.id}
+          onClaim={() => {
+            demo.claimItem(item.id);
+            setOpenId(item.id);
+          }}
+          onOpen={() => setOpenId(openId === item.id ? null : item.id)}
+          onEditPercent={() => {
+            if (!mine) demo.claimItem(item.id);
+            setOpenId(null);
+            setAlert(null);
+            setPercentId(item.id);
+          }}
+          onSavePercent={(basisPoints) => {
+            const message = demo.customizeItem(item.id, basisPoints);
+            if (message) {
+              setAlert(message);
+              return message;
+            }
+            setAlert(null);
+            setPercentId(null);
+            setOpenId(item.id);
+            return null;
+          }}
+          onCancelPercent={() => { setPercentId(null); setAlert(null); }}
+          onLeave={() => {
+            demo.unclaimItem(item.id);
+            setOpenId(null);
+            setPercentId(null);
+          }}
         />;
       })}
-    </View>
-    <CustomSplitSheet
-      visible={!!customItem && !!editable}
-      item={customItem}
-      people={demo.members}
-      roster={demo.viewingGroup.memberIds}
-      viewerId={demo.personId}
-      onClose={() => setCustomId(null)}
-      onSave={(basisPoints) => customItem ? demo.customizeItem(customItem.id, basisPoints) : 'That item is gone.'}
-      onReset={() => { if (customItem) demo.resetItem(customItem.id); }}
-      onLeave={() => { if (customItem) demo.unclaimItem(customItem.id); }}
-    />
+    </ReceiptPaper>
   </Screen>;
 }

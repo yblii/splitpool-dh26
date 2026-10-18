@@ -34,22 +34,22 @@ export default function ReceiptScreen() {
       const result = camera ? await ImagePicker.launchCameraAsync(options) : await ImagePicker.launchImageLibraryAsync(options);
       if (!result.canceled) {
         const asset = result.assets[0];
-        setPicked({ uri: asset.uri, mimeType: asset.mimeType ?? undefined, fileName: asset.fileName ?? undefined });
+        const photo = { uri: asset.uri, mimeType: asset.mimeType ?? undefined, fileName: asset.fileName ?? undefined };
+        setPicked(photo);
         setSampleArmed(false);
-        setNote('Photo selected. Continuing uses a sample receipt unless the local parser is configured. The sample is not read from this photo.');
+        await continueReview(photo);
       }
     } catch {
       setSampleArmed(true);
       setPicked(undefined);
       setNote('Photos could not be opened. A sample receipt is ready instead.');
+      openSample();
     }
   }
 
   function useSample() {
     if (Platform.OS === 'web') {
-      setSampleArmed(true);
-      setPicked(undefined);
-      setNote('Camera preview is not available here. This is a sample receipt, not a scan.');
+      openSample();
       return;
     }
     void pick(true);
@@ -60,13 +60,13 @@ export default function ReceiptScreen() {
     router.push('/receipt-review');
   }
 
-  async function continueReview() {
+  async function continueReview(photo: PickedReceipt | undefined = picked) {
     const existing = demo.billFor(group.id);
     if (existing && existing.phase !== 'editing' && existing.phase !== 'paid') {
       Alert.alert('Bill locked', 'Finish the current demo payment, or reset the demo, before replacing this bill.');
       return;
     }
-    if (!picked) {
+    if (!photo) {
       openSample();
       return;
     }
@@ -77,7 +77,7 @@ export default function ReceiptScreen() {
     }
     setBusy(true);
     try {
-      const { draft, usedFallback } = await extractReceiptFromImage(picked);
+      const { draft, usedFallback } = await extractReceiptFromImage(photo);
       if (usedFallback) {
         setNote('Live parsing was unavailable. Sample items were loaded, and they were not read from your photo.');
         demo.setPendingReceipt(draft.source === 'sample-fallback' ? { ...makeSplitDemoReceipt(), warnings: draft.warnings } : draft);
@@ -95,14 +95,19 @@ export default function ReceiptScreen() {
     }
   }
 
-  const ready = !!picked || sampleArmed;
-
   return <Screen
-    header={<AppHeader title="Receipt" onBack={() => router.back()} />}
-    footer={<>
-      <Button title={busy ? 'Working…' : ready ? 'Continue to review' : 'Capture a receipt first'} disabled={busy || !ready} onPress={() => void continueReview()} />
-      <Button title="Use sample receipt" secondary disabled={busy} onPress={() => { setSampleArmed(true); setPicked(undefined); setNote('Sample receipt ready. These items are typed in for the demo, not scanned.'); }} />
-    </>}
+    header={<AppHeader title="Scan" onBack={() => router.back()} />}
+    footer={<View style={local.controls}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Choose from photo album" disabled={busy} onPress={() => void pick(false)} style={local.sideButton}>
+        <Text style={local.sideText}>Album</Text>
+      </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel="Capture receipt" disabled={busy} onPress={useSample} style={local.shutter}>
+        <View style={local.shutterInner} />
+      </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Group ${group.name}. Change group.`} disabled={busy} onPress={() => setPickingGroup(true)} style={local.sideButton}>
+        <Text style={local.sideText} numberOfLines={2}>{group.name}</Text>
+      </Pressable>
+    </View>}
   >
     <View style={local.finder}>
       {picked ? <Image source={{ uri: picked.uri }} accessibilityLabel="Selected receipt preview" style={local.preview} resizeMode="contain" /> : sampleArmed ? <View style={local.sample}>
@@ -117,17 +122,7 @@ export default function ReceiptScreen() {
       </View>}
     </View>
     {note && <ErrorBanner title="Demo receipt" message={note} />}
-    <View style={local.controls}>
-      <Pressable accessibilityRole="button" accessibilityLabel="Choose from gallery" onPress={() => void pick(false)} style={local.sideButton}>
-        <Text style={local.sideText}>Gallery</Text>
-      </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel="Capture receipt" onPress={useSample} style={local.shutter}>
-        <View style={local.shutterInner} />
-      </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Group ${group.name}. Change group.`} onPress={() => setPickingGroup(true)} style={local.sideButton}>
-        <Text style={local.sideText} numberOfLines={2}>{group.name}</Text>
-      </Pressable>
-    </View>
+    {busy && <Text style={local.busy}>Reading the photo…</Text>}
     <BottomSheet visible={pickingGroup} title="Group for this bill" onClose={() => setPickingGroup(false)}>
       {demo.groups.map((entry) => <Button key={entry.id} title={entry.id === group.id ? `${entry.name} · selected` : entry.name} secondary={entry.id !== group.id} onPress={() => { demo.selectReceiptGroup(entry.id); demo.selectGroup(entry.id); setPickingGroup(false); }} />)}
     </BottomSheet>
@@ -146,6 +141,7 @@ const local = StyleSheet.create({
   sampleLine: { color: 'rgba(255,255,255,0.86)', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 14, lineHeight: 22 },
   sampleTotal: { color: '#FFFFFF', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontSize: 14, lineHeight: 22, fontWeight: '700', marginTop: 8 },
   sampleNote: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 10 },
+  busy: { color: colors.ink, fontSize: 14, fontWeight: '600' },
   controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 },
   sideButton: { width: 88, minHeight: 64, borderRadius: 16, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
   sideText: { color: colors.ink, fontWeight: '700', textAlign: 'center', fontSize: 13, lineHeight: 18 },
