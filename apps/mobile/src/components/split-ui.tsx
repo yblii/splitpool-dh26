@@ -12,7 +12,7 @@ import {
   type ItemVisualState,
   type SplitLine,
 } from '@splitpool/contracts';
-import { monoFamily } from '../fonts';
+import { interItalic, monoFamily } from '../fonts';
 import { MemberAvatar, type AvatarPerson } from './people';
 import { BottomSheet } from './sheets';
 import { Button, colors, moneyMark, styles, useReduceMotion } from './ui';
@@ -297,7 +297,7 @@ export function ReceiptItemCard({
             <Text style={cardStyles.alertText}>{fieldError}</Text>
           </View> : null}
           <Pressable accessibilityRole="button" hitSlop={8} onPress={onCancelPercent}><Text style={styles.link}>Cancel</Text></Pressable>
-        </View> : <View style={[cardStyles.line, visual === 'error' && cardStyles.errorLine]}>
+        </View> : <View style={[cardStyles.line, visual === 'error' && cardStyles.errorLine, visual !== 'unclaimed' && visual !== 'error' && cardStyles.claimedLine]}>
           <View style={cardStyles.hatch}>
             {hatch.map((color, index) => <View key={`${color}-${index}`} style={{ flex: 1, backgroundColor: color }} />)}
           </View>
@@ -329,7 +329,7 @@ export function ReceiptItemCard({
             style={cardStyles.lineMain}
           >
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={cardStyles.name} numberOfLines={1}>{expanded && visual !== 'unclaimed' ? `✓ ${item.name}` : item.name}</Text>
+              <Text style={[cardStyles.name, visual !== 'unclaimed' && visual !== 'error' && cardStyles.claimedName]} numberOfLines={1}>{expanded && visual !== 'unclaimed' ? `✓ ${item.name}` : item.name}</Text>
               <Text style={cardStyles.meta}>
                 {status.lead}
                 {status.money ? <Text {...moneyMark} style={cardStyles.metaMoney}>{status.money}</Text> : null}
@@ -641,6 +641,13 @@ const cardStyles = StyleSheet.create({
   },
   lineMain: { flex: 1, minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
   errorLine: { backgroundColor: '#FBF4EA' },
+  claimedLine: { backgroundColor: colors.light },
+  claimedName: {
+    ...Platform.select({
+      web: { fontStyle: 'italic' as const },
+      default: { fontFamily: interItalic, fontStyle: 'normal' as const },
+    }),
+  },
   hatch: { width: 10, alignSelf: 'stretch', borderRadius: 2, overflow: 'hidden' },
   chevronHit: { minWidth: 32, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   chevron: { color: colors.muted, fontSize: 18, lineHeight: 22, width: 14, textAlign: 'center' },
