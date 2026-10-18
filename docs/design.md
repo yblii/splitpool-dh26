@@ -10,12 +10,18 @@ Scope: USD, one receipt and one active bill per group, and one merchant payment 
 | --- | --- |
 | Mobile app | React Native, Expo, TypeScript, Expo Router |
 | Backend | Node.js, Fastify, TypeScript; one API service with a small background worker |
-| Identity and data | Supabase Auth, PostgreSQL, private Storage |
-| Shared bill updates | Supabase Realtime; server remains authoritative |
+| Identity | Supabase Auth |
+| Application data | Tiger Data managed PostgreSQL; accessed through the Fastify API |
+| Receipt images | Supabase private Storage |
+| Shared bill updates | Authenticated API polling for the MVP; server remains authoritative |
 | Receipt parsing | Server-side OCR/vision provider behind a replaceable adapter |
 | Payments | Stripe React Native SDK for linking/collection; issuer adapter or simulator for merchant payment |
 
 All APIs below use `/api/v1` and authenticated access except signed provider webhooks. The API validates identity, group membership, and host permissions. Monetary values are integer cents, calculated on the server. Provider secrets stay on the backend.
+
+Tiger Data stores application profiles, groups, memberships, bills, claims, receipt metadata, and payment state. Fastify verifies Supabase access tokens and maps their user IDs to application profiles. Supabase Auth identities live separately from Tiger Data, so identity linkage is validated by the API rather than a cross-database foreign key. All application reads and writes go through authorized API routes; clients never receive database credentials. Receipt image access uses short-lived URLs issued after the API checks group membership and host permissions for uploads.
+
+For the hackathon, use one small Tiger Data database with no optional paid replicas or other paid extras. Check the free-service or trial terms shown at signup, monitor usage, and export data before trial expiry if needed. Keep image bytes in private Storage and use standard PostgreSQL migrations so the application data remains portable. See [Tiger Data pricing](https://www.tigerdata.com/pricing) for current costs. The API can run locally for the demo; cloud compute hosting is optional and billed separately.
 
 ## 1. User authentication, profiles, and payment linking
 
@@ -78,15 +84,19 @@ Each item price is its full line total, including quantity. Show existing gratui
 
 The creator is the host. Invitees sign in and explicitly join; app links resume the invitation after sign-in. Each group has one active bill whose payer roster is explicit. Members modify their own claims; the host manages receipt corrections, payer roster, tax, and tip settings.
 
+Group membership and bill payer rosters are dynamic and use real user IDs. The starter's three fixed participants are demo fixtures, not a product limit. Support multiple groups and variable roster sizes; calculations and claim validation must use each bill's stored roster. Any future group-size limit should be an explicit configurable policy rather than hardcoded participant identities.
+
 Represent a claim as an exact fraction, such as `1/3`, rather than a floating-point percentage. Claims for each item must total exactly `1` before finalization. Reject overclaims and show remaining fractions for underclaimed items.
 
 Tax and tip can each be divided equally across bill payers or proportionally to item subtotals. An added tip percentage uses the pretax net item subtotal. Convert to cents once; allocate fractional cents deterministically using largest remainders, with stable user IDs breaking ties. Every item's shares and all participant totals must reconcile exactly. A zero item subtotal requires equal extras or a correction.
 
 **Concurrent edits**
 
-Every bill has a version. A write includes `expectedVersion`; the backend locks the bill row, checks the version and permissions, validates the edit, saves it, and increments the version in one transaction. A stale write returns `409`; the client refetches and asks the user to retry. Simultaneous edits cannot overwrite one another or overclaim an item.
+Every bill has a version. A write includes `expectedVersion`; Fastify opens a transaction in Tiger Data PostgreSQL, locks the bill row, checks the version and permissions, validates the edit, saves it, and increments the version in that same transaction. A stale write returns `409`; the client refetches and asks the user to retry. Simultaneous edits cannot overwrite one another or overclaim an item.
 
-Publish committed updates to membership-protected Realtime channels. Clients refetch authoritative data after an update, reconnect, or foreground event. Show cached data as stale while offline and disable mutations. Receipt edits invalidate affected claims; any changes after final review invalidate participant acceptances.
+For the MVP, clients poll `GET /bills/:id` approximately every two seconds while the bill screen is active. Each request verifies identity and current group membership and returns committed authoritative state. Refetch immediately after a successful mutation, a stale-write conflict, reconnect, or foreground event. Stop polling in the background and back off on errors. Show cached data as stale while offline and disable mutations. Polling controls update visibility; database transactions and version checks enforce correctness.
+
+Supabase Realtime database subscriptions are not part of this Tiger Data integration. Authenticated Fastify WebSockets can be added later to notify authorized group members after commits, with clients still refetching authoritative state. Receipt edits invalidate affected claims; any changes after final review invalidate participant acceptances.
 
 **Data:** `groups`, `group_members`, `invites`, `bills(state, version, totals, split_settings)`, `bill_participants`, and `claims(item_id, user_id, numerator, denominator)`.
 
@@ -102,7 +112,7 @@ Publish committed updates to membership-protected Realtime channels. Clients ref
 
 Example claim body: `{ "fraction": { "numerator": 1, "denominator": 3 }, "expectedVersion": 12 }`.
 
-**Done when:** three users can edit one bill from separate app sessions, see committed changes, and resolve a stale edit. Missing/overclaimed items and receipt discrepancies prevent finalization.
+**Done when:** at least three users can edit one bill from separate app sessions, see committed changes through polling, and resolve a stale edit. Also verify a roster larger than three to catch demo-only assumptions. Missing/overclaimed items and receipt discrepancies prevent finalization.
 
 ## 4. Final payment
 
