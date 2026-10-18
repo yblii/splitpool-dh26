@@ -31,9 +31,9 @@ function itemDescription(visual: ItemVisualState, resolution: ItemResolution, qu
 }
 
 function sideStatus(visual: ItemVisualState) {
-  if (visual === 'single' || visual === 'equal' || visual === 'custom') return { color: colors.success, label: 'Done' };
-  if (visual === 'incomplete') return { color: colors.primary, label: 'In progress' };
-  return { color: colors.danger, label: 'Not ready' };
+  if (visual === 'unclaimed') return null;
+  if (visual === 'single' || visual === 'equal' || visual === 'custom') return { color: colors.ink, label: 'Fully claimed' };
+  return { color: '#A9C6DC', label: 'In progress' };
 }
 
 function personColor(people: AvatarPerson[], id: string) {
@@ -309,9 +309,9 @@ export function ReceiptItemCard({
           </View> : null}
           <Pressable accessibilityRole="button" hitSlop={8} onPress={onCancelPercent}><Text style={styles.link}>Cancel</Text></Pressable>
         </View> : <View style={[cardStyles.line, visual === 'error' && cardStyles.errorLine, visual !== 'unclaimed' && visual !== 'error' && cardStyles.claimedLine]}>
-          <View accessibilityLabel={side.label} style={cardStyles.hatch}>
+          {side ? <View accessibilityLabel={side.label} style={cardStyles.hatch}>
             <View style={{ flex: 1, backgroundColor: side.color }} />
-          </View>
+          </View> : null}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={expanded ? `Close ${item.name}` : `Open ${item.name}`}
