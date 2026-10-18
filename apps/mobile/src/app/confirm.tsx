@@ -4,7 +4,8 @@ import { router } from 'expo-router';
 import { formatBasisPoints, formatMoney } from '@splitpool/contracts';
 import { ConfirmationDialog, PaymentStatusRow } from '../components/payment-ui';
 import { PersonSwitcher } from '../components/people';
-import { AppHeader, Button, Card, ErrorBanner, Screen, colors, styles } from '../components/ui';
+import { monoFamily } from '../fonts';
+import { AppHeader, Button, Card, ErrorBanner, Screen, colors, moneyMark, styles } from '../components/ui';
 import { useDemo } from '../state/demo';
 
 export default function ConfirmScreen() {
@@ -58,19 +59,19 @@ export default function ConfirmScreen() {
     {bill.phase === 'editing' && <ErrorBanner title="Still editing" message="The host sends the bill for approval after every item is fully allocated." />}
     <Card>
       <Text style={styles.label}>{approved ? 'Approved amount' : 'Amount to approve'}</Text>
-      <Text style={{ fontSize: 36, lineHeight: 42, fontWeight: '700', color: colors.ink, fontVariant: ['tabular-nums'] }}>{formatMoney(mineCents)}</Text>
+      <Text {...moneyMark} style={{ fontFamily: monoFamily, fontSize: 36, lineHeight: 42, fontWeight: '700', color: colors.ink }}>{formatMoney(mineCents)}</Text>
       {myPortions.map(({ item, portion }) => <View key={item} style={styles.row}>
         <Text style={[styles.text, { flex: 1 }]}>{item}</Text>
         <Text style={styles.small}>{formatBasisPoints(portion.basisPoints)}</Text>
-        <Text style={{ fontWeight: '700', color: colors.ink, fontVariant: ['tabular-nums'] }}>{formatMoney(portion.cents)}</Text>
+        <Text {...moneyMark} style={{ fontFamily: monoFamily, fontWeight: '700', color: colors.ink }}>{formatMoney(portion.cents)}</Text>
       </View>)}
       {myPortions.length === 0 && <Text style={styles.small}>You have not claimed any items.</Text>}
       <View style={styles.divider} />
-      <View style={styles.row}><Text style={styles.text}>Subtotal</Text><Text style={styles.text}>{formatMoney(mine?.itemsCents ?? 0)}</Text></View>
-      <View style={styles.row}><Text style={styles.text}>Tax</Text><Text style={styles.text}>{summary.itemsComplete ? formatMoney(mine?.taxCents ?? 0) : 'Pending'}</Text></View>
-      <View style={styles.row}><Text style={styles.text}>Tip</Text><Text style={styles.text}>{summary.itemsComplete ? formatMoney(mine?.tipCents ?? 0) : 'Pending'}</Text></View>
-      {(mine?.serviceCents ?? 0) > 0 && <View style={styles.row}><Text style={styles.text}>Service</Text><Text style={styles.text}>{formatMoney(mine?.serviceCents ?? 0)}</Text></View>}
-      <View style={styles.row}><Text style={styles.heading}>You pay</Text><Text style={styles.heading}>{formatMoney(mineCents)}</Text></View>
+      <View style={styles.row}><Text style={styles.text}>Subtotal</Text><Text {...moneyMark} style={[styles.text, { fontFamily: monoFamily }]}>{formatMoney(mine?.itemsCents ?? 0)}</Text></View>
+      <View style={styles.row}><Text style={styles.text}>Tax</Text>{summary.itemsComplete ? <Text {...moneyMark} style={[styles.text, { fontFamily: monoFamily }]}>{formatMoney(mine?.taxCents ?? 0)}</Text> : <Text style={styles.text}>Pending</Text>}</View>
+      <View style={styles.row}><Text style={styles.text}>Tip</Text>{summary.itemsComplete ? <Text {...moneyMark} style={[styles.text, { fontFamily: monoFamily }]}>{formatMoney(mine?.tipCents ?? 0)}</Text> : <Text style={styles.text}>Pending</Text>}</View>
+      {(mine?.serviceCents ?? 0) > 0 && <View style={styles.row}><Text style={styles.text}>Service</Text><Text {...moneyMark} style={[styles.text, { fontFamily: monoFamily }]}>{formatMoney(mine?.serviceCents ?? 0)}</Text></View>}
+      <View style={styles.row}><Text style={styles.heading}>You pay</Text><Text {...moneyMark} style={[styles.heading, { fontFamily: monoFamily }]}>{formatMoney(mineCents)}</Text></View>
     </Card>
     <Card>
       <Text style={styles.heading}>Payment method</Text>

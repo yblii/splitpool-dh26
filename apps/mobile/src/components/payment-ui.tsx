@@ -3,7 +3,8 @@ import { Animated, StyleSheet, Text, View } from 'react-native';
 import { formatMoney } from '@splitpool/contracts';
 import { MemberAvatar, type AvatarPerson } from './people';
 import { CenterDialog } from './sheets';
-import { Button, colors, styles, useReduceMotion } from './ui';
+import { monoFamily } from '../fonts';
+import { Button, colors, moneyMark, styles, useReduceMotion } from './ui';
 
 export function PaymentStatusRow({ person, status, amountCents }: {
   person: AvatarPerson; status: string; amountCents: number;
@@ -14,7 +15,7 @@ export function PaymentStatusRow({ person, status, amountCents }: {
       <Text style={styles.text}>{person.name}</Text>
       <Text style={styles.small}>{status}</Text>
     </View>
-    <Text style={payStyles.amount}>{formatMoney(amountCents)}</Text>
+    <Text {...moneyMark} style={payStyles.amount}>{formatMoney(amountCents)}</Text>
   </View>;
 }
 
@@ -37,7 +38,7 @@ export function VirtualCard({
     <View style={payStyles.orb} />
     <Text style={payStyles.brand}>SPLITPOOL</Text>
     <Text style={payStyles.kicker}>Simulated card</Text>
-    <Text style={payStyles.cardAmount}>{formatMoney(amountCents)}</Text>
+    <Text {...moneyMark} style={payStyles.cardAmount}>{formatMoney(amountCents)}</Text>
     <Text style={payStyles.group}>{groupName}</Text>
     <Text style={payStyles.status}>{status}</Text>
     <Text style={payStyles.detail}>{detail}</Text>
@@ -73,7 +74,7 @@ const payStyles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12,
     borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  amount: { color: colors.ink, fontSize: 16, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  amount: { fontFamily: monoFamily, color: colors.ink, fontSize: 16, fontWeight: '700' },
   card: {
     backgroundColor: '#173E5C', borderRadius: 24, padding: 20, minHeight: 196, overflow: 'hidden', gap: 4,
   },
@@ -83,7 +84,7 @@ const payStyles = StyleSheet.create({
   },
   brand: { color: 'rgba(255,255,255,0.72)', fontSize: 12, letterSpacing: 1.4, fontWeight: '700' },
   kicker: { color: '#FFFFFF', fontSize: 13, lineHeight: 18, fontWeight: '600', marginTop: 8 },
-  cardAmount: { color: '#FFFFFF', fontSize: 32, lineHeight: 38, fontWeight: '700', fontVariant: ['tabular-nums'], marginTop: 8 },
+  cardAmount: { fontFamily: monoFamily, color: '#FFFFFF', fontSize: 32, lineHeight: 38, fontWeight: '700', marginTop: 8 },
   group: { color: 'rgba(255,255,255,0.86)', fontSize: 15, lineHeight: 20 },
   status: { color: '#FFFFFF', fontSize: 15, lineHeight: 20, fontWeight: '700', marginTop: 10 },
   detail: { color: 'rgba(255,255,255,0.78)', fontSize: 13, lineHeight: 18 },

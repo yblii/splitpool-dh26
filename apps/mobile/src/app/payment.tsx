@@ -3,7 +3,8 @@ import { router } from 'expo-router';
 import { formatMoney } from '@splitpool/contracts';
 import { PaymentStatusRow, VirtualCard } from '../components/payment-ui';
 import { PersonSwitcher } from '../components/people';
-import { AppHeader, Button, Card, ErrorBanner, Screen, styles } from '../components/ui';
+import { monoFamily } from '../fonts';
+import { AppHeader, Button, Card, ErrorBanner, Screen, moneyMark, styles } from '../components/ui';
 import { billStatusLabel, payerStatus, useDemo } from '../state/demo';
 
 export default function PaymentScreen() {
@@ -36,7 +37,7 @@ export default function PaymentScreen() {
   return <Screen header={<AppHeader title={bill.phase === 'paid' ? 'Complete' : 'Payment'} onBack={() => router.back()} />}>
     <View style={{ gap: 4 }}>
       <Text style={styles.title}>{bill.phase === 'paid' ? 'Demo complete' : demo.viewingGroup.name}</Text>
-      <Text style={styles.subtitle}>{bill.merchant} · {formatMoney(summary.computedTotalCents)} · {billStatusLabel(bill.phase)}</Text>
+      <Text style={styles.subtitle}>{bill.merchant} · <Text {...moneyMark} style={{ fontFamily: monoFamily }}>{formatMoney(summary.computedTotalCents)}</Text> · {billStatusLabel(bill.phase)}</Text>
     </View>
     {bill.phase === 'paid' && <ErrorBanner tone="success" title="Nothing was charged" message={`The demo collected ${formatMoney(summary.computedTotalCents)} across ${summary.people.filter((person) => person.totalCents > 0).length} people and then stopped. No restaurant was paid.`} />}
     <VirtualCard

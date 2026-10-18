@@ -1,7 +1,8 @@
 import { Text, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { formatMoney } from '@splitpool/contracts';
-import { AppHeader, Card, EmptyState, Screen, colors, styles } from '../components/ui';
+import { monoFamily } from '../fonts';
+import { AppHeader, Card, EmptyState, Screen, colors, moneyMark, styles } from '../components/ui';
 import { useDemo } from '../state/demo';
 
 export default function HistoryScreen() {
@@ -18,8 +19,8 @@ export default function HistoryScreen() {
         <Text style={styles.subtitle}>{group?.name ?? 'Group'} · {bill.dateLabel}</Text>
       </View>
       <Card>
-        <View style={styles.row}><Text style={styles.text}>Group total</Text><Text style={styles.heading}>{formatMoney(bill.totalCents)}</Text></View>
-        <View style={styles.row}><Text style={styles.text}>You paid</Text><Text style={styles.heading}>{formatMoney(bill.yourShareCents)}</Text></View>
+        <View style={styles.row}><Text style={styles.text}>Group total</Text><Text {...moneyMark} style={[styles.heading, { fontFamily: monoFamily }]}>{formatMoney(bill.totalCents)}</Text></View>
+        <View style={styles.row}><Text style={styles.text}>You paid</Text><Text {...moneyMark} style={[styles.heading, { fontFamily: monoFamily }]}>{formatMoney(bill.yourShareCents)}</Text></View>
         <Text style={{ color: colors.success, fontWeight: '700' }}>Paid</Text>
         <Text style={styles.small}>This is sample history. It cannot be edited, and it was not a real charge.</Text>
       </Card>

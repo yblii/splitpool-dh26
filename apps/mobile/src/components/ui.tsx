@@ -14,7 +14,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { inter } from '../fonts';
+import { inter, monoFamily } from '../fonts';
 
 export const colors = {
   background: '#F3F6F8',
@@ -199,7 +199,7 @@ export function EmptyState({ title, body }: { title: string; body: string }) {
 
 export const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  content: { paddingHorizontal: 20, paddingTop: 8, gap: 16, width: '100%' },
+  content: { paddingHorizontal: 20, paddingTop: 8, gap: 16, width: '100%', minWidth: 0 },
   header: {
     paddingHorizontal: 12, paddingBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: colors.background,
@@ -267,6 +267,8 @@ export const styles = StyleSheet.create({
   },
 });
 
+export const moneyMark = { dataSet: { money: '1' } };
+
 export function moneyStyle(extra?: TextStyle): TextStyle {
-  return { ...inter, fontVariant: ['tabular-nums'], fontWeight: '700', color: colors.ink, ...extra };
+  return { fontFamily: monoFamily, fontVariant: ['tabular-nums'], fontWeight: '700', color: colors.ink, ...extra };
 }

@@ -4,7 +4,8 @@ import { router } from 'expo-router';
 import { formatBasisPoints, formatMoney, itemVisualState, type SplitBlocker } from '@splitpool/contracts';
 import { PersonSwitcher } from '../components/people';
 import { ProgressMeter } from '../components/split-ui';
-import { AppHeader, Button, Card, ErrorBanner, Screen, SegmentedControl, colors, styles } from '../components/ui';
+import { monoFamily } from '../fonts';
+import { AppHeader, Button, Card, ErrorBanner, Screen, SegmentedControl, colors, moneyMark, styles } from '../components/ui';
 import { useDemo } from '../state/demo';
 
 const STATE_LABEL = {
@@ -55,11 +56,11 @@ export default function OverviewScreen() {
       <View style={styles.row}>
         <View>
           <Text style={styles.label}>{summary.itemsComplete ? 'Your total' : 'Your items'}</Text>
-          <Text style={{ fontSize: 28, fontWeight: '700', color: colors.ink, fontVariant: ['tabular-nums'] }}>{formatMoney(viewer?.totalCents ?? 0)}</Text>
+          <Text {...moneyMark} style={{ fontFamily: monoFamily, fontSize: 28, fontWeight: '700', color: colors.ink }}>{formatMoney(viewer?.totalCents ?? 0)}</Text>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={styles.label}>Group total</Text>
-          <Text style={{ fontSize: 18, fontWeight: '700', color: colors.ink, fontVariant: ['tabular-nums'] }}>{formatMoney(summary.computedTotalCents)}</Text>
+          <Text {...moneyMark} style={{ fontFamily: monoFamily, fontSize: 18, fontWeight: '700', color: colors.ink }}>{formatMoney(summary.computedTotalCents)}</Text>
         </View>
       </View>
       <ProgressMeter value={summary.fullyAllocated} total={summary.itemCount} />
@@ -93,7 +94,7 @@ export default function OverviewScreen() {
         return <View key={item.id} style={{ backgroundColor: colors.paper, borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 14, gap: 4 }}>
           <View style={styles.row}>
             <Text style={[styles.text, { fontWeight: '700', flex: 1 }]}>{item.name}</Text>
-            <Text style={{ fontWeight: '700', color: colors.ink, fontVariant: ['tabular-nums'] }}>{formatMoney(item.cents)}</Text>
+            <Text {...moneyMark} style={{ fontFamily: monoFamily, fontWeight: '700', color: colors.ink }}>{formatMoney(item.cents)}</Text>
           </View>
           <Text style={{ color: tone, fontWeight: '700', fontSize: 13 }}>{STATE_LABEL[visual]}</Text>
           <Text style={styles.small}>{resolution.portions.length === 0

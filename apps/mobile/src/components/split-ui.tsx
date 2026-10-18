@@ -12,9 +12,10 @@ import {
   type ItemVisualState,
   type SplitLine,
 } from '@splitpool/contracts';
+import { monoFamily } from '../fonts';
 import { MemberAvatar, type AvatarPerson } from './people';
 import { BottomSheet } from './sheets';
-import { Button, colors, styles, useReduceMotion } from './ui';
+import { Button, colors, moneyMark, styles, useReduceMotion } from './ui';
 
 const STATE_LABEL: Record<ItemVisualState, string> = {
   unclaimed: 'Unclaimed',
@@ -95,7 +96,7 @@ export function MoneyText({ cents, style }: { cents: number; style?: object }) {
     scale.setValue(1.08);
     Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 7, tension: 140 }).start();
   }, [cents, reduceMotion, scale]);
-  return <Animated.Text style={[{ transform: [{ scale }] }, style]}>{formatMoney(cents)}</Animated.Text>;
+  return <Animated.Text {...moneyMark} style={[{ transform: [{ scale }] }, style]}>{formatMoney(cents)}</Animated.Text>;
 }
 
 const RECEIPT_PAPER = '#FFFDF8';
@@ -154,10 +155,18 @@ export function ReceiptPaper({ title, dimTitle, alert, children }: {
 }
 
 function shareMark(count: number, custom: boolean, basisPoints: number) {
-  if (count <= 0) return '';
+  if (count <= 1) return '✓';
   if (custom) return formatBasisPoints(basisPoints);
-  if (count === 1) return '1';
   return `1/${count}`;
+}
+
+function claimLabel(name: string, count: number, mine: boolean, custom: boolean, basisPoints: number) {
+  if (count === 0) return `Claim ${name}`;
+  if (!mine) return count === 1
+    ? `${name} is claimed. Tap to claim your share.`
+    : `${name} split ${shareMark(count, false, 0)}. Tap to claim your share.`;
+  if (count === 1) return `${name}, claimed. Tap to remove your claim.`;
+  return `${name} split ${shareMark(count, custom, basisPoints)}. Tap to remove your claim.`;
 }
 
 export function ReceiptItemCard({
@@ -283,7 +292,7 @@ export function ReceiptItemCard({
             onSubmitEditing={commitPercent}
             style={cardStyles.percentInput}
           />
-          <Text style={cardStyles.sharePrice}>{preview ? formatMoney(preview.cents) : formatMoney(item.cents)}</Text>
+          <Text {...moneyMark} style={cardStyles.sharePrice}>{preview ? formatMoney(preview.cents) : formatMoney(item.cents)}</Text>
           <Pressable accessibilityRole="button" accessibilityLabel="Save percentage" onPress={commitPercent} style={cardStyles.setButton}>
             <Text style={cardStyles.setText}>Set</Text>
           </Pressable>
@@ -315,7 +324,7 @@ export function ReceiptItemCard({
               <Text style={cardStyles.name} numberOfLines={1}>{expanded && visual !== 'unclaimed' ? `✓ ${item.name}` : item.name}</Text>
               <Text style={cardStyles.meta}>{STATE_LABEL[visual]}{item.quantity > 1 ? ` · Qty ${item.quantity}` : ''}</Text>
             </View>
-            <Text style={cardStyles.price}>{formatMoney(item.cents)}</Text>
+            <Text {...moneyMark} style={cardStyles.price}>{formatMoney(item.cents)}</Text>
             {resolution.portions.length > 0 ? <View style={cardStyles.avatars}>
               {resolution.portions.map((portion, index) => {
                 const person = people.find((entry) => entry.id === portion.personId);
@@ -328,18 +337,16 @@ export function ReceiptItemCard({
           <Pressable
             accessibilityRole="checkbox"
             accessibilityState={{ checked: !!mine, disabled: !editable }}
-            accessibilityLabel={resolution.portions.length === 0
-              ? `Claim ${item.name}`
-              : `${item.name} split ${shareMark(resolution.portions.length, mine?.mode === 'custom', mine?.basisPoints ?? 0)}. ${mine ? 'Tap to remove your claim.' : 'Tap to claim your share.'}`}
+            accessibilityLabel={claimLabel(item.name, resolution.portions.length, !!mine, mine?.mode === 'custom', mine?.basisPoints ?? 0)}
             disabled={!editable}
             hitSlop={6}
             onPress={() => {
               if (mine) onLeave();
               else onClaim();
             }}
-            style={[cardStyles.claimCircle, mine && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+            style={[cardStyles.claimCircle, mine && cardStyles.claimOn]}
           >
-            <Text style={[cardStyles.claimMark, mine && { color: '#FFFFFF' }]}>
+            <Text style={[cardStyles.claimMark, mine && cardStyles.claimOnMark, resolution.portions.length > 1 && cardStyles.claimFraction]}>
               {mine ? shareMark(resolution.portions.length, mine.mode === 'custom', mine.basisPoints) : ''}
             </Text>
           </Pressable>
@@ -352,11 +359,11 @@ export function ReceiptItemCard({
               {person && <MemberAvatar person={person} size={28} />}
               <Text style={[cardStyles.portionName, { color: person?.color ?? colors.ink }]}>{person?.name ?? 'Someone'}</Text>
               <Text style={cardStyles.portionMeta}>{formatBasisPoints(portion.basisPoints)} · {portion.mode === 'custom' ? 'Custom' : 'Auto'}</Text>
-              <Text style={cardStyles.portionMoney}>{formatMoney(portion.cents)}</Text>
+              <Text {...moneyMark} style={cardStyles.portionMoney}>{formatMoney(portion.cents)}</Text>
             </View>;
           })}
           {resolution.remainderBasisPoints > 0 && <Text style={cardStyles.warn}>
-            Overflow portion {formatBasisPoints(resolution.remainderBasisPoints)} · {formatMoney(resolution.unallocatedCents)} still open
+            Overflow portion {formatBasisPoints(resolution.remainderBasisPoints)} · <Text {...moneyMark} style={{ fontFamily: monoFamily, color: colors.warning }}>{formatMoney(resolution.unallocatedCents)}</Text> still open
           </Text>}
           {resolution.message && visual !== 'equal' && visual !== 'single' && <Text style={cardStyles.warn}>{resolution.message}</Text>}
           {editable && mine && <Pressable accessibilityRole="button" hitSlop={8} onPress={onLeave}>
@@ -467,7 +474,7 @@ export function CustomSplitSheet({
     </View>}
   >
     {item && <>
-      <Text style={styles.subtitle}>{formatMoney(item.cents)} total. Your percentage stays fixed. Everyone on Auto splits what is left.</Text>
+      <Text style={styles.subtitle}><Text {...moneyMark} style={{ fontFamily: monoFamily, color: colors.muted }}>{formatMoney(item.cents)}</Text> total. Your percentage stays fixed. Everyone on Auto splits what is left.</Text>
       {otherCustom > 0 && <Text style={styles.small}>Other custom shares already use {formatBasisPoints(otherCustom)}. You can take up to {formatBasisPoints(maxBp)}.</Text>}
       <PercentSlider value={draftBp} max={maxBp} onChange={(basisPoints) => applyText(formatBasisPoints(basisPoints).replace('%', ''))} />
       <View style={{ gap: 6 }}>
@@ -492,11 +499,11 @@ export function CustomSplitSheet({
               <Text style={styles.text}>{person?.name ?? 'Someone'}{isViewer ? ' · you' : ''}</Text>
               <Text style={styles.small}>{portion.mode === 'custom' ? 'Custom' : 'Auto'}{!isViewer && portion.mode === 'custom' ? ' · only they can change this' : ''}</Text>
             </View>
-            <Text style={sheetRow.money}>{formatBasisPoints(portion.basisPoints)} · {formatMoney(portion.cents)}</Text>
+            <Text {...moneyMark} style={sheetRow.money}>{formatBasisPoints(portion.basisPoints)} · {formatMoney(portion.cents)}</Text>
           </View>;
         })}
         {(preview?.remainderBasisPoints ?? 0) > 0 && <Text style={[styles.small, { color: colors.warning }]}>
-          Unallocated {formatBasisPoints(preview?.remainderBasisPoints ?? 0)} · {formatMoney(preview?.unallocatedCents ?? 0)}
+          Unallocated {formatBasisPoints(preview?.remainderBasisPoints ?? 0)} · <Text {...moneyMark} style={{ fontFamily: monoFamily, color: colors.warning }}>{formatMoney(preview?.unallocatedCents ?? 0)}</Text>
         </Text>}
       </View>
       <View style={[styles.row, { justifyContent: 'flex-start', gap: 16 }]}>
@@ -558,7 +565,7 @@ export function BillSummary({
       </View>
       <View style={{ gap: 2, alignItems: 'flex-end' }}>
         <Text style={styles.label}>Bill total</Text>
-        <Text style={summaryStyles.bill}>{formatMoney(totalCents)}</Text>
+        <Text {...moneyMark} style={summaryStyles.bill}>{formatMoney(totalCents)}</Text>
       </View>
     </View>
     <ProgressMeter value={allocated} total={count} />
@@ -580,6 +587,10 @@ const barStyles = StyleSheet.create({
 const paperStyles = StyleSheet.create({
   body: {
     backgroundColor: RECEIPT_PAPER,
+    width: '100%',
+    maxWidth: '100%',
+    minWidth: 0,
+    alignSelf: 'stretch',
     paddingHorizontal: 14,
     paddingBottom: 8,
     ...Platform.select({
@@ -621,14 +632,17 @@ const cardStyles = StyleSheet.create({
   chevron: { color: colors.muted, fontSize: 18, lineHeight: 22, width: 14 },
   name: { fontFamily: 'Inter', color: colors.ink, fontSize: 16, lineHeight: 21, fontWeight: '700' },
   meta: { color: colors.muted, fontSize: 12, lineHeight: 16 },
-  price: { fontFamily: 'Inter', color: colors.ink, fontSize: 15, lineHeight: 20, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  price: { fontFamily: monoFamily, color: colors.ink, fontSize: 15, lineHeight: 20, fontWeight: '700' },
   avatars: { flexDirection: 'row', marginLeft: 2 },
   claimCircle: {
     minWidth: 36, height: 36, paddingHorizontal: 6, borderRadius: 18, marginRight: 8,
-    borderWidth: 2, borderColor: colors.ink, backgroundColor: 'transparent',
+    borderWidth: 2, borderColor: colors.success, backgroundColor: '#FFFFFF',
     alignItems: 'center', justifyContent: 'center',
   },
-  claimMark: { fontFamily: 'Inter', color: colors.ink, fontSize: 11, lineHeight: 14, fontWeight: '800' },
+  claimOn: { backgroundColor: colors.success, borderColor: colors.success },
+  claimMark: { fontFamily: 'Inter', color: colors.success, fontSize: 18, lineHeight: 22, fontWeight: '700' },
+  claimOnMark: { color: '#FFFFFF' },
+  claimFraction: { fontSize: 11, lineHeight: 14, fontWeight: '800' },
   percentChip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
   percentText: { color: colors.primary, fontSize: 12, lineHeight: 16, fontWeight: '800' },
   editRow: {
@@ -640,7 +654,7 @@ const cardStyles = StyleSheet.create({
     minWidth: 96, minHeight: 44, borderWidth: 1.5, borderColor: colors.ink, borderRadius: 8,
     paddingHorizontal: 10, fontSize: 16, color: colors.ink, backgroundColor: '#FFFFFF',
   },
-  sharePrice: { color: colors.ink, fontSize: 16, lineHeight: 22, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  sharePrice: { fontFamily: monoFamily, color: colors.ink, fontSize: 16, lineHeight: 22, fontWeight: '700' },
   setButton: {
     minWidth: 52, minHeight: 44, borderRadius: 8, backgroundColor: colors.primary,
     alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12,
@@ -657,16 +671,16 @@ const cardStyles = StyleSheet.create({
   payer: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 36 },
   portionName: { flex: 1, fontSize: 14, lineHeight: 18, fontWeight: '700' },
   portionMeta: { color: colors.muted, fontSize: 12, lineHeight: 16 },
-  portionMoney: { width: 68, textAlign: 'right', color: colors.ink, fontSize: 15, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  portionMoney: { fontFamily: monoFamily, width: 76, textAlign: 'right', color: colors.ink, fontSize: 15, fontWeight: '700' },
   warn: { color: colors.warning, fontSize: 13, lineHeight: 18 },
 });
 
 const sheetRow = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
-  money: { color: colors.ink, fontSize: 13, lineHeight: 18, fontWeight: '700', fontVariant: ['tabular-nums'], textAlign: 'right' },
+  money: { fontFamily: monoFamily, color: colors.ink, fontSize: 13, lineHeight: 18, fontWeight: '700', textAlign: 'right' },
 });
 
 const summaryStyles = StyleSheet.create({
-  yours: { fontFamily: 'Inter', color: colors.ink, fontSize: 28, lineHeight: 34, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  bill: { fontFamily: 'Inter', color: colors.ink, fontSize: 18, lineHeight: 24, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  yours: { fontFamily: monoFamily, color: colors.ink, fontSize: 28, lineHeight: 34, fontWeight: '700' },
+  bill: { fontFamily: monoFamily, color: colors.ink, fontSize: 18, lineHeight: 24, fontWeight: '700' },
 });

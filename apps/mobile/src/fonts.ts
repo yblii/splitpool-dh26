@@ -3,6 +3,12 @@ import { Platform } from 'react-native';
 import { Asset } from 'expo-asset';
 import * as Font from 'expo-font';
 import {
+  IBMPlexMono_400Regular,
+  IBMPlexMono_500Medium,
+  IBMPlexMono_600SemiBold,
+  IBMPlexMono_700Bold,
+} from '@expo-google-fonts/ibm-plex-mono';
+import {
   Inter_400Regular,
   Inter_500Medium,
   Inter_600SemiBold,
@@ -18,7 +24,16 @@ const FACES = [
   [800, Inter_800ExtraBold],
 ] as const;
 
+const MONO_FACES = [
+  [400, IBMPlexMono_400Regular],
+  [500, IBMPlexMono_500Medium],
+  [600, IBMPlexMono_600SemiBold],
+  [700, IBMPlexMono_700Bold],
+] as const;
+
 export const inter = { fontFamily: 'Inter' } as const;
+export const monoFamily = 'IBM Plex Mono';
+export const mono = { fontFamily: monoFamily } as const;
 
 export function useInter() {
   const [ready, setReady] = useState(false);
@@ -32,15 +47,16 @@ export function useInter() {
 
 async function loadInter() {
   if (Platform.OS === 'web' && typeof document !== 'undefined') {
-    const rules = await Promise.all(FACES.map(async ([weight, source]) => {
+    const rules = await Promise.all([...FACES, ...MONO_FACES].map(async ([weight, source]) => {
       const asset = Asset.fromModule(source);
       if (!asset.downloaded) await asset.downloadAsync();
       const uri = asset.localUri ?? asset.uri;
-      return `@font-face{font-family:"Inter";src:url(${JSON.stringify(uri)});font-weight:${weight};font-style:normal;font-display:swap}`;
+      const family = MONO_FACES.some(([, face]) => face === source) ? monoFamily : 'Inter';
+      return `@font-face{font-family:${JSON.stringify(family)};src:url(${JSON.stringify(uri)});font-weight:${weight};font-style:normal;font-display:swap}`;
     }));
     const style = document.createElement('style');
     style.setAttribute('data-splitpool-font', 'inter');
-    style.textContent = `${rules.join('')}\nhtml,body,#root,#root *{font-family:Inter,sans-serif !important;}`;
+    style.textContent = `${rules.join('')}\nhtml,body,#root,#root *{font-family:Inter,sans-serif !important;}\n#root [data-money]{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace !important;}`;
     document.head.appendChild(style);
     return;
   }
@@ -50,5 +66,9 @@ async function loadInter() {
     Inter_600SemiBold,
     Inter_700Bold,
     Inter_800ExtraBold,
+    [monoFamily]: IBMPlexMono_400Regular,
+    IBMPlexMono_500Medium,
+    IBMPlexMono_600SemiBold,
+    IBMPlexMono_700Bold,
   });
 }

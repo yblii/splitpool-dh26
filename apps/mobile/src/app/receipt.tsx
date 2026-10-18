@@ -3,8 +3,9 @@ import { Alert, Image, Platform, Pressable, StyleSheet, Text, View } from 'react
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { makeSplitDemoReceipt } from '@splitpool/contracts';
+import { monoFamily } from '../fonts';
 import { BottomSheet } from '../components/sheets';
-import { AppHeader, Button, ErrorBanner, Screen, colors } from '../components/ui';
+import { AppHeader, Button, ErrorBanner, Screen, colors, moneyMark } from '../components/ui';
 import { apiUrl, extractReceiptFromImage } from '../lib/api';
 import { useDemo } from '../state/demo';
 
@@ -113,8 +114,8 @@ export default function ReceiptScreen() {
       {picked ? <Image source={{ uri: picked.uri }} accessibilityLabel="Selected receipt preview" style={local.preview} resizeMode="contain" /> : sampleArmed ? <View style={local.sample}>
         <Text style={local.sampleKicker}>Sample receipt</Text>
         <Text style={local.sampleTitle}>The Little Table</Text>
-        {['Pizza          30.00', 'Ice Cream      15.00', 'Drinks          12.00', 'Appetizer       18.00', 'Tax              6.00', 'Tip             13.50'].map((line) => <Text key={line} style={local.sampleLine}>{line}</Text>)}
-        <Text style={local.sampleTotal}>Total           94.50</Text>
+        {['Pizza          30.00', 'Ice Cream      15.00', 'Drinks          12.00', 'Appetizer       18.00', 'Tax              6.00', 'Tip             13.50'].map((line) => <Text {...moneyMark} key={line} style={local.sampleLine}>{line}</Text>)}
+        <Text {...moneyMark} style={local.sampleTotal}>Total           94.50</Text>
         <Text style={local.sampleNote}>Not from a camera or a scanner.</Text>
       </View> : <View style={local.emptyFinder}>
         <Text style={local.finderLabel}>Camera preview</Text>
@@ -138,8 +139,8 @@ const local = StyleSheet.create({
   sample: { padding: 22, gap: 6 },
   sampleKicker: { color: '#F3D7A1', fontSize: 12, fontWeight: '700', letterSpacing: 0.6 },
   sampleTitle: { color: '#FFFFFF', fontSize: 22, fontWeight: '700', marginBottom: 8 },
-  sampleLine: { color: 'rgba(255,255,255,0.86)', fontFamily: 'Inter', fontSize: 14, lineHeight: 22 },
-  sampleTotal: { color: '#FFFFFF', fontFamily: 'Inter', fontSize: 14, lineHeight: 22, fontWeight: '700', marginTop: 8 },
+  sampleLine: { color: 'rgba(255,255,255,0.86)', fontFamily: monoFamily, fontSize: 14, lineHeight: 22 },
+  sampleTotal: { color: '#FFFFFF', fontFamily: monoFamily, fontSize: 14, lineHeight: 22, fontWeight: '700', marginTop: 8 },
   sampleNote: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 10 },
   busy: { color: colors.ink, fontSize: 14, fontWeight: '600' },
   controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 },

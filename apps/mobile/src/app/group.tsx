@@ -5,7 +5,8 @@ import { formatMoney } from '@splitpool/contracts';
 import { AvatarStack, MemberAvatar } from '../components/people';
 import { BottomSheet } from '../components/sheets';
 import { ReceiptPaper } from '../components/split-ui';
-import { AppHeader, Button, ErrorBanner, Screen, colors, styles } from '../components/ui';
+import { monoFamily } from '../fonts';
+import { AppHeader, Button, ErrorBanner, Screen, colors, moneyMark, styles } from '../components/ui';
 import { billStatusLabel, useDemo } from '../state/demo';
 
 export default function GroupDetailsScreen() {
@@ -62,7 +63,7 @@ export default function GroupDetailsScreen() {
           <Text style={[styles.text, { fontWeight: '700' }]} numberOfLines={1}>{bill.merchant}</Text>
           <Text style={styles.small}>{billStatusLabel(bill.phase)}</Text>
         </View>
-        <Text style={money}>{formatMoney(bill.printedTotalCents)}</Text>
+        <Text {...moneyMark} style={money}>{formatMoney(bill.printedTotalCents)}</Text>
         <Text style={[money, { color: colors.primary }]}>Open</Text>
       </Pressable>}
       {past.length === 0 && !bill && <Text style={styles.small}>No earlier bills yet.</Text>}
@@ -74,8 +75,8 @@ export default function GroupDetailsScreen() {
         style={splitRow}
       >
         <Text style={[styles.text, { flex: 1 }]} numberOfLines={1}>{entry.merchant}</Text>
-        <Text style={money}>{formatMoney(entry.totalCents)}</Text>
-        <Text style={money}>{formatMoney(entry.yourShareCents)}</Text>
+        <Text {...moneyMark} style={money}>{formatMoney(entry.totalCents)}</Text>
+        <Text {...moneyMark} style={money}>{formatMoney(entry.yourShareCents)}</Text>
       </Pressable>)}
     </ReceiptPaper>
 
@@ -104,4 +105,4 @@ export default function GroupDetailsScreen() {
 }
 
 const splitRow = { minHeight: 48, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, borderTopWidth: 1, borderStyle: 'dashed' as const, borderColor: '#E4D5C2' };
-const money = { width: 72, textAlign: 'right' as const, color: colors.ink, fontWeight: '700' as const };
+const money = { fontFamily: monoFamily, width: 80, textAlign: 'right' as const, color: colors.ink, fontWeight: '700' as const };

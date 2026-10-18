@@ -12,7 +12,8 @@ import {
 } from '@splitpool/contracts';
 import { CenterDialog } from '../components/sheets';
 import { ReceiptPaper } from '../components/split-ui';
-import { AppHeader, Button, Screen, colors, styles } from '../components/ui';
+import { monoFamily } from '../fonts';
+import { AppHeader, Button, Screen, colors, moneyMark, styles } from '../components/ui';
 import { useDemo } from '../state/demo';
 
 function centsToInput(cents: number) {
@@ -101,11 +102,11 @@ function ReviewEditor({ seed, onCancel, onSave }: {
         return <View key={`${item.id ?? 'row'}-${index}`} style={line}>
           <Pressable accessibilityRole="button" accessibilityLabel={`${item.name || 'Item'}, ${formatMoney(item.netLineTotalCents)}. Edit.`} onPress={() => setOpenIndex(open ? -1 : index)} style={styles.row}>
             <Text style={[styles.text, { flex: 1, fontWeight: '700' }]} numberOfLines={1}>{item.name || 'New item'}</Text>
-            <Text style={price}>{formatMoney(item.netLineTotalCents)}</Text>
+            <Text {...moneyMark} style={price}>{formatMoney(item.netLineTotalCents)}</Text>
           </Pressable>
-          {open && <View style={{ gap: 8, paddingBottom: 8 }}>
+          {open && <View style={editor}>
             <TextInput accessibilityLabel={`Item ${index + 1} name`} value={item.name} onChangeText={(name) => patchItem(index, { name })} placeholder="Item name" placeholderTextColor={colors.muted} style={styles.input} />
-            <View style={styles.row}>
+            <View style={editorRow}>
               <TextInput accessibilityLabel={`Item ${index + 1} quantity`} keyboardType="number-pad" value={money.itemQuantities[index] ?? '1'} onChangeText={(value) => {
                 setMoney((current) => ({ ...current, itemQuantities: current.itemQuantities.map((entry, itemIndex) => itemIndex === index ? value : entry) }));
                 patchItem(index, { quantity: inputToQuantity(value) });
@@ -113,7 +114,7 @@ function ReviewEditor({ seed, onCancel, onSave }: {
               <TextInput accessibilityLabel={`Item ${index + 1} price`} keyboardType="decimal-pad" value={money.itemTotals[index] ?? '0.00'} onChangeText={(value) => {
                 setMoney((current) => ({ ...current, itemTotals: current.itemTotals.map((entry, itemIndex) => itemIndex === index ? value : entry) }));
                 patchItem(index, { netLineTotalCents: inputToCents(value) });
-              }} style={[styles.input, { flex: 1 }]} />
+              }} {...moneyMark} style={[styles.input, priceInput]} />
             </View>
             <Pressable accessibilityRole="button" onPress={() => removeItem(index)} hitSlop={8}><Text style={[styles.link, { color: colors.danger }]}>Delete</Text></Pressable>
           </View>}
@@ -124,7 +125,7 @@ function ReviewEditor({ seed, onCancel, onSave }: {
       </Pressable>
       <View style={[styles.row, { paddingVertical: 8 }]}>
         <Text style={styles.text}>Group total</Text>
-        <Text style={[styles.heading, { fontVariant: ['tabular-nums'] }]}>{formatMoney(reconciliation.computedTotalCents)}</Text>
+        <Text {...moneyMark} style={[styles.heading, { fontFamily: monoFamily }]}>{formatMoney(reconciliation.computedTotalCents)}</Text>
       </View>
     </ReceiptPaper>
     <Pressable accessibilityRole="button" accessibilityState={{ expanded: chargesOpen }} onPress={() => setChargesOpen((current) => !current)} style={{ minHeight: 44, justifyContent: 'center' }}>
@@ -158,14 +159,17 @@ function ReviewEditor({ seed, onCancel, onSave }: {
   </Screen>;
 }
 
-const line = { borderTopWidth: 1, borderStyle: 'dashed' as const, borderColor: '#E4D5C2', paddingTop: 8 };
-const price = { color: colors.ink, fontWeight: '700' as const, fontSize: 16 };
-const quantityInput = { width: 64, minHeight: 40, paddingHorizontal: 8, textAlign: 'center' as const, flexGrow: 0 };
+const line = { borderTopWidth: 1, borderStyle: 'dashed' as const, borderColor: '#E4D5C2', paddingTop: 8, width: '100%' as const, minWidth: 0, maxWidth: '100%' as const };
+const price = { fontFamily: monoFamily, color: colors.ink, fontWeight: '700' as const, fontSize: 16 };
+const editor = { gap: 8, paddingBottom: 8, width: '100%' as const, minWidth: 0, maxWidth: '100%' as const };
+const editorRow = { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, width: '100%' as const, minWidth: 0 };
+const quantityInput = { width: 56, maxWidth: 56, flexGrow: 0, flexShrink: 0, minHeight: 40, paddingHorizontal: 6, textAlign: 'center' as const };
+const priceInput = { flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 0, maxWidth: '100%' as const, fontFamily: monoFamily };
 
 function LabeledMoney({ label, value, onChange, accessibilityLabel }: { label: string; value: string; onChange: (value: string) => void; accessibilityLabel: string }) {
   return <View style={{ gap: 6 }}>
     <Text style={styles.label}>{label}</Text>
-    <TextInput accessibilityLabel={accessibilityLabel} keyboardType="decimal-pad" value={value} onChangeText={onChange} style={styles.input} />
+    <TextInput {...moneyMark} accessibilityLabel={accessibilityLabel} keyboardType="decimal-pad" value={value} onChangeText={onChange} style={[styles.input, { fontFamily: monoFamily }]} />
   </View>;
 }
 
