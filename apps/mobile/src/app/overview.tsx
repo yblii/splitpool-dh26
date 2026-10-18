@@ -5,7 +5,7 @@ import { formatBasisPoints, formatMoney, itemVisualState, type SplitBlocker } fr
 import { PersonSwitcher } from '../components/people';
 import { ProgressMeter } from '../components/split-ui';
 import { monoFamily } from '../fonts';
-import { AppHeader, Button, Card, ErrorBanner, Screen, SegmentedControl, colors, moneyMark, styles } from '../components/ui';
+import { AppHeader, Button, Card, ErrorBanner, FadingNotice, Screen, SegmentedControl, colors, moneyMark, styles } from '../components/ui';
 import { useDemo } from '../state/demo';
 
 const STATE_LABEL = {
@@ -48,9 +48,7 @@ export default function OverviewScreen() {
   return <Screen
     header={<AppHeader title="Overview" onBack={() => router.back()} />}
     footer={<View style={{ gap: 10 }}>
-      {demo.quietNotices.map((notice) => <Pressable key={notice.id} accessibilityRole="button" accessibilityLabel={`${notice.message} Dismiss.`} onPress={() => demo.dismissNotice(notice.id)}>
-        <ErrorBanner message={notice.message} />
-      </Pressable>)}
+      {demo.quietNotices.map((notice) => <FadingNotice key={notice.id} id={notice.id} message={notice.message} onDismiss={demo.dismissNotice} />)}
       {bill.phase === 'editing'
         ? <Button title={host ? 'Send for approval' : 'Waiting on the host'} disabled={!host || !summary.readyToFinalize} onPress={send} />
         : <Button title="Open approval" onPress={() => router.push('/confirm')} />}
@@ -142,20 +140,24 @@ export default function OverviewScreen() {
         const resolution = summary.resolutions.find((entry) => entry.itemId === item.id)?.resolution;
         if (!resolution) return null;
         const visual = itemVisualState(resolution);
+        const claimed = visual === 'single';
         const tone = visual === 'incomplete' || visual === 'unclaimed' || visual === 'error' ? colors.warning : colors.success;
         return <Pressable
           key={item.id}
           accessibilityRole="button"
-          accessibilityLabel={`Open ${item.name}`}
+          accessibilityLabel={claimed ? `Open ${item.name}, claimed` : `Open ${item.name}`}
           onPress={() => router.push({ pathname: '/split', params: { item: item.id, open: String(Date.now()) } })}
-          style={{ backgroundColor: colors.paper, borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 14, gap: 4 }}
+          style={{
+            backgroundColor: claimed ? colors.ink : colors.paper,
+            borderRadius: 16, borderWidth: 1, borderColor: claimed ? colors.ink : colors.border, padding: 14, gap: 4,
+          }}
         >
           <View style={styles.row}>
-            <Text style={[styles.text, { fontWeight: '700', flex: 1 }]}>{item.name}</Text>
-            <Text {...moneyMark} style={{ fontFamily: monoFamily, fontWeight: '700', color: colors.ink }}>{formatMoney(item.cents)}</Text>
+            <Text style={[styles.text, { fontWeight: '700', flex: 1, color: claimed ? '#FFFFFF' : colors.ink }]}>{item.name}</Text>
+            <Text {...moneyMark} style={{ fontFamily: monoFamily, fontWeight: '700', color: claimed ? '#FFFFFF' : colors.ink }}>{formatMoney(item.cents)}</Text>
           </View>
-          <Text style={{ color: tone, fontWeight: '700', fontSize: 13 }}>{STATE_LABEL[visual]}</Text>
-          <Text style={styles.small}>{resolution.portions.length === 0
+          {!claimed && <Text style={{ color: tone, fontWeight: '700', fontSize: 13 }}>{STATE_LABEL[visual]}</Text>}
+          <Text style={[styles.small, claimed && { color: 'rgba(255,255,255,0.78)' }]}>{resolution.portions.length === 0
             ? 'No claims yet'
             : resolution.portions.map((portion) => `${demo.lookup(portion.personId).name} ${formatBasisPoints(portion.basisPoints)}`).join(' · ')}</Text>
         </Pressable>;

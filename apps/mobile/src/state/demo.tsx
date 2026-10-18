@@ -209,7 +209,7 @@ export function DemoProvider({ children }: PropsWithChildren) {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [pendingReceipt, setPendingReceipt] = useState<ExtractedReceipt | null>(null);
   const [receiptGroupId, setReceiptGroupId] = useState('fam');
-  const [notices, setNotices] = useState<{ id: string; personId: string; message: string }[]>([]);
+  const [notices, setNotices] = useState<{ id: string; personId: string; itemId?: string; kind?: 'hint'; message: string }[]>([]);
   const [walletBillId, setWalletBillId] = useState<string | null>(null);
 
   const you = useMemo<DemoPerson>(() => ({
@@ -321,10 +321,12 @@ export function DemoProvider({ children }: PropsWithChildren) {
   function claimItem(itemId: string) {
     if (!currentBill || currentBill.phase !== 'editing') return;
     if (!viewingGroup.memberIds.includes(activePersonId)) return;
+    const claimer = activePersonId;
     updateEditing(currentBill.groupId, (bill) => ({
       ...bill,
-      items: bill.items.map((item) => item.id === itemId ? joinSplit(item, activePersonId) : item),
+      items: bill.items.map((item) => item.id === itemId ? joinSplit(item, claimer) : item),
     }));
+    setNotices((current) => current.filter((notice) => !(notice.kind === 'hint' && notice.itemId === itemId && notice.personId === claimer)));
   }
 
   function assignItem(itemId: string, personIdToAssign: string) {
@@ -356,6 +358,8 @@ export function DemoProvider({ children }: PropsWithChildren) {
     setNotices((current) => [...current, {
       id: `hint-${itemId}-${personIdToHint}-${Date.now().toString(36)}`,
       personId: personIdToHint,
+      itemId,
+      kind: 'hint',
       message: `${item.name} was hinted for you. You can still claim it yourself.`,
     }]);
     return null;

@@ -1,6 +1,7 @@
-import { useEffect, useState, type PropsWithChildren, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type PropsWithChildren, type ReactNode } from 'react';
 import {
   AccessibilityInfo,
+  Animated,
   Platform,
   Pressable,
   ScrollView,
@@ -139,6 +140,28 @@ export function DemoNote() {
     <View style={styles.noticeDot} />
     <Text style={styles.noticeText}>Demo mode · No real money moves</Text>
   </View>;
+}
+
+export function FadingNotice({ id, message, onDismiss }: { id: string; message: string; onDismiss: (id: string) => void }) {
+  const reduceMotion = useReduceMotion();
+  const [opacity] = useState(() => new Animated.Value(1));
+  const dismiss = useRef(onDismiss);
+  useEffect(() => { dismiss.current = onDismiss; });
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (reduceMotion) {
+        dismiss.current(id);
+        return;
+      }
+      Animated.timing(opacity, { toValue: 0, duration: 400, useNativeDriver: true }).start(() => dismiss.current(id));
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [id, opacity, reduceMotion]);
+  return <Animated.View style={{ opacity }}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${message} Dismiss.`} onPress={() => dismiss.current(id)}>
+      <ErrorBanner message={message} />
+    </Pressable>
+  </Animated.View>;
 }
 
 export function ErrorBanner({ title, message, tone = 'warning' }: {
