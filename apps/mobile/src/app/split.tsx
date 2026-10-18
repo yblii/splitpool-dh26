@@ -71,7 +71,7 @@ export default function SplitScreen() {
     <Text style={styles.subtitle}>{billStatusLabel(bill.phase)} · Tap a line to claim it. Slide it left, then enter your %.</Text>
     {!editable && <ErrorBanner title="Claims are locked" message="This bill is past editing. Reopen it from review, before collection, if you still need to change shares." />}
     <PersonSwitcher people={demo.members} value={demo.personId} onChange={demo.setPerson} />
-    <ReceiptPaper title={bill.merchant} dimTitle={!!percentId} alert={alert ?? overflowMessage}>
+    <ReceiptPaper title={bill.merchant} alert={alert ?? overflowMessage}>
       {bill.items.map((item) => {
         const resolution = summary.resolutions.find((entry) => entry.itemId === item.id)?.resolution;
         if (!resolution) return null;
@@ -84,7 +84,7 @@ export default function SplitScreen() {
           roster={demo.viewingGroup.memberIds}
           viewerId={demo.personId}
           editable={!!editable}
-          faded={!!percentId && percentId !== item.id}
+          faded={false}
           percentOpen={percentId === item.id}
           expanded={openId === item.id && percentId !== item.id}
           emphasized={focusId === item.id}
