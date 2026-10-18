@@ -140,26 +140,31 @@ export default function OverviewScreen() {
         const resolution = summary.resolutions.find((entry) => entry.itemId === item.id)?.resolution;
         if (!resolution) return null;
         const visual = itemVisualState(resolution);
-        const claimed = visual === 'single';
-        const tone = visual === 'incomplete' || visual === 'unclaimed' || visual === 'error' ? colors.warning : colors.success;
+        const done = visual === 'single' || visual === 'equal' || visual === 'custom';
+        const unclaimed = visual === 'unclaimed';
+        const fill = done ? colors.ink : unclaimed ? '#C45C28' : null;
+        const tone = visual === 'incomplete' || visual === 'error' ? colors.warning : colors.success;
         return <Pressable
           key={item.id}
           accessibilityRole="button"
-          accessibilityLabel={claimed ? `Open ${item.name}, claimed` : `Open ${item.name}`}
+          accessibilityLabel={`Open ${item.name}, ${STATE_LABEL[visual]}`}
           onPress={() => router.push({ pathname: '/split', params: { item: item.id, open: String(Date.now()) } })}
           style={{
-            backgroundColor: claimed ? colors.ink : colors.paper,
-            borderRadius: 16, borderWidth: 1, borderColor: claimed ? colors.ink : colors.border, padding: 14, gap: 4,
+            backgroundColor: fill ?? colors.paper,
+            borderRadius: 16, borderWidth: 1, borderColor: fill ?? colors.border, padding: 14, gap: 4,
           }}
         >
           <View style={styles.row}>
-            <Text style={[styles.text, { fontWeight: '700', flex: 1, color: claimed ? '#FFFFFF' : colors.ink }]}>{item.name}</Text>
-            <Text {...moneyMark} style={{ fontFamily: monoFamily, fontWeight: '700', color: claimed ? '#FFFFFF' : colors.ink }}>{formatMoney(item.cents)}</Text>
+            <Text style={[styles.text, { fontWeight: '700', flex: 1, color: fill ? '#FFFFFF' : colors.ink }]}>{item.name}</Text>
+            <Text {...moneyMark} style={{ fontFamily: monoFamily, fontWeight: '700', color: fill ? '#FFFFFF' : colors.ink }}>{formatMoney(item.cents)}</Text>
           </View>
-          {!claimed && <Text style={{ color: tone, fontWeight: '700', fontSize: 13 }}>{STATE_LABEL[visual]}</Text>}
-          <Text style={[styles.small, claimed && { color: 'rgba(255,255,255,0.78)' }]}>{resolution.portions.length === 0
-            ? 'No claims yet'
-            : resolution.portions.map((portion) => `${demo.lookup(portion.personId).name} ${formatBasisPoints(portion.basisPoints)}`).join(' · ')}</Text>
+          {visual !== 'single' && resolution.portions.length === 0 && <Text style={{ color: fill ? '#FFFFFF' : tone, fontWeight: '700', fontSize: 13 }}>{STATE_LABEL[visual]}</Text>}
+          <View style={styles.row}>
+            <Text style={[styles.small, { flex: 1 }, fill && { color: 'rgba(255,255,255,0.82)' }]}>{resolution.portions.length === 0
+              ? 'No claims yet'
+              : resolution.portions.map((portion) => `${demo.lookup(portion.personId).name} ${formatBasisPoints(portion.basisPoints)}`).join(' · ')}</Text>
+            {visual !== 'single' && resolution.portions.length > 0 && <Text style={{ color: fill ? '#FFFFFF' : tone, fontWeight: '700', fontSize: 13 }}>{STATE_LABEL[visual]}</Text>}
+          </View>
         </Pressable>;
       })}
     </View>
