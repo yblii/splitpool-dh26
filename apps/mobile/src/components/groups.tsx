@@ -1,9 +1,16 @@
 import { useState } from 'react';
-import { Animated, PanResponder, Pressable, Text, View } from 'react-native';
+import { Animated, PanResponder, Platform, Pressable, Text, View } from 'react-native';
+import { interItalic } from '../fonts';
 import { AvatarStack, type AvatarPerson } from './people';
 import { colors, styles } from './ui';
 
 const PAPER = '#FFFDF8';
+const lastBill = {
+  fontSize: 11,
+  lineHeight: 14,
+  fontStyle: 'italic' as const,
+  ...Platform.select({ default: { fontFamily: interItalic, fontStyle: 'normal' as const }, web: {} }),
+};
 
 const cardDrag = new Map<string, { editing: boolean; dragging: boolean; onDrag: (slots: number) => void }>();
 
@@ -69,7 +76,7 @@ export function GroupCard({ id, name, members, recent, editing, selected, onPres
             {editing ? <Text accessibilityElementsHidden importantForAccessibility="no" style={{ color: colors.muted, fontSize: 18, lineHeight: 20 }}>≡</Text> : null}
             <View style={{ flex: 1, gap: 4, minWidth: 0 }}>
               <Text style={styles.heading} numberOfLines={1}>{name}</Text>
-              {recent ? <Text style={styles.small} numberOfLines={1}>Last bill: {recent}</Text> : null}
+              {recent ? <Text style={[styles.small, lastBill]} numberOfLines={1}>Last bill: {recent}</Text> : null}
             </View>
           </View>
           <View style={{ alignItems: 'flex-end', gap: 4 }}>
