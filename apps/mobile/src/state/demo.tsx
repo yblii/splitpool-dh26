@@ -1,9 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
 import { Alert } from 'react-native';
 import {
-  allocateCents, claimedHalves, defaultTipChoices, demoBillFromVerifiedReceipt, makeDemoBill, PaymentLedger, people, summarizeBill,
-  type BillProjection, type DemoBill, type DemoMethodId, type ExtractedReceipt, type PersonId, type ReviewDraft, type TipChoice, type TipChoices, type VerifiedReceipt,
+  allocateCents, claimedHalves, defaultTipChoices, demoBillFromVerifiedReceipt, makeDemoBill, PaymentLedger, people, personItemLines, summarizeBill,
+  type BillProjection, type DemoBill, type DemoMethodId, type ExtractedReceipt, type MealHistoryEntry, type MealTitleAssignment,
+  type PersonId, type ReviewDraft, type TipChoice, type TipChoices, type VerifiedReceipt,
 } from '@splitpool/contracts';
+import { generateMealTitles, makeHistoryEntry } from '../lib/mealTitles';
 
 const DEMO_BILL = 'demo-bill';
 type Phase = 'editing' | 'collecting' | 'paid';
@@ -17,6 +19,10 @@ type DemoContextValue = {
   profileName: string; linked: boolean; summary: ReturnType<typeof summarizeBill>;
   payment: BillProjection | null; paymentError: string | null;
   pendingReceipt: ExtractedReceipt | null;
+  mealTitles: MealTitleAssignment[] | null;
+  mealTitlesLoading: boolean;
+  mealTitlesSource: string | null;
+  mealHistory: MealHistoryEntry[];
   setPerson: (person: PersonId) => void; setTipChoice: (choice: TipChoice) => void;
   setProfileName: (name: string) => void; setLinked: (linked: boolean) => void;
   setPersonMethod: (patch: Partial<PersonMethod>) => void;
@@ -45,6 +51,11 @@ function draftFrom(bill: DemoBill, summary: ReturnType<typeof summarizeBill>): R
   };
 }
 
+function displayName(personId: PersonId, profileName: string) {
+  if (personId === 'you') return profileName.trim() || 'You';
+  return people.find((entry) => entry.id === personId)?.name ?? personId;
+}
+
 export function DemoProvider({ children }: PropsWithChildren) {
   const [bill, setBill] = useState(makeDemoBill);
   const [person, setPerson] = useState<PersonId>('you');
@@ -56,10 +67,16 @@ export function DemoProvider({ children }: PropsWithChildren) {
   const [ledger, setLedger] = useState(() => new PaymentLedger({ fundingDelayMs: 1500 }));
   const [now, setNow] = useState(0);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [mealTitles, setMealTitles] = useState<MealTitleAssignment[] | null>(null);
+  const [mealTitlesLoading, setMealTitlesLoading] = useState(false);
+  const [mealTitlesSource, setMealTitlesSource] = useState<string | null>(null);
+  const [mealHistory, setMealHistory] = useState<MealHistoryEntry[]>([]);
   const holdsRef = useRef<Partial<Record<PersonId, string>>>({});
+  const titlesForSessionRef = useRef<string | null>(null);
   const summary = useMemo(() => summarizeBill(bill, tipChoices), [bill, tipChoices]);
   const payment = useMemo(() => ledger.peekBill(person, DEMO_BILL, now), [ledger, person, now]);
   const phase: Phase = payment?.session?.phase === 'paid' ? 'paid' : payment?.snapshotId ? 'collecting' : 'editing';
+  const sessionId = payment?.session?.sessionId;
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -68,6 +85,38 @@ export function DemoProvider({ children }: PropsWithChildren) {
     }, 400);
     return () => clearInterval(timer);
   }, [ledger]);
+
+  useEffect(() => {
+    if (phase !== 'paid' || !sessionId) return;
+    if (titlesForSessionRef.current === sessionId) return;
+    const members = people.map((entry) => ({
+      id: entry.id,
+      name: displayName(entry.id, profileName),
+      items: personItemLines(bill, entry.id).map((line) => line.name),
+    }));
+    const groupName = bill.groupName;
+    const merchant = bill.merchant;
+    let cancelled = false;
+    setMealTitlesLoading(true);
+    void (async () => {
+      const result = await generateMealTitles({ groupName, merchant, members });
+      if (cancelled) return;
+      titlesForSessionRef.current = sessionId;
+      setMealTitles(result.titles);
+      setMealTitlesSource(result.source);
+      setMealTitlesLoading(false);
+      setMealHistory((current) => [
+        makeHistoryEntry({
+          groupName,
+          merchant,
+          titles: result.titles,
+          source: result.source,
+        }),
+        ...current,
+      ].slice(0, 40));
+    })();
+    return () => { cancelled = true; };
+  }, [phase, sessionId, bill, profileName]);
 
   function run(action: () => void) {
     let ok = true;
@@ -80,6 +129,13 @@ export function DemoProvider({ children }: PropsWithChildren) {
     }
     setNow(Date.now());
     return ok;
+  }
+
+  function clearCurrentTitles() {
+    titlesForSessionRef.current = null;
+    setMealTitles(null);
+    setMealTitlesSource(null);
+    setMealTitlesLoading(false);
   }
 
   function setClaim(itemId: string, halves: number) {
@@ -103,7 +159,6 @@ export function DemoProvider({ children }: PropsWithChildren) {
     setPendingReceipt(null);
   }
 
-  const sessionId = payment?.session?.sessionId;
   async function settleHolds(action: 'cancel' | 'capture') {
     const pending = Object.entries(holdsRef.current).flatMap(([userId, paymentIntentId]) => paymentIntentId ? [[userId, paymentIntentId] as const] : []);
     if (pending.length === 0) return;
@@ -114,6 +169,7 @@ export function DemoProvider({ children }: PropsWithChildren) {
   }
   return <DemoContext.Provider value={{
     bill, person, tipChoices, phase, methods, profileName, linked, summary, payment, paymentError, pendingReceipt,
+    mealTitles, mealTitlesLoading, mealTitlesSource, mealHistory,
     setPerson, setProfileName, setLinked, setPendingReceipt, applyVerifiedReceipt,
     setPersonMethod: (patch) => {
       const seat = payment?.session?.seats.find((entry) => entry.userId === person);
@@ -171,9 +227,13 @@ export function DemoProvider({ children }: PropsWithChildren) {
         }
       })();
     },
-    reopenBill: () => run(() => ledger.reopen('you', DEMO_BILL)),
+    reopenBill: () => {
+      clearCurrentTitles();
+      run(() => ledger.reopen('you', DEMO_BILL));
+    },
     reset: () => {
       holdsRef.current = {};
+      clearCurrentTitles();
       setBill(makeDemoBill()); setTipChoices(defaultTipChoices()); setPerson('you'); setMethods(blankMethods());
       setLinked(false); setPendingReceipt(null);
       setPaymentError(null); setNow(0); setLedger(new PaymentLedger({ fundingDelayMs: 1500 }));

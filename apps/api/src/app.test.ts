@@ -2,6 +2,7 @@ import { expect, it } from 'vitest';
 import { makeSampleExtractedReceipt } from '@splitpool/contracts';
 import { buildApp } from './app.ts';
 import { createSampleFallbackParser } from './receipt/parser.ts';
+import { createFallbackTitleGenerator } from './titles/generator.ts';
 
 it('serves health and a read-only demo bill without exposing write operations', async () => {
   const app = await buildApp({ logger: false, parser: createSampleFallbackParser() });
@@ -76,5 +77,35 @@ it('rejects non-image multipart uploads', async () => {
       payload,
     });
     expect(response.statusCode).toBe(400);
+  } finally { await app.close(); }
+});
+
+it('generates positive meal titles for demo members', async () => {
+  const app = await buildApp({
+    logger: false,
+    parser: createSampleFallbackParser(),
+    titleGenerator: createFallbackTitleGenerator(),
+  });
+  try {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/demo/meal-titles',
+      headers: { 'content-type': 'application/json' },
+      payload: {
+        groupName: 'Friday dinner',
+        merchant: 'The Little Table',
+        members: [
+          { id: 'you', name: 'Jamie', items: ['House salad'] },
+          { id: 'alex', name: 'Alex', items: ['Orange juice'] },
+        ],
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.usedFallback).toBe(true);
+    expect(body.titles).toEqual([
+      expect.objectContaining({ id: 'you', title: 'Green Machine' }),
+      expect.objectContaining({ id: 'alex', title: 'Vitamin C Warrior' }),
+    ]);
   } finally { await app.close(); }
 });

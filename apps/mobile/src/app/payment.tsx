@@ -23,6 +23,7 @@ const phaseCopy: Record<string, string> = {
 export default function PaymentScreen() {
   const {
     bill, summary, tipChoices, setTipChoice, methods, phase, person, payment, paymentError,
+    mealTitles, mealTitlesLoading, mealTitlesSource,
     freezeBill, acceptShare, confirmCollection, authorizeShare, rememberWalletHold, retryShare, openCheckout, chargeRestaurant, declineCard, cancelPayment, reopenBill,
   } = useDemo();
   const session = payment?.session;
@@ -157,6 +158,30 @@ export default function PaymentScreen() {
       <Text style={styles.title}>{session?.phase === 'paid' ? 'All settled.' : 'Review your split.'}</Text>
       <Text style={styles.subtitle}>{bill.groupName} · {bill.merchant}</Text>
     </View>
+    {session?.phase === 'paid' && (
+      <Card>
+        <Text style={styles.heading}>Meal titles</Text>
+        <Text style={styles.small}>
+          Positive nicknames inspired by what each person ate
+          {mealTitlesSource ? ` · ${mealTitlesSource}` : ''}.
+        </Text>
+        {mealTitlesLoading && !mealTitles && (
+          <Text accessibilityLiveRegion="polite" style={styles.small}>Crafting titles…</Text>
+        )}
+        {mealTitles?.map((entry) => (
+          <View key={entry.id} style={local.titleBlock}>
+            <View style={styles.row}>
+              <Text style={[styles.text, { flex: 1 }]}>{entry.name}</Text>
+              <Text style={local.titleBadge}>{entry.title}</Text>
+            </View>
+            <Text style={styles.small}>
+              {entry.items.length ? entry.items.join(' · ') : 'No items claimed'}
+            </Text>
+          </View>
+        ))}
+        <Button title="View history" secondary onPress={() => router.push('/history')} />
+      </Card>
+    )}
     <View style={{ gap: 14 }}>
       {myItems.length === 0
         ? <Text style={styles.small}>No items claimed yet.</Text>
@@ -216,4 +241,14 @@ const local = StyleSheet.create({
   amount: { color: colors.ink, fontSize: 16, fontWeight: '700', fontVariant: ['tabular-nums'] },
   detailsContent: { gap: 14, paddingBottom: 8 },
   detailRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
+  titleBlock: { gap: 4 },
+  titleBadge: {
+    color: colors.success,
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    maxWidth: '58%',
+    textAlign: 'right',
+  },
 });

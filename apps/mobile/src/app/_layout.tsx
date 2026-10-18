@@ -58,6 +58,7 @@ function RootNavigator() {
         <Stack.Screen name="receipt" options={{ title: 'RECEIPT' }} />
         <Stack.Screen name="receipt-review" options={{ title: 'REVIEW' }} />
         <Stack.Screen name="profile" options={{ title: 'PROFILE' }} />
+        <Stack.Screen name="history" options={{ title: 'HISTORY' }} />
         <Stack.Screen name="payment" options={{ title: 'PAYMENT' }} />
       </Stack.Protected>
       <Stack.Protected guard={needsProfileSetup}>

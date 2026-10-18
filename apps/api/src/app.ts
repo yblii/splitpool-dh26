@@ -1,7 +1,7 @@
 import cors, { type FastifyCorsOptions } from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import Fastify from 'fastify';
-import { makeDemoBill, PaymentLedger, type ExtractedReceipt } from '@splitpool/contracts';
+import { makeDemoBill, PaymentLedger, type ExtractedReceipt, type MealTitlesResponse } from '@splitpool/contracts';
 import type { VerifyToken } from './auth.ts';
 import type { Database } from './db.ts';
 import { ApiError } from './errors.ts';
@@ -16,11 +16,18 @@ import {
 } from './receipt/parser.ts';
 import { collaborationRoutes } from './routes.ts';
 import { CollaborationService } from './service.ts';
+import {
+  createTitleGenerator,
+  generateMealTitlesWithFallback,
+  normalizeMealTitlesRequest,
+  type TitleGenerator,
+} from './titles/generator.ts';
 
 const MAX_RECEIPT_BYTES = 8 * 1024 * 1024;
 
 export type BuildAppOptions = {
   parser?: ReceiptParser;
+  titleGenerator?: TitleGenerator;
   db?: Database;
   verifyToken?: VerifyToken;
   /** Local directory for receipt image bytes (defaults to data/receipts). */
@@ -145,6 +152,22 @@ export async function buildApp(options: BuildAppOptions = {}) {
     if (reason) body.reason = reason;
     if (errorDetail) body.errorDetail = errorDetail;
     return reply.code(200).send(body);
+  });
+
+  app.post('/api/v1/demo/meal-titles', async (request, reply) => {
+    const body = normalizeMealTitlesRequest(request.body);
+    if (!body.members.length) {
+      return reply.code(400).send({ error: 'Expected at least one member with an id and name.' });
+    }
+    const env = loadApiEnv();
+    const generator = options.titleGenerator ?? createTitleGenerator();
+    request.log.info({
+      generator: generator.name,
+      geminiKeyPresent: env.geminiKeyPresent,
+      members: body.members.length,
+    }, 'Starting meal title generation');
+    const result: MealTitlesResponse = await generateMealTitlesWithFallback(generator, body, request.log);
+    return reply.code(200).send(result);
   });
 
   await registerPaymentRoutes(app, options.ledger ?? new PaymentLedger(), options.simulation !== false, options.stripe);

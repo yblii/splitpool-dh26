@@ -132,6 +132,11 @@ export default function ProfileScreen() {
           <Button title={linked ? 'Remove demo card' : 'Use demo card'} secondary onPress={() => setLinked(!linked)} />
           <Text style={styles.small}>A sample card for trying the split. No payment details are collected.</Text>
         </Card>
+        <Card>
+          <Text style={styles.heading}>History</Text>
+          <Text style={styles.small}>Meal titles from settled demo payments appear here.</Text>
+          <Button title="Open history" secondary onPress={() => router.push('/history')} />
+        </Card>
         <DemoNote />
       </Screen>
     );
@@ -217,6 +222,13 @@ export default function ProfileScreen() {
         <Text style={styles.text}>{linked ? 'Demo Visa ···· 4242' : 'No demo method selected'}</Text>
         <Button title={linked ? 'Remove demo card' : 'Use demo card'} secondary onPress={() => setLinked(!linked)} />
         <Text style={styles.small}>A sample card for trying the split. No payment details are collected.</Text>
+      </Card>
+      <Card>
+        <Text style={styles.heading}>History</Text>
+        <Text style={styles.small}>
+          See positive meal titles generated from the food you and your group ordered after each settled payment.
+        </Text>
+        <Button title="Open history" secondary onPress={() => router.push('/history')} />
       </Card>
       <Button title="Sign out" secondary disabled={busy} onPress={() => void onSignOut()} />
       <Button
