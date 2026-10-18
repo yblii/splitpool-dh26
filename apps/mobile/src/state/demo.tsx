@@ -70,7 +70,7 @@ export type DemoCard = { id: string; brand: string; last4: string };
 
 export const DEMO_CARDS: DemoCard[] = [
   { id: 'visa', brand: 'Demo Visa', last4: '4242' },
-  { id: 'mastercard', brand: 'Demo Mastercard', last4: '4444' },
+  { id: 'mastercard', brand: 'Demo Debit', last4: '4444' },
 ];
 
 const DIRECTORY: DemoPerson[] = [
