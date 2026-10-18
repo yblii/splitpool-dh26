@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { GroupCard } from '../components/groups';
 import { AvatarStack, MemberAvatar } from '../components/people';
 import { BottomSheet } from '../components/sheets';
+import { interFace } from '../fonts';
 import { AppHeader, Button, ErrorBanner, Screen, colors, styles } from '../components/ui';
 import { useDemo } from '../state/demo';
 
@@ -99,8 +100,11 @@ export default function GroupsScreen() {
       </Pressable>
     </View>}
   >
+    <Pressable accessibilityRole="button" accessibilityLabel={`Your title, ${demo.you.title}`} onPress={() => router.push('/profile')} style={{ alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center' }}>
+      <Text style={yourTitle}>{demo.you.title}</Text>
+    </Pressable>
     <View style={styles.row}>
-      <Text style={styles.title}>Groups</Text>
+      <Text style={groupsHeading}>Groups</Text>
       {editing ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
         <Pressable accessibilityRole="button" accessibilityLabel={pickedIsHidden ? 'Show selected group' : 'Hide selected group'} disabled={!pickedId} onPress={togglePicked} style={{ minHeight: 44, justifyContent: 'center' }}>
           <Text style={[styles.link, { opacity: pickedId ? 1 : 0.35 }]}>{pickedIsHidden ? 'Show' : 'Hide'}</Text>
@@ -188,14 +192,16 @@ export default function GroupsScreen() {
       {demo.friends.map((friend) => <Pressable
         key={friend.id}
         accessibilityRole="button"
-        accessibilityLabel={`Open ${friend.name}'s profile`}
+        accessibilityLabel={`Open ${friend.name}${friend.title ? `, ${friend.title}` : ''}`}
         onPress={() => { setFriendsOpen(false); router.push({ pathname: '/friend', params: { id: friend.id } }); }}
         style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12 }}
       >
         <MemberAvatar person={friend} />
         <View style={{ flex: 1 }}>
-          <Text style={styles.text}>{friend.name}</Text>
-          <Text style={styles.small}>@{friend.username}{friend.phone ? ` · ${friend.phone}` : ''}</Text>
+          <Text style={styles.text}>
+            <Text style={interFace(700)}>{friend.name}</Text>
+            {friend.title ? `, ${friend.title}` : ''}
+          </Text>
         </View>
         <Text style={{ color: colors.muted, fontSize: 22 }}>›</Text>
       </Pressable>)}
@@ -203,5 +209,7 @@ export default function GroupsScreen() {
   </Screen>;
 }
 
+const yourTitle = { fontFamily: 'Inter', fontSize: 21, lineHeight: 26, fontWeight: '600' as const, color: colors.ink };
+const groupsHeading = { fontFamily: 'Inter', fontSize: 22, lineHeight: 28, fontWeight: '600' as const, color: colors.ink };
 const dock = { minHeight: 48, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 };
 const dockLabel = { fontFamily: 'Inter', color: colors.ink, fontWeight: '700' as const, fontSize: 15 };

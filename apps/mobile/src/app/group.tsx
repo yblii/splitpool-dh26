@@ -59,28 +59,17 @@ export default function GroupDetailsScreen() {
     </Pressable>} />}
     footer={<Button title="Scan now" onPress={scan} />}
   >
-    {members.filter((member) => member.id === 'you').map((member) => <Pressable
-      key={member.id}
-      accessibilityRole="button"
-      accessibilityLabel={`Your profile, ${member.title}`}
-      onPress={() => router.push('/profile')}
-      style={youProfile}
-    >
-      <Text style={youTitle}>{member.title}</Text>
-      <MemberAvatar person={member} size={72} />
-      <Text style={styles.small}>{member.name}</Text>
-    </Pressable>)}
     <View style={memberRow}>
-      {members.filter((member) => member.id !== 'you').map((member) => <Pressable
+      {members.map((member) => <Pressable
         key={member.id}
         accessibilityRole="button"
-        accessibilityLabel={`${member.name}, ${member.title}. Open profile.`}
-        onPress={() => router.push({ pathname: '/friend', params: { id: member.id } })}
+        accessibilityLabel={member.id === 'you' ? `Your profile, ${member.title}` : `${member.name}, ${member.title}. Open profile.`}
+        onPress={() => member.id === 'you' ? router.push('/profile') : router.push({ pathname: '/friend', params: { id: member.id } })}
         style={memberProfile}
       >
-        <MemberAvatar person={member} size={44} />
-        <Text style={memberName}>{member.name}</Text>
-        <Text style={[styles.small, { textAlign: 'center' }]}>{member.title}</Text>
+        <MemberAvatar person={member} size={48} />
+        <Text style={memberName} numberOfLines={1}>{member.name}</Text>
+        {!!member.title && <Text style={memberTitle} numberOfLines={2}>{member.title}</Text>}
       </Pressable>)}
     </View>
     <ReceiptPaper title="Past splits" level="subheading">
@@ -137,10 +126,9 @@ export default function GroupDetailsScreen() {
   </Screen>;
 }
 
-const youProfile = { alignItems: 'center' as const, gap: 6, paddingTop: 4 };
-const youTitle = { fontFamily: 'Inter', fontSize: 21, lineHeight: 26, fontWeight: '600' as const, color: colors.ink, textAlign: 'center' as const };
-const memberRow = { flexDirection: 'row' as const, justifyContent: 'center' as const, gap: 28 };
-const memberProfile = { alignItems: 'center' as const, gap: 4, minWidth: 88, minHeight: 44 };
-const memberName = { fontFamily: 'Inter', fontSize: 16, lineHeight: 21, fontWeight: '600' as const, color: colors.ink };
+const memberRow = { flexDirection: 'row' as const, alignItems: 'flex-start' as const, justifyContent: 'space-between' as const };
+const memberProfile = { alignItems: 'center' as const, gap: 4, flex: 1, minHeight: 44 };
+const memberName = { fontFamily: 'Inter', fontSize: 16, lineHeight: 21, fontWeight: '600' as const, color: colors.ink, textAlign: 'center' as const };
+const memberTitle = { fontFamily: 'Inter', fontSize: 13, lineHeight: 18, fontWeight: '400' as const, color: colors.muted, textAlign: 'center' as const };
 const splitRow = { minHeight: 48, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, borderTopWidth: 1, borderStyle: 'dashed' as const, borderColor: '#E4D5C2' };
 const money = { fontFamily: monoFamily, width: 80, textAlign: 'right' as const, color: colors.ink, fontWeight: '700' as const };
