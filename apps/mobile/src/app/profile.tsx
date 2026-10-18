@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { router } from 'expo-router';
 import { Button, Card, DemoNote, Screen, colors, styles } from '../components/ui';
 import { useDemo } from '../state/demo';
-import { displayNameFromProfile, useAuth, type AuthProfile } from '../state/auth';
+import { useAuth, type AuthProfile } from '../state/auth';
 import { useAppProfile } from '../state/appProfile';
 import { apiUrl, checkApi } from '../lib/api';
 
@@ -22,14 +22,14 @@ export default function ProfileScreen() {
   const [showConnections, setShowConnections] = useState(false);
   const health = useQuery({ queryKey: ['health', apiUrl], queryFn: checkApi, enabled: false, retry: false });
 
+  // Sync local form fields from auth profile. Do not call setProfileName here —
+  // that updates DemoProvider and React forbids updating another component while rendering.
   if (profile !== draftProfile) {
     setDraftProfile(profile);
     if (profile) {
       setFirstName(profile.firstName);
       setLastName(profile.lastName);
       setPhone(profile.phone);
-      const name = displayNameFromProfile(profile);
-      if (name && name !== profileName) setProfileName(name);
     } else {
       setFirstName('');
       setLastName('');
