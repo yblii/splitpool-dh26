@@ -1,15 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
 import { Alert } from 'react-native';
 import {
-  claimedHalves,
-  demoBillFromVerifiedReceipt,
-  makeDemoBill,
-  summarizeBill,
-  type DemoBill,
-  type ExtractedReceipt,
-  type PersonId,
-  type SplitMode,
-  type VerifiedReceipt,
+  allocateCents, claimedHalves, defaultTipChoices, demoBillFromVerifiedReceipt, makeDemoBill, PaymentLedger, people, summarizeBill,
+  type BillProjection, type DemoBill, type DemoMethodId, type ExtractedReceipt, type PersonId, type ReviewDraft, type TipChoice, type TipChoices, type VerifiedReceipt,
 } from '@splitpool/contracts';
 
 const DEMO_BILL = 'demo-bill';
@@ -19,15 +12,20 @@ function blankMethods(): Record<PersonId, PersonMethod> {
   return { you: { methodId: null, imageUri: null }, alex: { methodId: null, imageUri: null }, sam: { methodId: null, imageUri: null } };
 }
 type DemoContextValue = {
-  bill: DemoBill; person: PersonId; mode: SplitMode; phase: Phase; linked: boolean;
-  profileName: string; summary: ReturnType<typeof summarizeBill>;
+  bill: DemoBill; person: PersonId; tipChoices: TipChoices; phase: Phase;
+  methods: Record<PersonId, PersonMethod>;
+  profileName: string; linked: boolean; summary: ReturnType<typeof summarizeBill>;
+  payment: BillProjection | null; paymentError: string | null;
   pendingReceipt: ExtractedReceipt | null;
-  setPerson: (person: PersonId) => void; setMode: (mode: SplitMode) => void;
+  setPerson: (person: PersonId) => void; setTipChoice: (choice: TipChoice) => void;
   setProfileName: (name: string) => void; setLinked: (linked: boolean) => void;
+  setPersonMethod: (patch: Partial<PersonMethod>) => void;
   renameGroup: (name: string) => void; setClaim: (itemId: string, halves: number) => void;
   setPendingReceipt: (draft: ExtractedReceipt | null) => void;
   applyVerifiedReceipt: (receipt: VerifiedReceipt) => void;
-  pay: () => void; reset: () => void;
+  freezeBill: () => void; acceptShare: () => void; confirmCollection: () => void;
+  authorizeShare: () => void; rememberWalletHold: (paymentIntentId: string) => void; retryShare: () => void; openCheckout: () => boolean;
+  chargeRestaurant: () => void; declineCard: () => boolean; cancelPayment: () => void; reopenBill: () => void; reset: () => void;
 };
 const DemoContext = createContext<DemoContextValue | null>(null);
 
@@ -53,8 +51,15 @@ export function DemoProvider({ children }: PropsWithChildren) {
   const [tipChoices, setTipChoices] = useState<TipChoices>(defaultTipChoices);
   const [methods, setMethods] = useState(blankMethods);
   const [profileName, setProfileName] = useState('Jamie');
+  const [linked, setLinked] = useState(false);
   const [pendingReceipt, setPendingReceipt] = useState<ExtractedReceipt | null>(null);
-  const summary = useMemo(() => summarizeBill(bill, mode), [bill, mode]);
+  const [ledger, setLedger] = useState(() => new PaymentLedger({ fundingDelayMs: 1500 }));
+  const [now, setNow] = useState(0);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const holdsRef = useRef<Partial<Record<PersonId, string>>>({});
+  const summary = useMemo(() => summarizeBill(bill, tipChoices), [bill, tipChoices]);
+  const payment = useMemo(() => ledger.peekBill(person, DEMO_BILL, now), [ledger, person, now]);
+  const phase: Phase = payment?.session?.phase === 'paid' ? 'paid' : payment?.snapshotId ? 'collecting' : 'editing';
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -98,20 +103,80 @@ export function DemoProvider({ children }: PropsWithChildren) {
     setPendingReceipt(null);
   }
 
+  const sessionId = payment?.session?.sessionId;
+  async function settleHolds(action: 'cancel' | 'capture') {
+    const pending = Object.entries(holdsRef.current).flatMap(([userId, paymentIntentId]) => paymentIntentId ? [[userId, paymentIntentId] as const] : []);
+    if (pending.length === 0) return;
+    const { releaseDemoCardHold, stripePublishableKey } = await import('../lib/cardWallet');
+    if (!stripePublishableKey) return;
+    await Promise.all(pending.map(([userId, paymentIntentId]) => releaseDemoCardHold(userId, paymentIntentId, action)));
+    holdsRef.current = {};
+  }
   return <DemoContext.Provider value={{
-    bill, person, mode, phase, linked, profileName, summary, pendingReceipt,
-    setPerson, setLinked, setProfileName, setPendingReceipt, applyVerifiedReceipt,
-    setMode: (next) => { if (phase === 'editing') setMode(next); },
+    bill, person, tipChoices, phase, methods, profileName, linked, summary, payment, paymentError, pendingReceipt,
+    setPerson, setProfileName, setLinked, setPendingReceipt, applyVerifiedReceipt,
+    setPersonMethod: (patch) => {
+      const seat = payment?.session?.seats.find((entry) => entry.userId === person);
+      if (seat && (seat.status === 'authorized' || seat.status === 'captured' || seat.status === 'refunded')) return;
+      setMethods((current) => ({ ...current, [person]: { ...current[person], ...patch } }));
+    },
+    setTipChoice: (choice) => {
+      if (phase !== 'editing') return;
+      if (choice.kind === 'custom' && (!Number.isSafeInteger(choice.cents) || choice.cents < 0 || choice.cents > 100_000)) return;
+      setTipChoices((current) => ({ ...current, [person]: choice }));
+    },
     renameGroup: (name) => { if (phase === 'editing' && name.trim()) setBill((current) => ({ ...current, groupName: name.trim() })); },
     setClaim,
-    pay: () => { if (summary.complete && linked && phase === 'editing') setPhase('collecting'); },
+    freezeBill: () => {
+      if (!summary.complete) return;
+      if (person !== 'you') { setPaymentError('Only the host can freeze the bill.'); return; }
+      run(() => ledger.review('you', DEMO_BILL, draftFrom(bill, summary), Date.now()));
+    },
+    acceptShare: () => run(() => ledger.accept(person, DEMO_BILL)),
+    confirmCollection: () => run(() => ledger.confirm('you', DEMO_BILL, 'confirm-demo', Date.now())),
+    authorizeShare: () => { if (sessionId) run(() => ledger.authorize(person, sessionId, `auth-${person}`, Date.now())); },
+    rememberWalletHold: (paymentIntentId) => { holdsRef.current[person] = paymentIntentId; },
+    retryShare: () => { if (sessionId) run(() => ledger.retry(person, sessionId, `retry-${person}-${Date.now()}`, Date.now())); },
+    openCheckout: () => sessionId ? run(() => ledger.checkout('you', sessionId, 'checkout-demo', Date.now())) : false,
+    chargeRestaurant: () => {
+      void (async () => {
+        try {
+          await settleHolds('capture');
+          if (sessionId) run(() => ledger.merchantEvent('you', sessionId, 'exact', `exact-${Date.now()}`, Date.now()));
+        } catch (error) {
+          setPaymentError(error instanceof Error ? error.message : 'The card hold could not be captured.');
+        }
+      })();
+    },
+    declineCard: () => {
+      if (!sessionId) return false;
+      void (async () => {
+        try {
+          await settleHolds('cancel');
+          run(() => ledger.declineCard('you', sessionId, `decline-${Date.now()}`, Date.now()));
+        } catch (error) {
+          setPaymentError(error instanceof Error ? error.message : 'The card hold could not be canceled.');
+        }
+      })();
+      return true;
+    },
+    cancelPayment: () => {
+      if (!sessionId) return;
+      void (async () => {
+        try {
+          await settleHolds('cancel');
+          run(() => ledger.cancel('you', sessionId, `cancel-${Date.now()}`, Date.now()));
+        } catch (error) {
+          setPaymentError(error instanceof Error ? error.message : 'The card hold could not be canceled.');
+        }
+      })();
+    },
+    reopenBill: () => run(() => ledger.reopen('you', DEMO_BILL)),
     reset: () => {
-      setBill(makeDemoBill());
-      setPhase('editing');
-      setMode('proportional');
-      setPerson('you');
-      setLinked(false);
-      setPendingReceipt(null);
+      holdsRef.current = {};
+      setBill(makeDemoBill()); setTipChoices(defaultTipChoices()); setPerson('you'); setMethods(blankMethods());
+      setLinked(false); setPendingReceipt(null);
+      setPaymentError(null); setNow(0); setLedger(new PaymentLedger({ fundingDelayMs: 1500 }));
     },
   }}>{children}</DemoContext.Provider>;
 }

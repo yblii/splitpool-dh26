@@ -2,6 +2,7 @@ import { supabaseVerifier } from './auth.ts';
 import { buildApp } from './app.ts';
 import { postgresDatabase } from './db.ts';
 import { loadApiEnv } from './load-env.ts';
+import { createStripePayments } from './payments/stripe.ts';
 import { createReceiptParser } from './receipt/parser.ts';
 
 const env = loadApiEnv();
@@ -26,11 +27,20 @@ function resolveCorsOrigin() {
   };
 }
 
+const apiKey = process.env.STRIPE_API_KEY?.trim();
+const stripe = apiKey ? createStripePayments(apiKey, {
+  cardholderId: process.env.STRIPE_CARDHOLDER_ID?.trim(),
+  webhookSecret: process.env.STRIPE_WEBHOOK_SECRET?.trim(),
+}) : undefined;
 const app = await buildApp({
   db: DATABASE_URL ? postgresDatabase(DATABASE_URL) : undefined,
   verifyToken: SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY ? supabaseVerifier(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY) : undefined,
   origins: resolveCorsOrigin(),
+  stripe,
 });
+if (apiKey?.startsWith('sk_')) {
+  app.log.warn('STRIPE_API_KEY is a secret key. Prefer a restricted key with PaymentIntent and Issuing write access.');
+}
 
 app.log.info({
   envFile: env.path,

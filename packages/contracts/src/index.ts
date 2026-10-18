@@ -1,4 +1,7 @@
+import { allocateCents } from './allocate';
+
 export type * from './api.ts';
+export { allocateCents };
 
 export type PersonId = 'you' | 'alex' | 'sam';
 export const tipPercents = [15, 18, 20, 25] as const;
@@ -91,8 +94,6 @@ function tipForItems(items: number, choice: TipChoice): number {
 export function claimedHalves(item: DemoItem): number {
   return people.reduce((sum, person) => sum + item.halves[person.id], 0);
 }
-
-export { allocateCents } from './allocate';
 
 export function summarizeBill(bill: DemoBill, choices: TipChoices) {
   const subtotal = bill.items.reduce((sum, item) => sum + item.cents, 0);
@@ -306,3 +307,6 @@ export function demoBillFromVerifiedReceipt(
     tipCents: receipt.tipCents,
   };
 }
+
+export * from './payment';
+export * from './ledger';

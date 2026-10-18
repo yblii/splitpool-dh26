@@ -1,11 +1,13 @@
 import cors, { type FastifyCorsOptions } from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import Fastify from 'fastify';
-import { makeDemoBill, type ExtractedReceipt } from '@splitpool/contracts';
+import { makeDemoBill, PaymentLedger, type ExtractedReceipt } from '@splitpool/contracts';
 import type { VerifyToken } from './auth.ts';
 import type { Database } from './db.ts';
 import { ApiError } from './errors.ts';
 import { loadApiEnv } from './load-env.ts';
+import { registerPaymentRoutes } from './payments/routes.ts';
+import type { StripePayments } from './payments/stripe.ts';
 import {
   createReceiptParser,
   parseWithFallback,
@@ -26,6 +28,9 @@ export type BuildAppOptions = {
   /** Passed to @fastify/cors `origin`. */
   origins?: FastifyCorsOptions['origin'];
   logger?: boolean;
+  ledger?: PaymentLedger;
+  simulation?: boolean;
+  stripe?: StripePayments;
 };
 
 function normalizeImageMimeType(mimeType: string): string {
@@ -49,7 +54,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     origin: options.origins ?? false,
     // Browser (Expo web) sends a preflight for PATCH + Authorization + JSON.
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Authorization', 'Content-Type', 'Accept'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'Accept', 'Idempotency-Key', 'X-User-Id'],
   });
   await app.register(multipart, {
     limits: { files: 1, fileSize: MAX_RECEIPT_BYTES },
@@ -141,6 +146,8 @@ export async function buildApp(options: BuildAppOptions = {}) {
     if (errorDetail) body.errorDetail = errorDetail;
     return reply.code(200).send(body);
   });
+
+  await registerPaymentRoutes(app, options.ledger ?? new PaymentLedger(), options.simulation !== false, options.stripe);
 
   if (options.db && options.verifyToken) {
     const db = options.db;
