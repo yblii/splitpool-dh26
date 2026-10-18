@@ -59,12 +59,13 @@ The preview profile produces an installable Android APK. For iOS, use `--platfor
 - Exact-cent totals with equal or proportional tax/tip splitting; incomplete claims block demo payment.
 - Native camera/photo selection, Gemini receipt parsing via the local API (sample fallback without a key), and a host review screen that writes verified items into the local demo bill.
 - A demo card toggle and simulated contribution/merchant payment states.
-- Auth-first launch: sign-in is the default screen; sign-up collects first name, last name, email, password, and phone, then opens a verify-email page. After sign-in, the app loads `GET /me` and requires a PostgreSQL username/display-name setup before the main screens. A profile icon supports photo and profile edits.
+- Auth-first launch: sign-in → app profile setup (`GET/PATCH /me`) → groups landing. **New group** creates a Tiger Data group + active bill; group/bill screens load from the API. Invites by username or link token are supported for hosts.
+- A profile icon supports photo and profile edits. Receipt OCR and concurrent claims UI are next.
 - A read-only Fastify health endpoint and demo bill endpoint, with an in-app connection check.
 
-The mobile demo bill lives in memory and resets on reload. Participant switching simulates collaboration on one device. The backend now implements persistent profiles, groups/invites, manual bills, concurrent fractional claims, and personal tips using Tiger Data PostgreSQL and Supabase Auth; the mobile screens still need integration with these APIs. Receipt upload/OCR, real card linking, issuing, and collection/refunds belong to separate integrations. Supabase sign-in alone does not connect the demo bill to a database. No real money moves.
+After profile setup, the home screen lists your groups from PostgreSQL. Creating a group also creates an active bill with you as the first payer. Receipt items and live multi-device claims are not wired on mobile yet (Phases C/D). Legacy local demo receipt/payment screens remain in the app but are off the main path. No real money moves.
 
-Try the demo: claim the salad, open **Review split**, choose a split mode, add the demo card from Profile, and simulate payment. Use **Reset local demo** in Profile to start again.
+Try the live path: sign in → choose a username → **New group** → open the bill. Use group **Invite** to add another signed-in user by username or invite token.
 
 ## Optional API
 

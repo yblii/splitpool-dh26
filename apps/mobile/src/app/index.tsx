@@ -1,80 +1,149 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { router } from 'expo-router';
-import { claimedHalves, formatMoney, people } from '@splitpool/contracts';
-import { Button, Card, colors, DemoNote, Screen, SegmentedControl, styles } from '../components/ui';
-import { useDemo } from '../state/demo';
+import { router, useFocusEffect } from 'expo-router';
+import type { Group } from '@splitpool/contracts';
+import { Button, Card, DemoNote, Screen, colors, styles } from '../components/ui';
+import { createBill, createGroup, formatApiError, listGroups } from '../lib/apiClient';
+import { useAppProfile } from '../state/appProfile';
 
-export default function GroupScreen() {
-  const { bill, summary, person, setPerson, setClaim, phase, renameGroup } = useDemo();
-  const [renaming, setRenaming] = useState(false);
-  const [name, setName] = useState(bill.groupName);
-  const currentShare = summary.shares.find((share) => share.id === person)!;
-  const completedItems = bill.items.length - summary.unclaimed;
+export default function LandingScreen() {
+  const { appProfile } = useAppProfile();
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
+  const [groupName, setGroupName] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  return <Screen footer={<>
-    <View style={styles.row}>
-      <Text style={styles.label}>{person === 'you' ? 'Your share' : `${currentShare.name}’s share`}{!summary.complete ? ' · items only' : ''}</Text>
-      <Text style={local.share}>{formatMoney(currentShare.total)}</Text>
-    </View>
-    <Button title={phase === 'paid' ? 'View payment' : 'Review split'} onPress={() => router.push('/payment')} />
-    <DemoNote />
-  </>}>
-    <View style={{ gap: 10 }}>
-      <View style={styles.row}>
-        <Text style={styles.label}>Your group</Text>
-        <Pressable accessibilityRole="button" accessibilityState={{ disabled: phase !== 'editing' }} disabled={phase !== 'editing'}
-          hitSlop={12} onPress={() => setRenaming(!renaming)}><Text style={styles.link}>{renaming ? 'Cancel' : 'Edit group'}</Text></Pressable>
+  const loadGroups = useCallback(async () => {
+    setLoading(true);
+    setMessage('');
+    try {
+      setGroups(await listGroups());
+    } catch (error) {
+      setMessage(formatApiError(error));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadGroups();
+    }, [loadGroups]),
+  );
+
+  async function onCreateGroup() {
+    if (!appProfile) return;
+    const name = groupName.trim();
+    if (!name) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      const group = await createGroup(name);
+      const bill = await createBill(group.id, [appProfile.userId]);
+      setGroupName('');
+      setShowCreate(false);
+      router.push({ pathname: '/bill/[billId]', params: { billId: bill.id } });
+    } catch (error) {
+      setMessage(formatApiError(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Screen>
+      <View style={{ gap: 10 }}>
+        <Text style={styles.title}>Your groups.</Text>
+        <Text style={styles.subtitle}>
+          {appProfile
+            ? `Signed in as @${appProfile.username}. Create a group to start a bill.`
+            : 'Create a group to start a bill.'}
+        </Text>
       </View>
-      <Text style={styles.title}>{bill.groupName}</Text>
-      <Text style={styles.subtitle}>{bill.merchant} · {people.length} people</Text>
-    </View>
-    {renaming && <Card>
-      <TextInput accessibilityLabel="Group name" value={name} onChangeText={setName} style={styles.input} maxLength={60} />
-      <Button title="Save group name" disabled={!name.trim()} onPress={() => { renameGroup(name); setRenaming(false); }} />
-    </Card>}
-    <View style={local.totalRow}>
-      <View style={{ gap: 5 }}><Text style={styles.label}>Bill total</Text><Text style={local.total}>{formatMoney(summary.total)}</Text></View>
-      <View style={{ gap: 5, alignItems: 'flex-end' }}>
-        <Text style={[styles.label, { color: phase === 'paid' ? colors.success : colors.primary }]}>{phase === 'paid' ? 'Demo paid' : `${completedItems} of ${bill.items.length} claimed`}</Text>
-        <View style={local.progressTrack}><View style={[local.progressFill, { width: `${completedItems / Math.max(bill.items.length, 1) * 100}%` }]} /></View>
-      </View>
-    </View>
-    <View style={{ gap: 12 }}>
-      <Text style={styles.label}>Claiming as · demo participants</Text>
-      <SegmentedControl label="Claiming as" options={people.map((entry) => ({ value: entry.id, label: entry.name }))} value={person} onChange={setPerson} />
-    </View>
-    <View>
-      <View style={[styles.row, { paddingBottom: 8 }]}>
-        <Text style={styles.heading}>Choose your items</Text>
-        <Pressable accessibilityRole="button" accessibilityLabel="Add a receipt" hitSlop={12} onPress={() => router.push('/receipt')}><Text style={styles.link}>Receipt ↗</Text></Pressable>
-      </View>
-      <Text style={styles.small}>Select the share you want to cover.</Text>
-      {bill.items.map((item) => <View key={item.id} style={local.item}>
-        <View style={styles.row}><Text style={local.itemName}>{item.name}</Text><Text style={local.price}>{formatMoney(item.cents)}</Text></View>
+
+      {!showCreate ? (
+        <Button title="New group" onPress={() => { setShowCreate(true); setMessage(''); }} />
+      ) : (
+        <Card>
+          <Text style={styles.heading}>New group</Text>
+          <Text style={styles.label}>Group name</Text>
+          <TextInput
+            accessibilityLabel="Group name"
+            value={groupName}
+            onChangeText={setGroupName}
+            placeholder="e.g. Friday dinner"
+            style={styles.input}
+            maxLength={100}
+            autoFocus
+          />
+          <Button
+            title={busy ? 'Creating…' : 'Create group & bill'}
+            disabled={busy || !groupName.trim() || !appProfile}
+            onPress={() => void onCreateGroup()}
+          />
+          <Button
+            title="Cancel"
+            secondary
+            disabled={busy}
+            onPress={() => { setShowCreate(false); setGroupName(''); }}
+          />
+        </Card>
+      )}
+
+      {!!message && <Text style={[styles.small, { color: colors.warning }]}>{message}</Text>}
+
+      <View style={{ gap: 12 }}>
         <View style={styles.row}>
-          <Text style={[styles.small, { flex: 1 }]}>{people.filter((entry) => item.halves[entry.id] > 0).map((entry) => `${entry.name} ${item.halves[entry.id] === 2 ? 'all' : '½'}`).join(' · ') || 'No claims yet'}</Text>
-          <Text style={[styles.label, { color: claimedHalves(item) === 2 ? colors.success : colors.warning }]}>
-            {claimedHalves(item) === 2 ? 'Claimed' : `${(2 - claimedHalves(item)) / 2 * 100}% available`}
-          </Text>
+          <Text style={styles.heading}>Groups</Text>
+          <Pressable accessibilityRole="button" hitSlop={12} onPress={() => void loadGroups()}>
+            <Text style={styles.link}>{loading ? 'Loading…' : 'Refresh'}</Text>
+          </Pressable>
         </View>
-        <SegmentedControl label={item.name} options={[{ label: 'None', value: 0 }, { label: 'Half', value: 1 }, { label: 'All mine', value: 2 }]}
-          value={item.halves[person]} onChange={(value) => setClaim(item.id, value)} disabled={phase !== 'editing'} />
-      </View>)}
-    </View>
-    <Text accessibilityLiveRegion="polite" style={[styles.small, { color: summary.complete ? colors.success : colors.warning }]}>
-      {summary.complete ? 'Every item is accounted for. Ready to review.' : `${summary.unclaimed} ${summary.unclaimed === 1 ? 'item needs' : 'items need'} a claim before payment.`}
-    </Text>
-  </Screen>;
+
+        {!loading && groups.length === 0 && (
+          <Text style={styles.small}>No groups yet. Tap New group to create one.</Text>
+        )}
+
+        {groups.map((group) => (
+          <Pressable
+            key={group.id}
+            accessibilityRole="button"
+            accessibilityLabel={`Open group ${group.name}`}
+            onPress={() => router.push({ pathname: '/group/[groupId]', params: { groupId: group.id } })}
+            style={({ pressed }) => [local.groupRow, pressed && { opacity: 0.75 }]}
+          >
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={local.groupName}>{group.name}</Text>
+              <Text style={styles.small}>
+                {group.activeBillId ? 'Active bill' : 'No active bill'}
+                {group.hostId === appProfile?.userId ? ' · You are host' : ''}
+              </Text>
+            </View>
+            <Text style={styles.link}>Open</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <DemoNote />
+    </Screen>
+  );
 }
 
 const local = StyleSheet.create({
-  totalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 20, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border, gap: 12 },
-  total: { color: colors.ink, fontSize: 34, lineHeight: 41, letterSpacing: -0.8, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  share: { color: colors.ink, fontSize: 20, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  progressTrack: { height: 3, width: 94, backgroundColor: colors.border, marginTop: 5 },
-  progressFill: { height: 3, backgroundColor: colors.primary },
-  item: { paddingVertical: 22, borderBottomWidth: 1, borderColor: colors.border, gap: 12 },
-  itemName: { flex: 1, color: colors.ink, fontSize: 16, lineHeight: 23, letterSpacing: 0.4, fontWeight: '800', textTransform: 'uppercase' },
-  price: { color: colors.ink, fontSize: 16, lineHeight: 23, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  groupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderColor: colors.border,
+  },
+  groupName: {
+    color: colors.ink,
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '700',
+  },
 });
