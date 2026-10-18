@@ -12,6 +12,7 @@ import {
   createBill,
   createInvite,
   formatApiError,
+  getBill,
   getGroup,
 } from '../../lib/apiClient';
 import { avatarFromProfile } from '../../lib/peopleUi';
@@ -63,16 +64,19 @@ export default function ConnectedGroupScreen() {
       : undefined);
   const past = group?.bills.filter((bill) => bill.state === 'PAID' || bill.state === 'CANCELLED') ?? [];
 
-  async function ensureOpenBill() {
+  async function ensureOpenBill(): Promise<{ id: string; version: number } | null> {
     if (!group) return null;
-    if (group.activeBillId) return group.activeBillId;
+    if (group.activeBillId) {
+      const bill = await getBill(group.activeBillId);
+      return { id: bill.id, version: bill.version };
+    }
     if (!isHost) {
       setMessage('Only the host can open a new bill for this group.');
       return null;
     }
     const bill = await createBill(group.id);
     await load();
-    return bill.id;
+    return { id: bill.id, version: bill.version };
   }
 
   async function scanReceipt() {
@@ -80,9 +84,12 @@ export default function ConnectedGroupScreen() {
     setBusy(true);
     setMessage(null);
     try {
-      const billId = await ensureOpenBill();
-      if (!billId) return;
-      router.push({ pathname: '/bill/[billId]/receipt', params: { billId } } as Href);
+      const open = await ensureOpenBill();
+      if (!open) return;
+      router.push({
+        pathname: '/bill/[billId]/receipt',
+        params: { billId: open.id, expectedVersion: String(open.version) },
+      } as Href);
     } catch (error) {
       setMessage(formatApiError(error));
     } finally {

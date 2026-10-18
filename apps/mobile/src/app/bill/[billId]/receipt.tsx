@@ -4,7 +4,12 @@ import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { makeSampleExtractedReceipt, type ExtractedReceipt } from '@splitpool/contracts';
 import { Button, Card, colors, Screen, styles } from '../../../components/ui';
-import { extractBillReceipt, formatApiError, isApiConfigured } from '../../../lib/apiClient';
+import {
+  extractBillReceipt,
+  formatApiError,
+  getBill,
+  isApiConfigured,
+} from '../../../lib/apiClient';
 import { useReceiptSession } from '../../../state/receiptSession';
 
 type PickedReceipt = {
@@ -18,21 +23,45 @@ export default function BillReceiptScreen() {
     billId: string;
     expectedVersion?: string;
   }>();
-  const version = Number.parseInt(expectedVersion ?? '', 10);
+  const paramVersion = Number.parseInt(
+    Array.isArray(expectedVersion) ? expectedVersion[0] ?? '' : expectedVersion ?? '',
+    10,
+  );
   const { setSession } = useReceiptSession();
   const [picked, setPicked] = useState<PickedReceipt>();
   const [busy, setBusy] = useState(false);
 
-  function openReview(draft: ExtractedReceipt) {
-    if (!billId || !Number.isFinite(version) || version < 1) {
+  async function resolveVersion(): Promise<number | null> {
+    if (Number.isFinite(paramVersion) && paramVersion >= 1) return paramVersion;
+    if (!billId) return null;
+    try {
+      const bill = await getBill(billId);
+      return bill.version;
+    } catch {
+      return null;
+    }
+  }
+
+  async function openReview(draft: ExtractedReceipt) {
+    if (!billId) {
       Alert.alert('Missing bill', 'Go back to the bill and try scanning again.');
       return;
     }
-    setSession({ billId, expectedVersion: version, draft });
-    router.push({
-      pathname: '/bill/[billId]/receipt-review',
-      params: { billId },
-    } as unknown as Href);
+    setBusy(true);
+    try {
+      const version = await resolveVersion();
+      if (!version) {
+        Alert.alert('Missing bill', 'Go back to the bill and try scanning again.');
+        return;
+      }
+      setSession({ billId, expectedVersion: version, draft });
+      router.push({
+        pathname: '/bill/[billId]/receipt-review',
+        params: { billId },
+      } as unknown as Href);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function pick(camera: boolean) {
@@ -76,7 +105,7 @@ export default function BillReceiptScreen() {
         'Set EXPO_PUBLIC_API_URL in apps/mobile/.env and run the API, or continue with the sample receipt.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Use sample', onPress: () => openReview(makeSampleExtractedReceipt()) },
+          { text: 'Use sample', onPress: () => { void openReview(makeSampleExtractedReceipt()); } },
         ],
       );
       return;
@@ -94,15 +123,15 @@ export default function BillReceiptScreen() {
         Alert.alert(
           'Using sample parse',
           `Live parsing was unavailable, so labeled sample items were loaded for review.\n\n${detail}`,
-          [{ text: 'Review', onPress: () => openReview(draft) }],
+          [{ text: 'Review', onPress: () => { void openReview(draft); } }],
         );
         return;
       }
-      openReview(draft);
+      await openReview(draft);
     } catch (error) {
       Alert.alert('Could not parse receipt', `${formatApiError(error)}\n\nYou can still continue with the sample receipt.`, [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Use sample', onPress: () => openReview(makeSampleExtractedReceipt()) },
+        { text: 'Use sample', onPress: () => { void openReview(makeSampleExtractedReceipt()); } },
       ]);
     } finally {
       setBusy(false);
@@ -112,7 +141,7 @@ export default function BillReceiptScreen() {
   return (
     <Screen footer={<>
       <Button
-        title={busy ? 'Parsing…' : picked ? 'Parse receipt' : Platform.OS === 'web' ? 'Choose a photo' : 'Take a photo'}
+        title={busy ? 'Working…' : picked ? 'Parse receipt' : Platform.OS === 'web' ? 'Choose a photo' : 'Take a photo'}
         disabled={busy}
         onPress={() => {
           if (!picked) void pick(Platform.OS !== 'web');
@@ -151,7 +180,7 @@ export default function BillReceiptScreen() {
         title="Use sample receipt"
         secondary
         disabled={busy}
-        onPress={() => openReview(makeSampleExtractedReceipt())}
+        onPress={() => { void openReview(makeSampleExtractedReceipt()); }}
       />
     </Screen>
   );
