@@ -163,21 +163,6 @@ export function ReceiptPaper({ title, dimTitle, alert, children }: {
   </View>;
 }
 
-function shareMark(count: number, custom: boolean, basisPoints: number) {
-  if (count <= 1) return '✓';
-  if (custom) return formatBasisPoints(basisPoints);
-  return `1/${count}`;
-}
-
-function claimLabel(name: string, count: number, mine: boolean, custom: boolean, basisPoints: number) {
-  if (count === 0) return `Claim ${name}`;
-  if (!mine) return count === 1
-    ? `${name} is claimed. Tap to claim your share.`
-    : `${name} split ${shareMark(count, false, 0)}. Tap to claim your share.`;
-  if (count === 1) return `${name}, claimed. Tap to remove your claim.`;
-  return `${name} split ${shareMark(count, custom, basisPoints)}. Tap to remove your claim.`;
-}
-
 export function ReceiptItemCard({
   item, resolution, people, roster, viewerId, editable, faded, percentOpen, expanded, emphasized = false,
   onClaim, onOpen, onEditPercent, onSavePercent, onCancelPercent, onLeave,
@@ -317,11 +302,13 @@ export function ReceiptItemCard({
             accessibilityRole="button"
             accessibilityLabel={mine
               ? `${item.name}, ${formatMoney(item.cents)}. Paying: ${payers}. Your share ${formatMoney(mine.cents)}.`
-              : `${item.name}, ${formatMoney(item.cents)}, unclaimed.`}
-            accessibilityHint="Tap the line to open it. Tap the circle to claim."
+              : `${item.name}, ${formatMoney(item.cents)}, unclaimed. Tap to claim.`}
+            accessibilityHint="Tap the line to claim it and see each share."
+            disabled={!editable && !mine}
             onPress={() => {
               if (motion.swiped) return;
-              onOpen();
+              if (editable && !mine) onClaim();
+              else onOpen();
             }}
             style={cardStyles.lineMain}
           >
@@ -337,7 +324,6 @@ export function ReceiptItemCard({
                 {status.tail}
               </Text>
             </View>
-            <Text {...moneyMark} style={cardStyles.price}>{formatMoney(item.cents)}</Text>
             {resolution.portions.length > 0 ? <View style={cardStyles.avatars}>
               {resolution.portions.map((portion, index) => {
                 const person = people.find((entry) => entry.id === portion.personId);
@@ -346,22 +332,7 @@ export function ReceiptItemCard({
                 </View> : null;
               })}
             </View> : null}
-          </Pressable>
-          <Pressable
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: !!mine, disabled: !editable }}
-            accessibilityLabel={claimLabel(item.name, resolution.portions.length, !!mine, mine?.mode === 'custom', mine?.basisPoints ?? 0)}
-            disabled={!editable}
-            hitSlop={6}
-            onPress={() => {
-              if (mine) onLeave();
-              else onClaim();
-            }}
-            style={[cardStyles.claimCircle, mine && cardStyles.claimOn]}
-          >
-            <Text style={[cardStyles.claimMark, mine && cardStyles.claimOnMark, resolution.portions.length > 1 && cardStyles.claimFraction]}>
-              {mine ? shareMark(resolution.portions.length, mine.mode === 'custom', mine.basisPoints) : ''}
-            </Text>
+            <Text {...moneyMark} style={cardStyles.price}>{formatMoney(item.cents)}</Text>
           </Pressable>
         </View>}
         {expanded && !percentOpen && <View style={cardStyles.opened}>
@@ -649,17 +620,8 @@ const cardStyles = StyleSheet.create({
   name: { fontFamily: 'Inter', color: colors.ink, fontSize: 16, lineHeight: 21, fontWeight: '700' },
   meta: { color: colors.muted, fontSize: 12, lineHeight: 16 },
   metaMoney: { fontFamily: monoFamily, color: colors.muted, fontSize: 12, lineHeight: 16, fontWeight: '700' },
-  price: { fontFamily: monoFamily, color: colors.ink, fontSize: 15, lineHeight: 20, fontWeight: '700' },
+  price: { fontFamily: monoFamily, color: colors.ink, fontSize: 15, lineHeight: 20, fontWeight: '700', marginRight: 8, textAlign: 'right' },
   avatars: { flexDirection: 'row', marginLeft: 2 },
-  claimCircle: {
-    minWidth: 36, height: 36, paddingHorizontal: 6, borderRadius: 18, marginRight: 8,
-    borderWidth: 2, borderColor: colors.success, backgroundColor: '#FFFFFF',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  claimOn: { backgroundColor: colors.success, borderColor: colors.success },
-  claimMark: { fontFamily: 'Inter', color: colors.success, fontSize: 18, lineHeight: 22, fontWeight: '700' },
-  claimOnMark: { color: '#FFFFFF' },
-  claimFraction: { fontSize: 11, lineHeight: 14, fontWeight: '800' },
   percentChip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
   percentText: { color: colors.primary, fontSize: 12, lineHeight: 16, fontWeight: '800' },
   editRow: {

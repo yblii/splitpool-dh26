@@ -90,7 +90,7 @@ export default function SplitScreen() {
           emphasized={focusId === item.id}
           onClaim={() => {
             demo.claimItem(item.id);
-            setOpenId(null);
+            setOpenId(item.id);
           }}
           onOpen={() => setOpenId(openId === item.id ? null : item.id)}
           onEditPercent={() => {
