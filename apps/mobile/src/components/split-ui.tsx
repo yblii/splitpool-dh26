@@ -266,7 +266,7 @@ export function ReceiptItemCard({
   }
 
   return <View style={[cardStyles.shell, emphasized && { borderWidth: 2, borderColor: colors.warning, borderRadius: 16 }]}>
-    {editable && !percentOpen && <View style={cardStyles.reveal}>
+    {editable && !percentOpen && !faded && <View style={cardStyles.reveal}>
       <Text style={cardStyles.revealText}>enter %</Text>
     </View>}
     <Animated.View style={{ transform: [{ translateX }], opacity: fade }} {...(editable && !percentOpen ? pan.panHandlers : {})}>
@@ -343,7 +343,15 @@ export function ReceiptItemCard({
             return <View key={portion.personId} style={[cardStyles.payer, yours && cardStyles.payerYours]}>
               {person && <MemberAvatar person={person} size={28} />}
               <Text style={[cardStyles.portionName, { color: person?.color ?? colors.ink }, yours && cardStyles.portionYours]}>{person?.name ?? 'Someone'}</Text>
-              <Text style={[cardStyles.portionMeta, yours && cardStyles.portionYours]}>{formatBasisPoints(portion.basisPoints)}</Text>
+              {yours && editable ? <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Your share is ${formatBasisPoints(portion.basisPoints)}. Change it.`}
+                hitSlop={8}
+                onPress={onEditPercent}
+                style={cardStyles.percentEdit}
+              >
+                <Text style={[cardStyles.portionMeta, cardStyles.portionYours]}>{formatBasisPoints(portion.basisPoints)}</Text>
+              </Pressable> : <Text style={cardStyles.portionMeta}>{formatBasisPoints(portion.basisPoints)}</Text>}
               <Text {...moneyMark} style={[cardStyles.portionMoney, yours && cardStyles.portionMoneyYours]}>{formatMoney(portion.cents)}</Text>
             </View>;
           })}
@@ -652,6 +660,11 @@ const cardStyles = StyleSheet.create({
   portionName: { flex: 1, fontSize: 14, lineHeight: 18, fontWeight: '500' },
   portionYours: { fontWeight: '800' },
   portionMeta: { color: colors.muted, fontSize: 13, lineHeight: 18, fontWeight: '500' },
+  percentEdit: {
+    minWidth: 52, minHeight: 32, paddingHorizontal: 8, borderRadius: 8,
+    borderWidth: 1.5, borderColor: colors.primary, backgroundColor: '#FFFFFF',
+    alignItems: 'center', justifyContent: 'center',
+  },
   portionMoney: { fontFamily: monoFamily, width: 76, textAlign: 'right', color: colors.ink, fontSize: 15, fontWeight: '400' },
   portionMoneyYours: { fontWeight: '800' },
   warn: { color: colors.warning, fontSize: 13, lineHeight: 18 },
