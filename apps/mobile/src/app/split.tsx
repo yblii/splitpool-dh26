@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Text } from 'react-native';
-import { router } from 'expo-router';
+import { Pressable, Text, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { AvatarStack, PersonSwitcher } from '../components/people';
 import { BillSummary, ReceiptItemCard, ReceiptPaper } from '../components/split-ui';
 import { AppHeader, EmptyState, ErrorBanner, Screen, styles } from '../components/ui';
@@ -19,6 +19,8 @@ export default function SplitScreen() {
     setPercentId(null);
     setAlert(null);
   }
+  const params = useLocalSearchParams<{ item?: string | string[] }>();
+  const focusId = Array.isArray(params.item) ? params.item[0] : params.item;
   const editable = bill?.phase === 'editing';
   const viewerTotal = summary?.people.find((person) => person.id === demo.personId);
 
@@ -44,16 +46,21 @@ export default function SplitScreen() {
       }}
       right={<AvatarStack people={demo.members} />}
     />}
-    footer={<BillSummary
-      yourLabel={summary.itemsComplete ? 'Your total' : 'Your items'}
-      yourCents={yourCents}
-      totalCents={summary.computedTotalCents}
-      allocated={summary.fullyAllocated}
-      count={summary.itemCount}
-      actionLabel="Review split"
-      onAction={() => router.push('/overview')}
-      note={summary.itemsComplete ? undefined : 'Tax and tip join your total once every item is fully allocated.'}
-    />}
+    footer={<View style={{ gap: 10 }}>
+      {demo.quietNotices.map((notice) => <Pressable key={notice.id} accessibilityRole="button" accessibilityLabel={`${notice.message} Dismiss.`} onPress={() => demo.dismissNotice(notice.id)}>
+        <ErrorBanner message={notice.message} />
+      </Pressable>)}
+      <BillSummary
+        yourLabel={summary.itemsComplete ? 'Your total' : 'Your items'}
+        yourCents={yourCents}
+        totalCents={summary.computedTotalCents}
+        allocated={summary.fullyAllocated}
+        count={summary.itemCount}
+        actionLabel="Review split"
+        onAction={() => router.push('/overview')}
+        note={summary.itemsComplete ? undefined : 'Tax and tip join your total once every item is fully allocated.'}
+      />
+    </View>}
   >
     <Text style={styles.subtitle}>{billStatusLabel(bill.phase)} · Tap a line to claim it. Slide it left, then enter your %.</Text>
     {!editable && <ErrorBanner title="Claims are locked" message="This bill is past editing. Reopen it from review, before collection, if you still need to change shares." />}
@@ -74,6 +81,7 @@ export default function SplitScreen() {
           faded={!!percentId && percentId !== item.id}
           percentOpen={percentId === item.id}
           expanded={openId === item.id && percentId !== item.id}
+          emphasized={focusId === item.id}
           onClaim={() => {
             demo.claimItem(item.id);
             setOpenId(null);

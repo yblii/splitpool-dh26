@@ -155,6 +155,7 @@ type DemoContextValue = {
   removeGroupMember: (groupId: string, memberId: string) => string | null;
   addFriend: (username: string) => { ok: true; person: DemoPerson } | { ok: false; message: string };
   claimItem: (itemId: string) => void;
+  assignItem: (itemId: string, personId: string) => string | null;
   unclaimItem: (itemId: string) => void;
   customizeItem: (itemId: string, basisPoints: number) => string | null;
   resetItem: (itemId: string) => void;
@@ -170,6 +171,8 @@ type DemoContextValue = {
   simulateMerchant: () => void;
   completeMerchant: () => void;
   cancelCollection: () => void;
+  dismissNotice: (id: string) => void;
+  quietNotices: { id: string; message: string }[];
   reset: () => void;
 };
 
@@ -198,6 +201,7 @@ export function DemoProvider({ children }: PropsWithChildren) {
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [pendingReceipt, setPendingReceipt] = useState<ExtractedReceipt | null>(null);
   const [receiptGroupId, setReceiptGroupId] = useState('fam');
+  const [notices, setNotices] = useState<{ id: string; personId: string; message: string }[]>([]);
 
   const you = useMemo<DemoPerson>(() => ({
     id: HOST_ID,
@@ -307,6 +311,30 @@ export function DemoProvider({ children }: PropsWithChildren) {
       ...bill,
       items: bill.items.map((item) => item.id === itemId ? joinSplit(item, activePersonId) : item),
     }));
+  }
+
+  function assignItem(itemId: string, personIdToAssign: string) {
+    if (!currentBill || currentBill.phase !== 'editing') return 'This bill is locked.';
+    if (!viewingGroup.memberIds.includes(personIdToAssign)) return 'That person is not in this group.';
+    const item = currentBill.items.find((entry) => entry.id === itemId);
+    if (!item) return 'That item is no longer on the bill.';
+    if (item.shares.some((share) => share.personId === personIdToAssign)) return null;
+    updateEditing(currentBill.groupId, (bill) => ({
+      ...bill,
+      items: bill.items.map((entry) => entry.id === itemId ? joinSplit(entry, personIdToAssign) : entry),
+    }));
+    if (personIdToAssign !== activePersonId) {
+      setNotices((current) => [...current, {
+        id: `${itemId}-${personIdToAssign}-${Date.now().toString(36)}`,
+        personId: personIdToAssign,
+        message: `${item.name} was added to your items.`,
+      }]);
+    }
+    return null;
+  }
+
+  function dismissNotice(id: string) {
+    setNotices((current) => current.filter((notice) => notice.id !== id));
   }
 
   function unclaimItem(itemId: string) {
@@ -494,6 +522,7 @@ export function DemoProvider({ children }: PropsWithChildren) {
     setSelectedCardId(null);
     setPendingReceipt(null);
     setReceiptGroupId('fam');
+    setNotices([]);
   }
 
   const value: DemoContextValue = {
@@ -506,9 +535,11 @@ export function DemoProvider({ children }: PropsWithChildren) {
     selectCard: setSelectedCardId, setPendingReceipt, lookup, activityLabel,
     billFor: (groupId) => bills[groupId] ?? null,
     createGroup, renameGroup, addGroupMember, removeGroupMember, addFriend,
-    claimItem, unclaimItem, customizeItem, resetItem, setSplitMode, applyVerifiedReceipt,
+    claimItem, assignItem, unclaimItem, customizeItem, resetItem, setSplitMode, applyVerifiedReceipt,
     startReview, reopenReview, approveShare, confirmCollect,
     simulateCollectionSuccess, simulateCollectionFailure, retryFailed, simulateMerchant, completeMerchant, cancelCollection,
+    dismissNotice,
+    quietNotices: notices.filter((notice) => notice.personId === activePersonId),
     reset,
   };
 

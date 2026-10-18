@@ -170,7 +170,7 @@ function claimLabel(name: string, count: number, mine: boolean, custom: boolean,
 }
 
 export function ReceiptItemCard({
-  item, resolution, people, roster, viewerId, editable, faded, percentOpen, expanded,
+  item, resolution, people, roster, viewerId, editable, faded, percentOpen, expanded, emphasized = false,
   onClaim, onOpen, onEditPercent, onSavePercent, onCancelPercent, onLeave,
 }: {
   item: SplitLine;
@@ -182,6 +182,7 @@ export function ReceiptItemCard({
   faded: boolean;
   percentOpen: boolean;
   expanded: boolean;
+  emphasized?: boolean;
   onClaim: () => void;
   onOpen: () => void;
   onEditPercent: () => void;
@@ -269,7 +270,7 @@ export function ReceiptItemCard({
     if (message) setDraft((current) => ({ ...current, error: message }));
   }
 
-  return <View style={cardStyles.shell}>
+  return <View style={[cardStyles.shell, emphasized && { borderWidth: 2, borderColor: colors.warning, borderRadius: 16 }]}>
     {editable && !percentOpen && <View style={cardStyles.reveal}>
       <Text style={cardStyles.revealText}>enter %</Text>
     </View>}

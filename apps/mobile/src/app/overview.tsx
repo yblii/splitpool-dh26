@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { formatBasisPoints, formatMoney, itemVisualState, type SplitBlocker } from '@splitpool/contracts';
 import { PersonSwitcher } from '../components/people';
@@ -46,7 +46,14 @@ export default function OverviewScreen() {
 
   return <Screen
     header={<AppHeader title="Overview" onBack={() => router.back()} />}
-    footer={bill.phase === 'editing' ? <Button title={host ? 'Send for approval' : 'Waiting on the host'} disabled={!host || !summary.readyToFinalize} onPress={send} /> : <Button title="Open approval" onPress={() => router.push('/confirm')} />}
+    footer={<View style={{ gap: 10 }}>
+      {demo.quietNotices.map((notice) => <Pressable key={notice.id} accessibilityRole="button" accessibilityLabel={`${notice.message} Dismiss.`} onPress={() => demo.dismissNotice(notice.id)}>
+        <ErrorBanner message={notice.message} />
+      </Pressable>)}
+      {bill.phase === 'editing'
+        ? <Button title={host ? 'Send for approval' : 'Waiting on the host'} disabled={!host || !summary.readyToFinalize} onPress={send} />
+        : <Button title="Open approval" onPress={() => router.push('/confirm')} />}
+    </View>}
   >
     <View style={{ gap: 4 }}>
       <Text style={styles.title}>{bill.merchant}</Text>
@@ -67,7 +74,38 @@ export default function OverviewScreen() {
       {summary.readyToFinalize && <ErrorBanner tone="success" title="Ready" message="Every item is fully allocated and the totals match." />}
     </Card>
     {summary.blockers.length > 0 && <View style={{ gap: 8 }}>
-      {summary.blockers.map((blocker, index) => <ErrorBanner key={`${blocker.kind}-${index}`} message={blockerCopy(blocker)} />)}
+      {summary.blockers.map((blocker, index) => {
+        const itemId = 'itemId' in blocker ? blocker.itemId : null;
+        const unclaimed = blocker.kind === 'unclaimed';
+        return <View key={`${blocker.kind}-${itemId ?? index}`} style={{ gap: 8 }}>
+          <View style={[styles.banner, { backgroundColor: colors.warningSoft, flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={itemId ? `Open ${blockerCopy(blocker)}` : blockerCopy(blocker)}
+              disabled={!itemId}
+              onPress={() => itemId && router.push({ pathname: '/split', params: { item: itemId } })}
+              style={{ flex: 1 }}
+            >
+              <Text style={[styles.bannerBody, { color: colors.warning }]}>{blockerCopy(blocker)}</Text>
+            </Pressable>
+            {unclaimed && bill.phase === 'editing' && <Pressable accessibilityRole="button" accessibilityLabel={`Claim ${blocker.itemName}`} onPress={() => demo.claimItem(blocker.itemId)} hitSlop={6}>
+              <Text style={styles.link}>Claim</Text>
+            </Pressable>}
+          </View>
+          {unclaimed && bill.phase === 'editing' && <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+            <Text style={styles.small}>Assign</Text>
+            {demo.members.filter((person) => person.id !== demo.personId).map((person) => <Pressable
+              key={person.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Assign ${blocker.itemName} to ${person.name}`}
+              onPress={() => demo.assignItem(blocker.itemId, person.id)}
+              style={{ minHeight: 36, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 18, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.border }}
+            >
+              <Text style={{ color: person.color, fontWeight: '700' }}>{person.name}</Text>
+            </Pressable>)}
+          </View>}
+        </View>;
+      })}
     </View>}
     {message && <ErrorBanner message={message} />}
     <PersonSwitcher people={demo.members} value={demo.personId} onChange={demo.setPerson} />
