@@ -193,7 +193,7 @@ export async function getBill(billId: string, { signal }: { signal?: AbortSignal
   return apiRequest<BillResponse>(`/bills/${billId}`, { signal });
 }
 
-/** Mark a collaboration bill PAID/CANCELLED so it leaves group activeBillId listings. */
+/** Mark a collaboration bill PAID/CANCELLED; the group leaves open-bill listings. */
 export async function closeBill(
   billId: string,
   state: 'PAID' | 'CANCELLED',
