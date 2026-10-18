@@ -623,7 +623,7 @@ const paperStyles = StyleSheet.create({
       },
     }),
   },
-  title: { ...typeScale.pageTitle, textAlign: 'center', paddingTop: 2, paddingBottom: 6 },
+  title: { ...typeScale.pageTitle, fontSize: 24, lineHeight: 30, textAlign: 'center', paddingTop: 2, paddingBottom: 6 },
   subheading: { ...typeScale.subheading, textAlign: 'center', paddingTop: 2, paddingBottom: 6 },
   dimmed: { opacity: 0.25 },
   rule: { borderBottomWidth: 1, borderStyle: 'dashed', borderColor: '#D9CBB8', marginBottom: 4 },
