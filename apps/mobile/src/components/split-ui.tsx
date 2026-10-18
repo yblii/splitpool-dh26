@@ -307,13 +307,11 @@ export function ReceiptItemCard({
             accessibilityRole="button"
             accessibilityLabel={mine
               ? `${item.name}, ${formatMoney(item.cents)}. Paying: ${payers}. Your share ${formatMoney(mine.cents)}.`
-              : `${item.name}, ${formatMoney(item.cents)}, unclaimed. Tap to claim.`}
-            accessibilityHint={editable ? 'Tap to claim. Swipe left to enter your percent.' : undefined}
-            disabled={!editable}
+              : `${item.name}, ${formatMoney(item.cents)}, unclaimed.`}
+            accessibilityHint="Tap the line to open it. Tap the circle to claim."
             onPress={() => {
               if (motion.dragging) return;
-              if (!mine) onClaim();
-              else if (expanded) onOpen();
+              onOpen();
             }}
             style={cardStyles.lineMain}
           >

@@ -19,8 +19,14 @@ export default function SplitScreen() {
     setPercentId(null);
     setAlert(null);
   }
-  const params = useLocalSearchParams<{ item?: string | string[] }>();
+  const params = useLocalSearchParams<{ item?: string | string[]; open?: string | string[] }>();
   const focusId = Array.isArray(params.item) ? params.item[0] : params.item;
+  const openToken = Array.isArray(params.open) ? params.open[0] : params.open;
+  const [seenToken, setSeenToken] = useState<string | null>(null);
+  if (openToken && focusId && seenToken !== openToken) {
+    setSeenToken(openToken);
+    setOpenId(focusId);
+  }
   const editable = bill?.phase === 'editing';
   const viewerTotal = summary?.people.find((person) => person.id === demo.personId);
 

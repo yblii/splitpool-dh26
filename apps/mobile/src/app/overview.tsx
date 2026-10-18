@@ -83,7 +83,7 @@ export default function OverviewScreen() {
               accessibilityRole="button"
               accessibilityLabel={itemId ? `Open ${blockerCopy(blocker)}` : blockerCopy(blocker)}
               disabled={!itemId}
-              onPress={() => itemId && router.push({ pathname: '/split', params: { item: itemId } })}
+              onPress={() => itemId && router.push({ pathname: '/split', params: { item: itemId, open: String(Date.now()) } })}
               style={{ flex: 1 }}
             >
               <Text style={[styles.bannerBody, { color: colors.warning }]}>{blockerCopy(blocker)}</Text>
@@ -129,7 +129,13 @@ export default function OverviewScreen() {
         if (!resolution) return null;
         const visual = itemVisualState(resolution);
         const tone = visual === 'incomplete' || visual === 'unclaimed' || visual === 'error' ? colors.warning : colors.success;
-        return <View key={item.id} style={{ backgroundColor: colors.paper, borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 14, gap: 4 }}>
+        return <Pressable
+          key={item.id}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${item.name}`}
+          onPress={() => router.push({ pathname: '/split', params: { item: item.id, open: String(Date.now()) } })}
+          style={{ backgroundColor: colors.paper, borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 14, gap: 4 }}
+        >
           <View style={styles.row}>
             <Text style={[styles.text, { fontWeight: '700', flex: 1 }]}>{item.name}</Text>
             <Text {...moneyMark} style={{ fontFamily: monoFamily, fontWeight: '700', color: colors.ink }}>{formatMoney(item.cents)}</Text>
@@ -138,7 +144,7 @@ export default function OverviewScreen() {
           <Text style={styles.small}>{resolution.portions.length === 0
             ? 'No claims yet'
             : resolution.portions.map((portion) => `${demo.lookup(portion.personId).name} ${formatBasisPoints(portion.basisPoints)}`).join(' · ')}</Text>
-        </View>;
+        </Pressable>;
       })}
     </View>
     {!host && bill.phase === 'editing' && <Text style={styles.small}>You can claim items. The host sends the finished bill for approval.</Text>}
