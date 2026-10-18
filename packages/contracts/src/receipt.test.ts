@@ -4,7 +4,7 @@ import {
   makeSampleExtractedReceipt,
   reconcileReceipt,
   verifyReceipt,
-} from './receipt.js';
+} from './index';
 
 describe('receipt contracts', () => {
   it('builds a sample draft that reconciles to the demo bill totals', () => {
