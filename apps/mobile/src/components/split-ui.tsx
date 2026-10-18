@@ -353,6 +353,15 @@ export function ReceiptItemCard({
             const person = people.find((entry) => entry.id === portion.personId);
             const yours = portion.personId === viewerId;
             return <View key={portion.personId} style={[cardStyles.payer, yours && cardStyles.payerYours]}>
+              {yours && editable ? <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${person?.name ?? 'your'} claim`}
+                hitSlop={6}
+                onPress={onLeave}
+                style={cardStyles.removeClaim}
+              >
+                <Text style={cardStyles.removeMark}>−</Text>
+              </Pressable> : null}
               {person && <MemberAvatar person={person} size={28} />}
               <Text style={[cardStyles.portionName, { color: person?.color ?? colors.ink }, yours && cardStyles.portionYours]}>{person?.name ?? 'Someone'}</Text>
               {yours && editable ? <Pressable
@@ -371,9 +380,6 @@ export function ReceiptItemCard({
             Overflow portion {formatBasisPoints(resolution.remainderBasisPoints)} · <Text {...moneyMark} style={{ fontFamily: monoFamily, color: colors.warning }}>{formatMoney(resolution.unallocatedCents)}</Text> still open
           </Text>}
           {resolution.message && visual !== 'equal' && visual !== 'single' && <Text style={cardStyles.warn}>{resolution.message}</Text>}
-          {editable && mine && <Pressable accessibilityRole="button" hitSlop={8} onPress={onLeave}>
-            <Text style={[styles.link, { color: colors.danger }]}>Remove my claim</Text>
-          </Pressable>}
         </View>}
       </Animated.View>
     </Animated.View>
@@ -669,6 +675,11 @@ const cardStyles = StyleSheet.create({
   alertText: { flex: 1, color: colors.danger, fontSize: 13, lineHeight: 18 },
   opened: { gap: 8, paddingLeft: 24, paddingRight: 4, paddingBottom: 10, backgroundColor: RECEIPT_PAPER },
   payer: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 36, borderRadius: 8, paddingHorizontal: 4 },
+  removeClaim: {
+    width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.dangerSoft,
+  },
+  removeMark: { color: colors.danger, fontSize: 22, lineHeight: 24, fontWeight: '700', marginTop: -2 },
   payerYours: { backgroundColor: '#E7F0F6' },
   portionName: { flex: 1, fontSize: 14, lineHeight: 18, fontWeight: '500' },
   portionYours: { fontWeight: '800' },
