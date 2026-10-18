@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { GroupCard } from '../components/groups';
 import { AvatarStack, MemberAvatar } from '../components/people';
 import { BottomSheet } from '../components/sheets';
-import { interFace } from '../fonts';
+import { interFace, interItalic } from '../fonts';
 import { AppHeader, Button, ErrorBanner, Screen, colors, styles } from '../components/ui';
 import { useDemo } from '../state/demo';
 
@@ -101,7 +101,7 @@ export default function GroupsScreen() {
     </View>}
   >
     <Pressable accessibilityRole="button" accessibilityLabel={`Your title, ${demo.you.title}`} onPress={() => router.push('/profile')} style={{ alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center' }}>
-      <Text style={yourTitle}>{demo.you.title}</Text>
+      <Text style={yourTitle}>“{demo.you.title}”</Text>
     </Pressable>
     <View style={styles.row}>
       <Text style={groupsHeading}>Groups</Text>
@@ -209,7 +209,13 @@ export default function GroupsScreen() {
   </Screen>;
 }
 
-const yourTitle = { fontFamily: 'Inter', fontSize: 21, lineHeight: 26, fontWeight: '600' as const, color: colors.ink };
+const yourTitle = {
+  fontSize: 21, lineHeight: 26, color: colors.ink,
+  ...Platform.select({
+    web: { fontFamily: 'Inter', fontWeight: '400' as const, fontStyle: 'italic' as const },
+    default: { fontFamily: interItalic, fontWeight: 'normal' as const, fontStyle: 'normal' as const },
+  }),
+};
 const groupsHeading = { fontFamily: 'Inter', fontSize: 22, lineHeight: 28, fontWeight: '600' as const, color: colors.ink };
 const dock = { minHeight: 48, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 };
 const dockLabel = { fontFamily: 'Inter', color: colors.ink, fontWeight: '700' as const, fontSize: 15 };
