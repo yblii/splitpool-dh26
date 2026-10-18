@@ -136,6 +136,7 @@ type DemoContextValue = {
   members: DemoPerson[];
   currentBill: ActiveBill | null;
   summary: SplitSummary | null;
+  cards: DemoCard[];
   selectedCard: DemoCard | null;
   linked: boolean;
   pendingReceipt: ExtractedReceipt | null;
@@ -147,6 +148,7 @@ type DemoContextValue = {
   selectReceiptGroup: (id: string) => void;
   setLinked: (linked: boolean) => void;
   selectCard: (id: string | null) => void;
+  addPayment: (brand: string, last4: string) => string | null;
   setPendingReceipt: (draft: ExtractedReceipt | null) => void;
   lookup: (id: string) => DemoPerson;
   activityLabel: (groupId: string) => string | undefined;
@@ -200,6 +202,7 @@ export function DemoProvider({ children }: PropsWithChildren) {
   const [bills, setBills] = useState<Record<string, ActiveBill>>(seedBills);
   const [personId, setPersonId] = useState(HOST_ID);
   const [viewingGroupId, setViewingGroupId] = useState('fam');
+  const [cards, setCards] = useState<DemoCard[]>(DEMO_CARDS);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [pendingReceipt, setPendingReceipt] = useState<ExtractedReceipt | null>(null);
   const [receiptGroupId, setReceiptGroupId] = useState('fam');
@@ -227,7 +230,7 @@ export function DemoProvider({ children }: PropsWithChildren) {
     [currentBill, viewingGroup],
   );
   const members = viewingGroup.memberIds.map((id) => lookup(id));
-  const selectedCard = DEMO_CARDS.find((card) => card.id === selectedCardId) ?? null;
+  const selectedCard = cards.find((card) => card.id === selectedCardId) ?? null;
   const activePersonId = viewingGroup.memberIds.includes(personId) ? personId : HOST_ID;
 
   function updateEditing(groupId: string, recipe: (bill: ActiveBill) => ActiveBill) {
@@ -519,6 +522,17 @@ export function DemoProvider({ children }: PropsWithChildren) {
     setPhase('editing', { approvals: {}, failedPersonId: null });
   }
 
+  function addPayment(brand: string, last4: string) {
+    const name = brand.trim().slice(0, 30);
+    if (!name) return 'Enter a name for this payment type.';
+    const digits = last4.replace(/\D/g, '');
+    if (last4.trim() && digits.length !== 4) return 'Use 4 digits for the label, or leave it blank.';
+    const id = `pay-${Date.now().toString(36)}`;
+    setCards((current) => [...current, { id, brand: name, last4: digits }]);
+    setSelectedCardId(id);
+    return null;
+  }
+
   function reset() {
     setBills(seedBills());
     setGroups(seedGroups());
@@ -526,6 +540,7 @@ export function DemoProvider({ children }: PropsWithChildren) {
     setPastBills(seedPastBills());
     setPersonId(HOST_ID);
     setViewingGroupId('fam');
+    setCards(DEMO_CARDS);
     setSelectedCardId(null);
     setPendingReceipt(null);
     setReceiptGroupId('fam');
@@ -534,12 +549,12 @@ export function DemoProvider({ children }: PropsWithChildren) {
 
   const value: DemoContextValue = {
     profileName, username, friends, groups, pastBills, personId: activePersonId, you,
-    viewingGroupId, viewingGroup, members, currentBill, summary, selectedCard,
+    viewingGroupId, viewingGroup, members, currentBill, summary, cards, selectedCard,
     linked: selectedCard !== null, pendingReceipt, receiptGroupId,
     setProfileName, setUsername, setPerson: setPersonId, selectGroup: setViewingGroupId,
     selectReceiptGroup: setReceiptGroupId,
     setLinked: (linked) => setSelectedCardId(linked ? (selectedCardId ?? 'visa') : null),
-    selectCard: setSelectedCardId, setPendingReceipt, lookup, activityLabel,
+    selectCard: setSelectedCardId, addPayment, setPendingReceipt, lookup, activityLabel,
     billFor: (groupId) => bills[groupId] ?? null,
     createGroup, renameGroup, addGroupMember, removeGroupMember, addFriend,
     claimItem, assignItem, unclaimItem, customizeItem, resetItem, setSplitMode, applyVerifiedReceipt,

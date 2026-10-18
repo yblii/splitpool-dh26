@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { MemberAvatar } from '../components/people';
 import { AppHeader, Button, Card, Screen, colors, styles } from '../components/ui';
-import { DEMO_CARDS, useDemo } from '../state/demo';
+import { useDemo } from '../state/demo';
 import { apiUrl, checkApi } from '../lib/api';
 import { getSupabase, supabaseConfigured } from '../lib/supabase';
 
@@ -68,7 +68,7 @@ export default function ProfileScreen() {
     <Card>
       <Text style={styles.heading}>Payment methods</Text>
       <Text style={styles.small}>These are labeled demo cards. Do not enter a real card number. SplitPool does not store one here.</Text>
-      {DEMO_CARDS.map((card) => {
+      {demo.cards.map((card) => {
         const selected = demo.selectedCard?.id === card.id;
         return <Pressable
           key={card.id}
@@ -82,7 +82,7 @@ export default function ProfileScreen() {
           }}
         >
           <Text style={[styles.text, { fontWeight: '700' }]}>{card.brand}</Text>
-          <Text style={styles.small}>···· {card.last4} · Demo card{selected ? ' · Selected' : ''}</Text>
+          <Text style={styles.small}>{card.last4 ? `···· ${card.last4} · ` : ''}Demo card{selected ? ' · Selected' : ''}</Text>
         </Pressable>;
       })}
     </Card>

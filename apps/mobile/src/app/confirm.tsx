@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { formatBasisPoints, formatMoney } from '@splitpool/contracts';
 import { ConfirmationDialog, PaymentStatusRow } from '../components/payment-ui';
 import { PersonSwitcher } from '../components/people';
+import { BottomSheet } from '../components/sheets';
 import { monoFamily } from '../fonts';
 import { AppHeader, Button, Card, ErrorBanner, Screen, colors, moneyMark, styles } from '../components/ui';
 import { useDemo } from '../state/demo';
@@ -14,6 +15,11 @@ export default function ConfirmScreen() {
   const summary = demo.summary;
   const [message, setMessage] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
+  const [pickingCard, setPickingCard] = useState(false);
+  const [addingCard, setAddingCard] = useState(false);
+  const [cardName, setCardName] = useState('');
+  const [cardLast4, setCardLast4] = useState('');
+  const [cardError, setCardError] = useState<string | null>(null);
   const host = demo.personId === 'you';
 
   if (!bill || !summary) {
@@ -37,6 +43,23 @@ export default function ConfirmScreen() {
   function approve() {
     const error = demo.approveShare();
     setMessage(error ?? `You approved ${formatMoney(mineCents)}. This does not charge a card.`);
+  }
+
+  function closeCards() {
+    setPickingCard(false);
+    setAddingCard(false);
+    setCardName('');
+    setCardLast4('');
+    setCardError(null);
+  }
+
+  function savePayment() {
+    const error = demo.addPayment(cardName, cardLast4);
+    if (error) {
+      setCardError(error);
+      return;
+    }
+    closeCards();
   }
 
   function collect() {
@@ -73,12 +96,43 @@ export default function ConfirmScreen() {
       {(mine?.serviceCents ?? 0) > 0 && <View style={styles.row}><Text style={styles.text}>Service</Text><Text {...moneyMark} style={[styles.text, { fontFamily: monoFamily }]}>{formatMoney(mine?.serviceCents ?? 0)}</Text></View>}
       <View style={styles.row}><Text style={styles.heading}>You pay</Text><Text {...moneyMark} style={[styles.heading, { fontFamily: monoFamily }]}>{formatMoney(mineCents)}</Text></View>
     </Card>
-    <Card>
-      <Text style={styles.heading}>Payment method</Text>
-      <Text style={styles.text}>{demo.selectedCard ? `${demo.selectedCard.brand} ···· ${demo.selectedCard.last4}` : 'No demo card selected'}</Text>
-      <Text style={styles.small}>Demo cards are labels only. SplitPool does not collect a real card number here.</Text>
-      {!demo.selectedCard && <Button title="Choose a demo card" secondary onPress={() => router.push('/profile')} />}
-    </Card>
+    <Pressable accessibilityRole="button" accessibilityLabel="Choose a payment method" onPress={() => setPickingCard(true)}>
+      <Card>
+        <Text style={styles.heading}>Payment method</Text>
+        <Text style={styles.text}>{demo.selectedCard ? `${demo.selectedCard.brand}${demo.selectedCard.last4 ? ` ···· ${demo.selectedCard.last4}` : ''}` : 'No demo card selected'}</Text>
+        <Text style={styles.small}>Demo cards are labels only. SplitPool does not collect a real card number here.</Text>
+        <Text style={styles.link}>Change</Text>
+      </Card>
+    </Pressable>
+    <BottomSheet visible={pickingCard} title="Payment method" onClose={closeCards}>
+      <Text style={styles.small}>Pick a label. This does not charge a card.</Text>
+      {demo.cards.map((card) => {
+        const selected = demo.selectedCard?.id === card.id;
+        return <Pressable
+          key={card.id}
+          accessibilityRole="button"
+          accessibilityState={{ selected }}
+          onPress={() => { demo.selectCard(card.id); closeCards(); }}
+          style={{
+            minHeight: 64, borderRadius: 16, borderWidth: 1.5, paddingHorizontal: 14, paddingVertical: 12,
+            borderColor: selected ? colors.primary : colors.border,
+            backgroundColor: selected ? colors.light : colors.paper,
+            justifyContent: 'center',
+          }}
+        >
+          <Text style={[styles.text, { fontWeight: '700' }]}>{card.brand}</Text>
+          <Text style={styles.small}>{card.last4 ? `···· ${card.last4}` : 'No number'}{selected ? ' · Selected' : ''}</Text>
+        </Pressable>;
+      })}
+      {addingCard ? <>
+        <Text style={styles.label}>Name</Text>
+        <TextInput accessibilityLabel="Payment type name" value={cardName} onChangeText={setCardName} placeholder="Cash or Demo Card" placeholderTextColor={colors.muted} maxLength={30} style={styles.input} />
+        <Text style={styles.label}>Last 4, optional</Text>
+        <TextInput accessibilityLabel="Last 4 digits" value={cardLast4} onChangeText={setCardLast4} placeholder="4242" placeholderTextColor={colors.muted} keyboardType="number-pad" maxLength={4} style={styles.input} />
+        {cardError && <ErrorBanner message={cardError} />}
+        <Button title="Save payment type" onPress={savePayment} />
+      </> : <Button title="Add a payment type" secondary onPress={() => { setCardError(null); setAddingCard(true); }} />}
+    </BottomSheet>
     {owes && bill.phase === 'review' && !approved && <Button title={`Approve my share · ${formatMoney(mineCents)}`} onPress={approve} />}
     {approved && <ErrorBanner tone="success" title="Approved" message={`${formatMoney(mineCents)} is the amount you approved. You can switch people to approve the other shares.`} />}
     {message && <ErrorBanner message={message} tone={message.startsWith('You approved') ? 'success' : 'warning'} />}
