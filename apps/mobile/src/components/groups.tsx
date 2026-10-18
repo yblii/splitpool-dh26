@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Animated, PanResponder, Pressable, Text, View } from 'react-native';
 import { AvatarStack, type AvatarPerson } from './people';
-import { RippedEdge, colors, styles } from './ui';
+import { colors, styles } from './ui';
 
 const PAPER = '#FFFDF8';
 
@@ -15,10 +15,11 @@ function dragFor(id: string) {
   return created;
 }
 
-export function GroupCard({ id, name, members, editing, selected, onPress, onDrag }: {
+export function GroupCard({ id, name, members, recent, editing, selected, onPress, onDrag }: {
   id: string;
   name: string;
   members: AvatarPerson[];
+  recent?: string;
   editing?: boolean;
   selected?: boolean;
   onPress: () => void;
@@ -52,24 +53,24 @@ export function GroupCard({ id, name, members, editing, selected, onPress, onDra
     style={{ transform: [{ translateY: offset }], zIndex: lifted ? 2 : 0 }}
     {...(editing ? pan.panHandlers : {})}
   >
-    <View style={{ flexDirection: 'row', alignItems: 'stretch', borderWidth: selected ? 1.5 : 0, borderColor: colors.primary }}>
+    <View style={{ borderRadius: 20, overflow: 'hidden', borderWidth: selected ? 1.5 : 0, borderColor: colors.primary, backgroundColor: PAPER }}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={editing ? `${name}. ${selected ? 'Selected. ' : ''}Drag up or down to reorder.` : `Open ${name}`}
+        accessibilityLabel={editing ? `${name}. ${selected ? 'Selected. ' : ''}Drag up or down to reorder.` : `Open ${name}${recent ? `. Last split ${recent}` : ''}`}
         accessibilityHint={editing ? 'Drag up or down to reorder. Hide is at the top.' : undefined}
         onPress={() => {
           if (motion.dragging) return;
           onPress();
         }}
-        style={{ flex: 1, backgroundColor: PAPER, paddingHorizontal: 16, paddingVertical: 14, gap: 10 }}
+        style={{ backgroundColor: PAPER, paddingHorizontal: 16, paddingVertical: 14, gap: 10 }}
       >
         <View style={[styles.row, { justifyContent: 'flex-start', gap: 10 }]}>
           {editing ? <Text accessibilityElementsHidden importantForAccessibility="no" style={{ color: colors.muted, fontSize: 18, lineHeight: 20 }}>≡</Text> : null}
           <Text style={styles.heading}>{name}</Text>
         </View>
         <AvatarStack people={members} />
+        {recent ? <Text style={styles.small} numberOfLines={1}>{recent}</Text> : null}
       </Pressable>
-      <RippedEdge color={PAPER} side="right" />
     </View>
   </Animated.View>;
 }

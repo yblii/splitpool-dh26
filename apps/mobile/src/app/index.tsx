@@ -86,7 +86,7 @@ export default function GroupsScreen() {
   }
 
   return <Screen
-    header={<AppHeader title="Groups" right={<Pressable accessibilityRole="button" accessibilityLabel="New group" hitSlop={8} onPress={() => { setCreateError(null); setCreating(true); }} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}>
+    header={<AppHeader title="SplitPool" right={<Pressable accessibilityRole="button" accessibilityLabel="New group" hitSlop={8} onPress={() => { setCreateError(null); setCreating(true); }} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}>
       <Text style={styles.link}>+ New</Text>
     </Pressable>} />}
     footer={<View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
@@ -119,6 +119,7 @@ export default function GroupsScreen() {
         id={group.id}
         name={group.name}
         members={group.memberIds.map((id) => demo.lookup(id))}
+        recent={demo.pastBills.find((entry) => entry.groupId === group.id)?.merchant}
         editing={editing}
         selected={pickedId === group.id}
         onPress={() => editing ? setPickedId(group.id) : openGroup(group.id)}
@@ -135,6 +136,7 @@ export default function GroupsScreen() {
         id={group.id}
         name={group.name}
         members={group.memberIds.map((id) => demo.lookup(id))}
+        recent={demo.pastBills.find((entry) => entry.groupId === group.id)?.merchant}
         editing={editing}
         selected={pickedId === group.id}
         onPress={() => editing ? setPickedId(group.id) : openGroup(group.id)}
@@ -164,14 +166,14 @@ export default function GroupsScreen() {
     </BottomSheet>
 
     <BottomSheet visible={friendsOpen} title="Friends" onClose={() => setFriendsOpen(false)}>
-      <Text style={styles.small}>Add a demo friend by username. Try @riley or @morgan.</Text>
+      <Text style={styles.small}>Add a demo friend by username or phone number. Try @riley, @morgan, or 555-0148.</Text>
       <TextInput
-        accessibilityLabel="Friend username"
+        accessibilityLabel="Friend username or phone number"
         autoCapitalize="none"
         autoCorrect={false}
         value={friendName}
         onChangeText={setFriendName}
-        placeholder="@username"
+        placeholder="@username or phone"
         placeholderTextColor={colors.muted}
         style={styles.input}
       />
@@ -188,7 +190,7 @@ export default function GroupsScreen() {
         <MemberAvatar person={friend} />
         <View style={{ flex: 1 }}>
           <Text style={styles.text}>{friend.name}</Text>
-          <Text style={styles.small}>@{friend.username}</Text>
+          <Text style={styles.small}>@{friend.username}{friend.phone ? ` · ${friend.phone}` : ''}</Text>
         </View>
         <Text style={{ color: colors.muted, fontSize: 22 }}>›</Text>
       </Pressable>)}

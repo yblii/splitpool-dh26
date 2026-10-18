@@ -21,6 +21,7 @@ export type DemoPerson = {
   id: string;
   name: string;
   username: string;
+  phone?: string;
   initial: string;
   color: string;
 };
@@ -74,10 +75,10 @@ export const DEMO_CARDS: DemoCard[] = [
 ];
 
 const DIRECTORY: DemoPerson[] = [
-  { id: 'alex', name: 'Alex', username: 'alex', initial: 'A', color: '#C4622D' },
-  { id: 'sam', name: 'Sam', username: 'sam', initial: 'S', color: '#2F7D6D' },
-  { id: 'riley', name: 'Riley', username: 'riley', initial: 'R', color: '#6D5BD0' },
-  { id: 'morgan', name: 'Morgan', username: 'morgan', initial: 'M', color: '#B4536A' },
+  { id: 'alex', name: 'Alex', username: 'alex', phone: '555-0101', initial: 'A', color: '#C4622D' },
+  { id: 'sam', name: 'Sam', username: 'sam', phone: '555-0102', initial: 'S', color: '#2F7D6D' },
+  { id: 'riley', name: 'Riley', username: 'riley', phone: '555-0148', initial: 'R', color: '#6D5BD0' },
+  { id: 'morgan', name: 'Morgan', username: 'morgan', phone: '555-0162', initial: 'M', color: '#B4536A' },
 ];
 
 const YOU_COLOR = '#1F4E72';
@@ -92,6 +93,7 @@ function seedGroups(): DemoGroup[] {
 
 function seedPastBills(): PastBill[] {
   return [
+    { id: 'pb-thai', groupId: 'fam', merchant: 'Dinner at Little Thai', dateLabel: 'Oct 16', totalCents: 6400, yourShareCents: 2134, status: 'paid' },
     { id: 'pb-luigi', groupId: 'fam', merchant: "Luigi's", dateLabel: 'Oct 4', totalCents: 8620, yourShareCents: 2840, status: 'paid' },
     { id: 'pb-luna', groupId: 'fam', merchant: 'Cafe Luna', dateLabel: 'Sep 18', totalCents: 4200, yourShareCents: 1400, status: 'paid' },
     { id: 'pb-deli', groupId: 'roommates', merchant: 'Corner Deli', dateLabel: 'Oct 11', totalCents: 2860, yourShareCents: 1430, status: 'paid' },
@@ -294,11 +296,16 @@ export function DemoProvider({ children }: PropsWithChildren) {
   }
 
   function addFriend(raw: string): { ok: true; person: DemoPerson } | { ok: false; message: string } {
-    const handle = raw.trim().replace(/^@/, '').toLowerCase();
-    if (!handle) return { ok: false, message: 'Enter a username.' };
+    const trimmed = raw.trim();
+    const handle = trimmed.replace(/^@/, '').toLowerCase();
+    const digits = trimmed.replace(/\D/g, '');
+    if (!handle) return { ok: false, message: 'Enter a username or phone number.' };
     if (handle === you.username.toLowerCase()) return { ok: false, message: 'That’s you.' };
-    const match = DIRECTORY.find((person) => person.username === handle);
-    if (!match) return { ok: false, message: `No demo user @${handle}. Try @riley or @morgan.` };
+    const match = DIRECTORY.find((person) => person.username === handle)
+      ?? (digits.length >= 7 ? DIRECTORY.find((person) => person.phone?.replace(/\D/g, '') === digits) : undefined);
+    if (!match) return { ok: false, message: digits.length >= 7
+      ? `No demo number ${trimmed}. Try 555-0148 or 555-0162.`
+      : `No demo user @${handle}. Try @riley or @morgan.` };
     if (friends.some((friend) => friend.id === match.id)) return { ok: false, message: `${match.name} is already a friend.` };
     setFriends((current) => [...current, match]);
     return { ok: true, person: match };

@@ -13,11 +13,11 @@ export default function FriendScreen() {
   const groups = demo.groups.filter((group) => id && group.memberIds.includes(id));
 
   return <Screen header={<AppHeader title="Friend" onBack={() => router.back()} />}>
-    {!friend || !known ? <EmptyState title="Friend not found" body="Add them from Groups with a demo username." /> : <>
+    {!friend || !known ? <EmptyState title="Friend not found" body="Add them from Groups with a demo username or phone number." /> : <>
       <View style={{ alignItems: 'center', gap: 8, paddingVertical: 8 }}>
         <MemberAvatar person={friend} size={84} />
         <Text style={styles.title}>{friend.name}</Text>
-        <Text style={styles.subtitle}>@{friend.username}</Text>
+        <Text style={styles.subtitle}>@{friend.username}{friend.phone ? ` · ${friend.phone}` : ''}</Text>
       </View>
       <Card>
         <Text style={styles.heading}>Groups together</Text>

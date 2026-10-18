@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type PropsWithChildren, type ReactNode } from 'react';
+import { useEffect, useState, type PropsWithChildren, type ReactNode } from 'react';
 import {
   AccessibilityInfo,
   Platform,
@@ -35,44 +35,6 @@ export const colors = {
   shadow: 'rgba(22, 50, 74, 0.08)',
 };
 
-const RIP_DEPTH = [4, 15, 7, 12, 3, 16, 9, 5, 14, 8, 2, 13, 6, 11, 16, 4];
-const RIP_HEIGHT = [6, 9, 4, 11, 7, 5, 8, 3, 10, 6];
-
-export function RippedEdge({ color, side }: { color: string; side: 'left' | 'right' }) {
-  const [span, setSpan] = useState(0);
-  const pieces = useMemo(() => {
-    if (span <= 0) return [];
-    const rows: { h: number; depth: number; gap: number }[] = [];
-    let used = 0;
-    let index = 0;
-    while (used < span) {
-      const room = span - used;
-      const h = Math.min(RIP_HEIGHT[index % RIP_HEIGHT.length], room);
-      const gap = h > 4 && index % 4 === 1 ? 2 : 0;
-      rows.push({ h: h - gap, depth: RIP_DEPTH[index % RIP_DEPTH.length], gap });
-      used += h;
-      index += 1;
-    }
-    return rows;
-  }, [span]);
-  const towardEnd = side === 'right' ? 'flex-start' : 'flex-end';
-  return <View
-    onLayout={(event) => {
-      const next = Math.round(event.nativeEvent.layout.height);
-      setSpan((current) => current === next ? current : next);
-    }}
-    style={{ width: 16, overflow: 'hidden' }}
-  >
-    {pieces.map((piece, index) => <View key={index} style={{
-      height: piece.h,
-      width: piece.depth,
-      marginBottom: piece.gap,
-      backgroundColor: color,
-      alignSelf: towardEnd,
-    }} />)}
-  </View>;
-}
-
 export function useReduceMotion() {
   const [reduce, setReduce] = useState(false);
   useEffect(() => {
@@ -89,12 +51,14 @@ export function Screen({
   header,
   footer,
   demoNote = true,
-}: PropsWithChildren<{ header?: ReactNode; footer?: ReactNode; demoNote?: boolean }>) {
+  fill = false,
+}: PropsWithChildren<{ header?: ReactNode; footer?: ReactNode; demoNote?: boolean; fill?: boolean }>) {
   const insets = useSafeAreaInsets();
   return <View style={styles.screen}>
     {header}
     <ScrollView
-      contentContainerStyle={[styles.content, { paddingBottom: footer ? 24 : 32 }]}
+      style={fill ? styles.fill : undefined}
+      contentContainerStyle={[styles.content, fill && styles.fill, { paddingBottom: footer ? 24 : 32 }]}
       keyboardShouldPersistTaps="handled"
       automaticallyAdjustKeyboardInsets
     >
@@ -199,6 +163,7 @@ export function EmptyState({ title, body }: { title: string; body: string }) {
 
 export const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
+  fill: { flexGrow: 1 },
   content: { paddingHorizontal: 20, paddingTop: 8, gap: 16, width: '100%', minWidth: 0 },
   header: {
     paddingHorizontal: 12, paddingBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 8,

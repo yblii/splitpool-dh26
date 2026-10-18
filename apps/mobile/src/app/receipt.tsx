@@ -4,8 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { makeSplitDemoReceipt } from '@splitpool/contracts';
 import { monoFamily } from '../fonts';
-import { BottomSheet } from '../components/sheets';
-import { AppHeader, Button, ErrorBanner, Screen, colors, moneyMark } from '../components/ui';
+import { AppHeader, ErrorBanner, Screen, colors, moneyMark } from '../components/ui';
 import { apiUrl, extractReceiptFromImage } from '../lib/api';
 import { useDemo } from '../state/demo';
 
@@ -16,9 +15,16 @@ export default function ReceiptScreen() {
   const [picked, setPicked] = useState<PickedReceipt>();
   const [sampleArmed, setSampleArmed] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [pickingGroup, setPickingGroup] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const group = demo.groups.find((entry) => entry.id === demo.receiptGroupId) ?? demo.viewingGroup;
+  const groupIndex = Math.max(0, demo.groups.findIndex((entry) => entry.id === group.id));
+
+  function shiftGroup(direction: -1 | 1) {
+    if (demo.groups.length < 2) return;
+    const next = demo.groups[(groupIndex + direction + demo.groups.length) % demo.groups.length];
+    demo.selectReceiptGroup(next.id);
+    demo.selectGroup(next.id);
+  }
 
   async function pick(camera: boolean) {
     try {
@@ -97,6 +103,7 @@ export default function ReceiptScreen() {
   }
 
   return <Screen
+    fill
     header={<AppHeader title="Scan" onBack={() => router.back()} />}
     footer={<View style={local.controls}>
       <Pressable accessibilityRole="button" accessibilityLabel="Choose from photo album" disabled={busy} onPress={() => void pick(false)} style={local.sideButton}>
@@ -105,9 +112,15 @@ export default function ReceiptScreen() {
       <Pressable accessibilityRole="button" accessibilityLabel="Capture receipt" disabled={busy} onPress={useSample} style={local.shutter}>
         <View style={local.shutterInner} />
       </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Group ${group.name}. Change group.`} disabled={busy} onPress={() => setPickingGroup(true)} style={local.sideButton}>
-        <Text style={local.sideText} numberOfLines={2}>{group.name}</Text>
-      </Pressable>
+      <View style={local.groupSwitch}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Previous group" disabled={busy || demo.groups.length < 2} hitSlop={8} onPress={() => shiftGroup(-1)} style={local.chevronHit}>
+          <Text style={local.chevron}>‹</Text>
+        </Pressable>
+        <Text accessibilityRole="text" numberOfLines={2} style={local.groupName}>{group.name}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Next group" disabled={busy || demo.groups.length < 2} hitSlop={8} onPress={() => shiftGroup(1)} style={local.chevronHit}>
+          <Text style={local.chevron}>›</Text>
+        </Pressable>
+      </View>
     </View>}
   >
     <View style={local.finder}>
@@ -124,19 +137,16 @@ export default function ReceiptScreen() {
     </View>
     {note && <ErrorBanner title="Demo receipt" message={note} />}
     {busy && <Text style={local.busy}>Reading the photo…</Text>}
-    <BottomSheet visible={pickingGroup} title="Group for this bill" onClose={() => setPickingGroup(false)}>
-      {demo.groups.map((entry) => <Button key={entry.id} title={entry.id === group.id ? `${entry.name} · selected` : entry.name} secondary={entry.id !== group.id} onPress={() => { demo.selectReceiptGroup(entry.id); demo.selectGroup(entry.id); setPickingGroup(false); }} />)}
-    </BottomSheet>
   </Screen>;
 }
 
 const local = StyleSheet.create({
-  finder: { minHeight: 280, borderRadius: 24, overflow: 'hidden', backgroundColor: '#1B3346' },
-  preview: { width: '100%', height: 320, backgroundColor: '#1B3346' },
-  emptyFinder: { minHeight: 280, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 8 },
+  finder: { flexGrow: 1, flexShrink: 1, minHeight: 280, borderRadius: 24, overflow: 'hidden', backgroundColor: '#1B3346' },
+  preview: { width: '100%', flexGrow: 1, minHeight: 280, backgroundColor: '#1B3346' },
+  emptyFinder: { flexGrow: 1, minHeight: 280, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 8 },
   finderLabel: { color: '#FFFFFF', fontSize: 18, fontWeight: '700' },
   finderHint: { color: 'rgba(255,255,255,0.76)', fontSize: 14, lineHeight: 20, textAlign: 'center' },
-  sample: { padding: 22, gap: 6 },
+  sample: { flexGrow: 1, justifyContent: 'center', padding: 22, gap: 6 },
   sampleKicker: { color: '#F3D7A1', fontSize: 12, fontWeight: '700', letterSpacing: 0.6 },
   sampleTitle: { color: '#FFFFFF', fontSize: 22, fontWeight: '700', marginBottom: 8 },
   sampleLine: { color: 'rgba(255,255,255,0.86)', fontFamily: monoFamily, fontSize: 14, lineHeight: 22 },
@@ -144,6 +154,10 @@ const local = StyleSheet.create({
   sampleNote: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 10 },
   busy: { color: colors.ink, fontSize: 14, fontWeight: '600' },
   controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 },
+  groupSwitch: { width: 132, minHeight: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2 },
+  chevronHit: { minWidth: 36, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  chevron: { color: colors.primary, fontSize: 28, lineHeight: 32, fontWeight: '600' },
+  groupName: { flexShrink: 1, color: colors.ink, fontWeight: '700', textAlign: 'center', fontSize: 15, lineHeight: 18 },
   sideButton: { width: 88, minHeight: 64, borderRadius: 16, backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
   sideText: { color: colors.ink, fontWeight: '700', textAlign: 'center', fontSize: 13, lineHeight: 18 },
   shutter: { width: 78, height: 78, borderRadius: 39, borderWidth: 4, borderColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
