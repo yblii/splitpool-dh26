@@ -629,7 +629,7 @@ const paperStyles = StyleSheet.create({
       default: { fontFamily: interBoldItalic, fontWeight: 'normal' as const, fontStyle: 'normal' as const },
     }),
   },
-  subheading: { ...typeScale.subheading, textAlign: 'center', paddingTop: 2, paddingBottom: 6 },
+  subheading: { ...typeScale.subheading, fontSize: 16, lineHeight: 21, textAlign: 'center', paddingTop: 2, paddingBottom: 6 },
   dimmed: { opacity: 0.25 },
   rule: { borderBottomWidth: 1, borderStyle: 'dashed', borderColor: '#D9CBB8', marginBottom: 4 },
   alert: {
