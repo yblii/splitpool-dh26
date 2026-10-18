@@ -76,7 +76,7 @@ export default function ConfirmScreen() {
   return <Screen header={<AppHeader title="Approval" onBack={() => router.back()} />}>
     <View style={{ gap: 4 }}>
       <Text style={styles.title}>{host ? 'Lock in the shares' : 'Your share'}</Text>
-      <Text style={styles.subtitle}>{demo.viewingGroup.name} · {bill.merchant}</Text>
+      <Text style={styles.subheading}>{demo.viewingGroup.name} · {bill.merchant}</Text>
     </View>
     <PersonSwitcher people={demo.members} value={demo.personId} onChange={demo.setPerson} />
     {bill.phase === 'editing' && <ErrorBanner title="Still editing" message="The host sends the bill for approval after every item is fully allocated." />}

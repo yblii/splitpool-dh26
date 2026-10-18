@@ -16,7 +16,7 @@ export default function HistoryScreen() {
     {!bill ? <EmptyState title="Bill not found" body="That sample bill is no longer in this demo." /> : <>
       <View style={{ gap: 4 }}>
         <Text style={styles.title}>{bill.merchant}</Text>
-        <Text style={styles.subtitle}>{group?.name ?? 'Group'} · {bill.dateLabel}</Text>
+        <Text style={styles.subheading}>{group?.name ?? 'Group'} · {bill.dateLabel}</Text>
       </View>
       <Card>
         <View style={styles.row}><Text style={styles.text}>Group total</Text><Text {...moneyMark} style={[styles.heading, { fontFamily: monoFamily }]}>{formatMoney(bill.totalCents)}</Text></View>

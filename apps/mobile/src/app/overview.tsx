@@ -56,7 +56,7 @@ export default function OverviewScreen() {
   >
     <View style={{ gap: 4 }}>
       <Text style={styles.title}>{bill.merchant}</Text>
-      <Text style={styles.subtitle}>{demo.viewingGroup.name}</Text>
+      <Text style={styles.subheading}>{demo.viewingGroup.name}</Text>
     </View>
     <Card>
       <View style={styles.row}>

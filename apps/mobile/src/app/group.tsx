@@ -62,7 +62,7 @@ export default function GroupDetailsScreen() {
     <View style={[styles.row, { justifyContent: 'flex-start' }]}>
       <AvatarStack people={members} size={36} />
     </View>
-    <ReceiptPaper title="Past splits">
+    <ReceiptPaper title="Past splits" level="subheading">
       <View style={[styles.row, { paddingVertical: 6 }]}>
         <Text style={[styles.small, { flex: 1 }]} />
         <Text style={[styles.small, { width: 72, textAlign: 'right' }]}>Total</Text>

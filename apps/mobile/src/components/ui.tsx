@@ -38,6 +38,7 @@ export const colors = {
 
 export const typeScale = {
   pageTitle: { ...interFace(700), fontSize: 30, lineHeight: 36, color: colors.ink },
+  subheading: { ...interFace(600), fontSize: 21, lineHeight: 26, color: colors.ink },
   section: { ...interFace(600), fontSize: 21, lineHeight: 26, color: colors.ink },
   itemName: { ...interFace(600), fontSize: 18, lineHeight: 23, color: colors.ink },
   itemPrice: { fontFamily: monoFamily, fontSize: 18, lineHeight: 23, fontWeight: '700' as const, color: colors.ink },
@@ -231,6 +232,7 @@ export const styles = StyleSheet.create({
     }),
   },
   title: typeScale.pageTitle,
+  subheading: typeScale.subheading,
   subtitle: typeScale.description,
   heading: typeScale.section,
   text: { ...interFace(400), fontSize: 16, lineHeight: 22, color: colors.ink },

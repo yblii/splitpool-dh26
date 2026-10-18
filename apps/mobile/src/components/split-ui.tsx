@@ -151,15 +151,16 @@ function createItemPan(
   });
 }
 
-export function ReceiptPaper({ title, dimTitle, alert, onFix, children }: {
+export function ReceiptPaper({ title, level = 'title', dimTitle, alert, onFix, children }: {
   title: string;
+  level?: 'title' | 'subheading';
   dimTitle?: boolean;
   alert?: string | null;
   onFix?: () => void;
   children: ReactNode;
 }) {
   return <View style={paperStyles.body}>
-    {title ? <Text style={[paperStyles.title, dimTitle && paperStyles.dimmed]}>{title}</Text> : null}
+    {title ? <Text style={[level === 'subheading' ? paperStyles.subheading : paperStyles.title, dimTitle && paperStyles.dimmed]}>{title}</Text> : null}
     {title ? <View style={paperStyles.rule} /> : null}
     {children}
     {alert ? <Pressable
@@ -622,6 +623,7 @@ const paperStyles = StyleSheet.create({
     }),
   },
   title: { ...typeScale.pageTitle, textAlign: 'center', paddingTop: 2, paddingBottom: 6 },
+  subheading: { ...typeScale.subheading, textAlign: 'center', paddingTop: 2, paddingBottom: 6 },
   dimmed: { opacity: 0.25 },
   rule: { borderBottomWidth: 1, borderStyle: 'dashed', borderColor: '#D9CBB8', marginBottom: 4 },
   alert: {
