@@ -1,5 +1,18 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import type { Bill, BillResponse, ExtractedReceipt, Group, Profile, SaveItemsRequest, SetClaimRequest, SetTipRequest, UpdateSettingsRequest } from '@splitpool/contracts';
+import type {
+  Bill,
+  BillResponse,
+  ExtractedReceipt,
+  Group,
+  GroupBillSummary,
+  GroupDetail,
+  GroupListItem,
+  Profile,
+  SaveItemsRequest,
+  SetClaimRequest,
+  SetTipRequest,
+  UpdateSettingsRequest,
+} from '@splitpool/contracts';
 import type { Database, Sql } from './db.ts';
 import { ApiError, requireThat } from './errors.ts';
 import { addFractions, normalizeFraction, summarize } from './calculations.ts';
@@ -32,13 +45,36 @@ export class CollaborationService {
     });
   }
 
-  async listGroups(userId: string) {
-    // Closed bills retire the group: only open group↔bill pairs are listed.
-    return (await this.db.query<Group>(`SELECT g.id, g.name, g.host_id AS "hostId", b.id AS "activeBillId"
+  async listGroups(userId: string): Promise<GroupListItem[]> {
+    // Groups persist after payment. activeBillId is null when there is no open bill.
+    const groups = (await this.db.query<Group>(`SELECT g.id, g.name, g.host_id AS "hostId",
+        (
+          SELECT b.id FROM bills b
+          WHERE b.group_id = g.id AND b.state NOT IN ('PAID','CANCELLED')
+          ORDER BY b.created_at DESC, b.id DESC
+          LIMIT 1
+        ) AS "activeBillId"
       FROM groups g
       JOIN group_members m ON m.group_id = g.id AND m.user_id = $1
-      JOIN bills b ON b.group_id = g.id AND b.state NOT IN ('PAID','CANCELLED')
       ORDER BY g.created_at, g.id`, [userId])).rows;
+
+    const result: GroupListItem[] = [];
+    for (const group of groups) {
+      const members = (await this.db.query<Profile>(`SELECT ${profileColumns} FROM profiles
+        WHERE user_id IN (SELECT user_id FROM group_members WHERE group_id = $1)
+        ORDER BY user_id`, [group.id])).rows;
+      const recent = (await this.db.query<{ merchant: string }>(
+        `SELECT merchant FROM bills WHERE group_id = $1 AND length(trim(merchant)) > 0
+         ORDER BY created_at DESC, id DESC LIMIT 1`,
+        [group.id],
+      )).rows[0];
+      result.push({
+        ...group,
+        members,
+        recentMerchant: recent?.merchant?.trim() || null,
+      });
+    }
+    return result;
   }
 
   async createGroup(userId: string, name: string) {
@@ -52,14 +88,40 @@ export class CollaborationService {
     });
   }
 
-  async getGroup(userId: string, groupId: string) {
+  async getGroup(userId: string, groupId: string): Promise<GroupDetail> {
     return this.db.transaction(async tx => {
       const group = await this.groupAccess(tx, userId, groupId);
-      const active = (await tx.query('SELECT id FROM bills WHERE group_id = $1 AND state NOT IN (\'PAID\',\'CANCELLED\')', [groupId])).rows[0];
-      requireThat(active, 404, 'GROUP_CLOSED', 'This group’s bill is closed.');
+      const active = (await tx.query(
+        `SELECT id FROM bills WHERE group_id = $1 AND state NOT IN ('PAID','CANCELLED')
+         ORDER BY created_at DESC, id DESC LIMIT 1`,
+        [groupId],
+      )).rows[0];
       const members = (await tx.query<Profile>(`SELECT ${profileColumns} FROM profiles
         WHERE user_id IN (SELECT user_id FROM group_members WHERE group_id = $1) ORDER BY user_id`, [groupId])).rows;
-      return { ...group, activeBillId: active.id as string, members };
+      const billRows = (await tx.query<{ id: string; created_at: string }>(
+        `SELECT id, created_at::text AS created_at FROM bills WHERE group_id = $1
+         ORDER BY created_at DESC, id DESC`,
+        [groupId],
+      )).rows;
+      const bills: GroupBillSummary[] = [];
+      for (const row of billRows) {
+        const bill = await this.readBill(tx, row.id);
+        const share = bill.summary.shares.find((entry) => entry.userId === userId);
+        bills.push({
+          id: bill.id,
+          merchant: bill.merchant || 'Untitled bill',
+          state: bill.state,
+          createdAt: row.created_at,
+          totalCents: bill.summary.totalCents,
+          yourShareCents: share?.totalCents ?? 0,
+        });
+      }
+      return {
+        ...group,
+        activeBillId: (active?.id as string | undefined) ?? null,
+        members,
+        bills,
+      };
     }, true);
   }
 
@@ -111,8 +173,12 @@ export class CollaborationService {
     return this.db.transaction(async tx => {
       await this.groupAccess(tx, userId, groupId, true);
       await tx.query('SELECT id FROM groups WHERE id = $1 FOR UPDATE', [groupId]);
-      const existing = await tx.query('SELECT id, state FROM bills WHERE group_id = $1', [groupId]);
-      requireThat(!existing.rows.length, 409, 'BILL_EXISTS', 'This group already has its bill.');
+      const active = await tx.query(
+        `SELECT id FROM bills WHERE group_id = $1 AND state NOT IN ('PAID','CANCELLED')`,
+        [groupId],
+      );
+      // Keep BILL_EXISTS for clients that already handle this conflict code.
+      requireThat(!active.rows.length, 409, 'BILL_EXISTS', 'This group already has an open bill.');
       const billId = await this.insertBillForGroup(tx, groupId);
       return this.readBill(tx, billId);
     });
@@ -120,13 +186,16 @@ export class CollaborationService {
 
   /**
    * Mirror payment-ledger progress onto the collaboration bill.
-   * PAID/CANCELLED retires the group from listings (one bill per group).
+   * PAID/CANCELLED closes the bill; the group remains and can start another bill later.
    * Unknown bill ids are ignored so in-memory payment demos stay usable without Postgres rows.
    */
   async syncPaymentState(billId: string, state: Bill['state']) {
+    // Terminal collaboration states are final — reopen/ledger resets must not revive them.
     const result = await this.db.query(
       `UPDATE bills SET state = $1, version = version + 1
-       WHERE id = $2 AND state IS DISTINCT FROM $1`,
+       WHERE id = $2
+         AND state IS DISTINCT FROM $1
+         AND state NOT IN ('PAID', 'CANCELLED')`,
       [state, billId],
     );
     return result.rowCount ?? 0;
@@ -141,12 +210,19 @@ export class CollaborationService {
         [billId],
       )).rows[0];
       requireThat(locked, 404, 'BILL_NOT_FOUND', 'Bill not found.');
-      if (locked.state !== state) {
-        await tx.query(
-          'UPDATE bills SET state = $1, version = version + 1 WHERE id = $2',
-          [state, billId],
+      if (locked.state === 'PAID' || locked.state === 'CANCELLED') {
+        requireThat(
+          locked.state === state,
+          409,
+          'BILL_CLOSED',
+          'This bill is closed and cannot be changed.',
         );
+        return this.readBill(tx, billId);
       }
+      await tx.query(
+        'UPDATE bills SET state = $1, version = version + 1 WHERE id = $2',
+        [state, billId],
+      );
       return this.readBill(tx, billId);
     });
   }

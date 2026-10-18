@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import { Button, Card, DemoNote, Screen, styles } from '../components/ui';
+import { Button, Card, Screen, styles } from '../components/ui';
 import { apiUrl } from '../lib/api';
 import { displayNameFromProfile, useAuth } from '../state/auth';
 import { useAppProfile } from '../state/appProfile';
@@ -58,7 +58,6 @@ export default function ProfileSetupScreen() {
             }}
           />
         </Card>
-        <DemoNote />
       </Screen>
     );
   }
@@ -83,7 +82,7 @@ export default function ProfileSetupScreen() {
           style={styles.input}
           maxLength={30}
         />
-        <Text style={styles.small}>3–30 characters: letters, numbers, underscore. Stored in PostgreSQL, not Supabase Auth.</Text>
+        <Text style={styles.small}>3–30 characters: letters, numbers, underscore.</Text>
         <Text style={styles.label}>Display name</Text>
         <TextInput
           accessibilityLabel="Display name"
@@ -108,7 +107,6 @@ export default function ProfileSetupScreen() {
           void signOut().then(() => router.replace('/login'));
         }}
       />
-      <DemoNote />
     </Screen>
   );
 }

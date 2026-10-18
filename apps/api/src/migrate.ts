@@ -21,7 +21,7 @@ if (!process.env.DATABASE_URL?.trim()) {
         'Tip: for local Tiger Data TLS, set NODE_ENV=development and DATABASE_ALLOW_SELF_SIGNED=true in apps/api/.env',
       );
     }
-    if (/duplicate key|unique constraint|one_bill_per_group/i.test(message)) {
+    if (/duplicate key|unique constraint|one_bill_per_group|one_active_bill_per_group/i.test(message)) {
       console.error(
         'Tip: a group still has more than one bill. Pull the latest 003 migration (it collapses extras) and retry.',
       );

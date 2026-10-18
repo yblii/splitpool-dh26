@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { Link, router, type Href } from 'expo-router';
-import { Button, Card, DemoNote, Screen, styles } from '../components/ui';
+import { Button, Card, Screen, styles } from '../components/ui';
 import { getSupabaseEnvStatus } from '../lib/supabase';
 import { useAuth } from '../state/auth';
 
@@ -107,7 +107,7 @@ export default function SignUpScreen() {
           disabled={busy || !canSubmit}
           onPress={() => void onSubmit()}
         />
-        <Text style={styles.small}>Password must be at least 8 characters. No MFA for this demo.</Text>
+        <Text style={styles.small}>Password must be at least 8 characters.</Text>
         {!!message && <Text style={styles.small}>{message}</Text>}
       </Card>
       <View style={styles.row}>
@@ -118,7 +118,6 @@ export default function SignUpScreen() {
           </Pressable>
         </Link>
       </View>
-      <DemoNote />
     </Screen>
   );
 }

@@ -18,6 +18,7 @@ function Navigator() {
   const connected = Boolean(session) && status === 'ready';
   return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
     <Stack.Screen name="index" />
+    <Stack.Screen name="invite/[token]" />
     <Stack.Protected guard={!isLoading && connected}>
       <Stack.Screen name="connected" />
       <Stack.Screen name="group/[groupId]" />
@@ -25,7 +26,6 @@ function Navigator() {
       <Stack.Screen name="bill/[billId]/receipt" />
       <Stack.Screen name="bill/[billId]/receipt-review" />
       <Stack.Screen name="bill/[billId]/payment" />
-      <Stack.Screen name="invite/[token]" />
       <Stack.Screen name="account" />
     </Stack.Protected>
   </Stack>;

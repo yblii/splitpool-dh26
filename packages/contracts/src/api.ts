@@ -2,8 +2,26 @@ export type UserId = string;
 export type AllocationMode = 'equal' | 'proportional';
 export type Fraction = { numerator: number; denominator: number };
 export type Profile = { userId: UserId; username: string; displayName: string };
+export type BillState =
+  | 'EDITING'
+  | 'REVIEW'
+  | 'COLLECTING'
+  | 'READY_TO_PAY'
+  | 'PAYMENT_PENDING'
+  | 'PAID'
+  | 'CANCELLED';
 export type Group = { id: string; name: string; hostId: UserId; activeBillId: string | null };
-export type GroupDetail = Group & { members: Profile[] };
+/** Lightweight bill row for group history (groups preserve closed bills). */
+export type GroupBillSummary = {
+  id: string;
+  merchant: string;
+  state: BillState;
+  createdAt: string;
+  totalCents: number;
+  yourShareCents: number;
+};
+export type GroupDetail = Group & { members: Profile[]; bills: GroupBillSummary[] };
+export type GroupListItem = Group & { members: Profile[]; recentMerchant: string | null };
 export type BillItem = { id: string; name: string; quantity: number; netLineTotalCents: number };
 export type ItemClaim = { itemId: string; userId: UserId; fraction: Fraction };
 export type BillSettings = {
@@ -11,7 +29,7 @@ export type BillSettings = {
   serviceChargeMode: AllocationMode;
 };
 export type Bill = {
-  id: string; groupId: string; state: 'EDITING' | 'REVIEW' | 'COLLECTING' | 'READY_TO_PAY' | 'PAYMENT_PENDING' | 'PAID' | 'CANCELLED';
+  id: string; groupId: string; state: BillState;
   version: number; merchant: string; currency: 'USD'; participants: (Profile & { tipCents: number })[];
   items: BillItem[]; claims: ItemClaim[];
   taxCents: number; serviceChargeCents: number; printedTotalCents: number | null;

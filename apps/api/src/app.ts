@@ -197,7 +197,7 @@ export async function buildApp(options: BuildAppOptions = {}) {
     const verify = options.verifyToken;
     app.get('/api/v1/ready', async (_request, reply) => {
       try {
-        const result = await db.query('SELECT version FROM schema_migrations WHERE version=3');
+        const result = await db.query('SELECT version FROM schema_migrations WHERE version=4');
         if (!result.rows.length) return reply.code(503).send({ status: 'unavailable' });
         return { status: 'ok' };
       }

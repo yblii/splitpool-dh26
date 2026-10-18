@@ -64,12 +64,12 @@ export default function SplitScreen() {
         count={summary.itemCount}
         actionLabel="Review split"
         onAction={() => router.push('/overview')}
-        note={summary.itemsComplete ? undefined : 'Tax and tip join your total once every item is fully allocated.'}
+        note={undefined}
       />
     </View>}
   >
     <Text style={styles.subtitle}>{billStatusLabel(bill.phase)} · Tap a line to claim it. Slide it left, then enter your %.</Text>
-    {!editable && <ErrorBanner title="Claims are locked" message="This bill is past editing. Reopen it from review, before collection, if you still need to change shares." />}
+    {!editable && <ErrorBanner title="Claims are locked" message="This bill can’t be edited right now." />}
     <PersonSwitcher people={demo.members} value={demo.personId} onChange={demo.setPerson} />
     <ReceiptPaper title={bill.merchant} alert={alert ?? overflowMessage}>
       {bill.items.map((item) => {

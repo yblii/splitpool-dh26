@@ -23,7 +23,6 @@ export default function FriendScreen() {
       <Card>
         <Text style={styles.heading}>Groups together</Text>
         {groups.length === 0 ? <Text style={styles.small}>You are not in a group with {friend.name} yet.</Text> : groups.map((group) => <Text key={group.id} style={styles.text}>{group.name}</Text>)}
-        <Text style={styles.small}>This profile is sample data on your device. It is not a signed-in account.</Text>
       </Card>
     </>}
   </Screen>;

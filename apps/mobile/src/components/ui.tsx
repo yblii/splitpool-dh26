@@ -66,24 +66,31 @@ export function Screen({
   children,
   header,
   footer,
-  demoNote = true,
   fill = false,
-}: PropsWithChildren<{ header?: ReactNode; footer?: ReactNode; demoNote?: boolean; fill?: boolean }>) {
+}: PropsWithChildren<{ header?: ReactNode; footer?: ReactNode; fill?: boolean }>) {
   const insets = useSafeAreaInsets();
   return <View style={styles.screen}>
     {header}
     <ScrollView
       style={fill ? styles.fill : undefined}
-      contentContainerStyle={[styles.content, fill && styles.fill, { paddingBottom: footer ? 24 : 32 }]}
+      contentContainerStyle={[
+        styles.content,
+        fill && styles.fill,
+        {
+          paddingTop: header ? 4 : Math.max(insets.top, 24),
+          paddingBottom: footer ? 24 : 32,
+        },
+      ]}
       keyboardShouldPersistTaps="handled"
       automaticallyAdjustKeyboardInsets
     >
       {children}
     </ScrollView>
-    <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
-      {footer}
-      {demoNote && <DemoNote />}
-    </View>
+    {footer ? (
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+        {footer}
+      </View>
+    ) : null}
   </View>;
 }
 
@@ -150,13 +157,6 @@ export function TextField({ label, style, ...props }: { label: string } & TextIn
   </View>;
 }
 
-export function DemoNote() {
-  return <View style={styles.notice}>
-    <View style={styles.noticeDot} />
-    <Text style={styles.noticeText}>Demo mode · No real money moves</Text>
-  </View>;
-}
-
 export function FadingNotice({ id, message, onDismiss }: { id: string; message: string; onDismiss: (id: string) => void }) {
   const reduceMotion = useReduceMotion();
   const [opacity] = useState(() => new Animated.Value(1));
@@ -212,7 +212,7 @@ export function EmptyState({ title, body }: { title: string; body: string }) {
 export const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   fill: { flexGrow: 1 },
-  content: { paddingHorizontal: 16, paddingTop: 4, gap: 12, width: '100%', minWidth: 0 },
+  content: { paddingHorizontal: 16, gap: 12, width: '100%', minWidth: 0 },
   header: {
     paddingHorizontal: 12, paddingBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: colors.background,
@@ -262,9 +262,6 @@ export const styles = StyleSheet.create({
   segmentSelected: { backgroundColor: colors.paper, borderWidth: 1, borderColor: colors.border },
   segmentText: { ...typeScale.status, fontSize: 13, lineHeight: 18, textAlign: 'center' },
   segmentTextSelected: { ...interFace(600), color: colors.ink },
-  notice: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingTop: 2 },
-  noticeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.warning },
-  noticeText: typeScale.helper,
   input: {
     borderWidth: 1, borderColor: colors.border, backgroundColor: colors.paper, borderRadius: 14,
     paddingHorizontal: 14, paddingVertical: 12, ...inter, fontSize: 16, color: colors.ink, minHeight: 48,

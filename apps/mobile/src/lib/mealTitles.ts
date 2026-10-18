@@ -1,5 +1,21 @@
-import type { MealTitlesRequest, MealTitlesResponse } from '@splitpool/contracts';
+import type {
+  BillResponse,
+  MealTitleMemberInput,
+  MealTitlesRequest,
+  MealTitlesResponse,
+} from '@splitpool/contracts';
 import { apiUrl } from './api';
+
+/** Build title inputs from claimed items on a collaboration bill. */
+export function membersFromBill(bill: BillResponse): MealTitleMemberInput[] {
+  return bill.participants.map((participant) => ({
+    id: participant.userId,
+    name: participant.displayName,
+    items: bill.items
+      .filter((item) => bill.claims.some((claim) => claim.itemId === item.id && claim.userId === participant.userId))
+      .map((item) => item.name),
+  }));
+}
 
 /** A visibly labeled, deterministic fallback; never presented as generated AI. */
 export function localFallbackTitles(request: MealTitlesRequest): MealTitlesResponse {

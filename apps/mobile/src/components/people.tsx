@@ -35,7 +35,7 @@ export function PersonSwitcher({ people, value, onChange }: {
   people: AvatarPerson[]; value: string; onChange: (id: string) => void;
 }) {
   return <View style={{ gap: 8 }}>
-    <Text style={styles.label}>Demo · viewing as</Text>
+    <Text style={styles.label}>Viewing as</Text>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
       {people.map((person) => {
         const selected = person.id === value;
@@ -57,6 +57,5 @@ export function PersonSwitcher({ people, value, onChange }: {
         </Pressable>;
       })}
     </ScrollView>
-    <Text style={styles.small}>Switch people on this device to claim, approve, and pay as them.</Text>
   </View>;
 }

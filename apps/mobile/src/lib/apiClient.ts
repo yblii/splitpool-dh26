@@ -4,6 +4,7 @@ import type {
   Fraction,
   Group,
   GroupDetail,
+  GroupListItem,
   Profile,
   SaveItemsRequest,
   VerifiedReceipt,
@@ -165,7 +166,7 @@ export async function saveAppProfile(
 }
 
 export async function listGroups({ signal }: { signal?: AbortSignal } = {}) {
-  const data = await apiRequest<{ groups: Group[] }>('/groups', { signal });
+  const data = await apiRequest<{ groups: GroupListItem[] }>('/groups', { signal });
   return data.groups;
 }
 
@@ -193,7 +194,7 @@ export async function getBill(billId: string, { signal }: { signal?: AbortSignal
   return apiRequest<BillResponse>(`/bills/${billId}`, { signal });
 }
 
-/** Mark a collaboration bill PAID/CANCELLED; the group leaves open-bill listings. */
+/** Mark a collaboration bill PAID/CANCELLED; the group keeps the bill in history. */
 export async function closeBill(
   billId: string,
   state: 'PAID' | 'CANCELLED',

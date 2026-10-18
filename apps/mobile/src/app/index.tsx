@@ -1,15 +1,22 @@
 import { useState } from 'react';
 import { Platform, Pressable, Text, TextInput, View } from 'react-native';
-import { router } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { GroupCard } from '../components/groups';
 import { AvatarStack, MemberAvatar } from '../components/people';
 import { BottomSheet } from '../components/sheets';
 import { interFace, interItalic } from '../fonts';
 import { AppHeader, Button, ErrorBanner, Screen, colors, styles } from '../components/ui';
+import { useAppProfile } from '../state/appProfile';
+import { useAuth } from '../state/auth';
 import { useDemo } from '../state/demo';
 
 export default function GroupsScreen() {
   const demo = useDemo();
+  const { session, isLoading } = useAuth();
+  const { status } = useAppProfile();
+  const params = useLocalSearchParams<{ local?: string | string[] }>();
+  const localFlag = Array.isArray(params.local) ? params.local[0] : params.local;
+  const stayOnDemo = localFlag === '1' || localFlag === 'true';
   const [creating, setCreating] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [groupName, setGroupName] = useState('');
@@ -29,6 +36,17 @@ export default function GroupsScreen() {
     const kept = order.filter((id) => demo.groups.some((group) => group.id === id));
     const added = demo.groups.map((group) => group.id).filter((id) => !kept.includes(id));
     setOrder([...kept, ...added]);
+  }
+
+  // Connected (signed-in) groups are the default home. Opt into the local demo with ?local=1.
+  if (!stayOnDemo && (isLoading || (session && status === 'loading'))) {
+    return null;
+  }
+  if (!isLoading && session && status === 'ready' && !stayOnDemo) {
+    return <Redirect href="/connected" />;
+  }
+  if (!isLoading && session && status === 'needsSetup' && !stayOnDemo) {
+    return <Redirect href="/profile-setup" />;
   }
 
   function openGroup(id: string) {
@@ -58,7 +76,7 @@ export default function GroupsScreen() {
     }
     setFriendName('');
     setFriendError(null);
-    setFriendMessage(`${result.person.name} was added. This stays on this device.`);
+    setFriendMessage(`${result.person.name} was added.`);
   }
 
   const byId = new Map(demo.groups.map((group) => [group.id, group]));
@@ -97,6 +115,14 @@ export default function GroupsScreen() {
       <Pressable accessibilityRole="button" accessibilityLabel="Open friends" onPress={() => { setFriendError(null); setFriendsOpen(true); }} style={dock}>
         <AvatarStack people={demo.friends} size={28} />
         <Text style={dockLabel}>Friends</Text>
+      </Pressable>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Open shared groups"
+        onPress={() => router.replace('/connected')}
+        style={dock}
+      >
+        <Text style={dockLabel}>Shared</Text>
       </Pressable>
     </View>}
   >
@@ -148,7 +174,6 @@ export default function GroupsScreen() {
     </View>}
 
     <BottomSheet visible={creating} title="New group" onClose={() => setCreating(false)} footer={<Button title="Create group" onPress={createGroup} />}>
-      <Text style={styles.small}>The group stays on this device.</Text>
       <Text style={styles.label}>Group name</Text>
       <TextInput accessibilityLabel="Group name" value={groupName} onChangeText={setGroupName} placeholder="Friday dinner" placeholderTextColor={colors.muted} style={styles.input} maxLength={40} />
       <Text style={styles.label}>Friends</Text>
@@ -175,7 +200,7 @@ export default function GroupsScreen() {
     </BottomSheet>
 
     <BottomSheet visible={friendsOpen} title="Friends" onClose={() => setFriendsOpen(false)}>
-      <Text style={styles.small}>Add a demo friend by username or phone number. Try @riley, @morgan, or 555-0148.</Text>
+      <Text style={styles.small}>Add a friend by username or phone number.</Text>
       <TextInput
         accessibilityLabel="Friend username or phone number"
         autoCapitalize="none"

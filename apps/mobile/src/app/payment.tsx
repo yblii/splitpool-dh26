@@ -22,7 +22,7 @@ export default function PaymentScreen() {
 
   if (bill.phase === 'paid') {
     return <Screen header={<AppHeader title="Complete" onBack={() => router.replace('/')} />}
-      footer={<Button title="Back to groups" onPress={() => router.replace('/')} />}>
+      footer={<Button title="Return to groups" onPress={() => router.replace('/')} />}>
       <View style={{ gap: 6 }}>
         <Text style={styles.title}>Settled together.</Text>
         <Text style={styles.subheading}>{bill.merchant} · {formatMoney(summary.computedTotalCents)}</Text>
@@ -46,7 +46,7 @@ export default function PaymentScreen() {
           : bill.phase === 'collecting'
             ? 'Collecting payments'
             : bill.phase === 'funding_pending' ? 'Funding pending' : 'Waiting for approval';
-  const cardDetail = 'Simulated card and merchant. No real money moves.';
+  const cardDetail = 'Virtual card ready for the restaurant.';
 
   return <Screen header={<AppHeader title="Payment" onBack={() => router.back()} />}>
     <View style={{ gap: 4 }}>
