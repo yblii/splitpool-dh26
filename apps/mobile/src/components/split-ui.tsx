@@ -355,23 +355,13 @@ export function ReceiptItemCard({
           </Pressable>
         </View>}
         {expanded && !percentOpen && <View style={cardStyles.opened}>
-          <SplitProgressBar segments={segments} />
+          {resolution.portions.length > 0 && <SplitProgressBar segments={segments} />}
           {resolution.portions.length === 0 ? <Text style={cardStyles.meta}>No one is paying for this yet.</Text> : [...resolution.portions].sort((a, b) => Number(b.personId === viewerId) - Number(a.personId === viewerId)).map((portion) => {
             const person = people.find((entry) => entry.id === portion.personId);
             const yours = portion.personId === viewerId;
             return <View key={portion.personId} style={[cardStyles.payer, yours && cardStyles.payerYours]}>
               {person && <MemberAvatar person={person} size={28} />}
-              <Text style={[cardStyles.portionName, yours && editable && { flex: 0 }, { color: person?.color ?? colors.ink }, yours && cardStyles.portionYours]}>{person?.name ?? 'Someone'}</Text>
-              {yours && editable ? <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Remove ${person?.name ?? 'your'} claim`}
-                hitSlop={6}
-                onPress={onLeave}
-                style={cardStyles.removeClaim}
-              >
-                <Text style={cardStyles.removeMark}>−</Text>
-              </Pressable> : null}
-              {yours && editable ? <View style={{ flex: 1 }} /> : null}
+              <Text style={[cardStyles.portionName, { color: person?.color ?? colors.ink }, yours && cardStyles.portionYours]}>{person?.name ?? 'Someone'}</Text>
               {yours && editable ? <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Your share is ${formatBasisPoints(portion.basisPoints)}. Change it.`}
@@ -381,10 +371,19 @@ export function ReceiptItemCard({
               >
                 <Text style={[cardStyles.portionMeta, cardStyles.portionYours]}>{formatBasisPoints(portion.basisPoints)}</Text>
               </Pressable> : <Text style={cardStyles.portionMeta}>{formatBasisPoints(portion.basisPoints)}</Text>}
+              {yours && editable ? <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Remove ${person?.name ?? 'your'} claim`}
+                hitSlop={6}
+                onPress={onLeave}
+                style={cardStyles.removeClaim}
+              >
+                <Text style={cardStyles.removeMark}>−</Text>
+              </Pressable> : null}
               <Text {...moneyMark} style={[cardStyles.portionMoney, yours && cardStyles.portionMoneyYours]}>{formatMoney(portion.cents)}</Text>
             </View>;
           })}
-          {resolution.remainderBasisPoints > 0 && <Text style={cardStyles.warn}>
+          {resolution.portions.length > 0 && resolution.remainderBasisPoints > 0 && <Text style={cardStyles.warn}>
             Overflow portion {formatBasisPoints(resolution.remainderBasisPoints)} · <Text {...moneyMark} style={{ fontFamily: monoFamily, color: colors.warning }}>{formatMoney(resolution.unallocatedCents)}</Text> still open
           </Text>}
           {resolution.message && visual !== 'equal' && visual !== 'single' && <Text style={cardStyles.warn}>{resolution.message}</Text>}
@@ -696,9 +695,9 @@ const cardStyles = StyleSheet.create({
   payer: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 36, borderRadius: 8, paddingHorizontal: 4 },
   removeClaim: {
     width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: colors.dangerSoft,
+    backgroundColor: '#FFFFFF',
   },
-  removeMark: { color: colors.danger, fontSize: 22, lineHeight: 24, fontWeight: '700', marginTop: -2 },
+  removeMark: { color: colors.primary, fontSize: 22, lineHeight: 24, fontWeight: '700', marginTop: -2 },
   payerYours: { backgroundColor: '#E7F0F6' },
   portionName: { ...typeScale.person, flex: 1 },
   portionYours: { fontWeight: '800' },
