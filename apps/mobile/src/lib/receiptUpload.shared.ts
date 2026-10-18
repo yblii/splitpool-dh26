@@ -9,6 +9,8 @@ export type ReceiptImageUpload = {
 export type ReceiptExtractionResponse = {
   draft: ExtractedReceipt;
   usedFallback: boolean;
+  reason?: 'provider_unavailable' | 'parse_failed';
+  errorDetail?: string;
 };
 
 export function receiptFileMeta(image: ReceiptImageUpload): { name: string; type: string } {

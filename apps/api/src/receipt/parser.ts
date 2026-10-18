@@ -4,7 +4,7 @@ import {
   type ExtractedReceiptItem,
   type ReceiptWarning,
 } from '@splitpool/contracts';
-import OpenAI from 'openai';
+import OpenAI, { APIError } from 'openai';
 
 export type ReceiptParseInput = {
   bytes: Buffer;
@@ -15,6 +15,21 @@ export type ReceiptParseInput = {
 export type ReceiptParser = {
   readonly name: string;
   parseReceiptImage(input: ReceiptParseInput): Promise<ExtractedReceipt>;
+};
+
+export type ReceiptFallbackReason = 'provider_unavailable' | 'parse_failed';
+
+export type ParseWithFallbackResult = {
+  draft: ExtractedReceipt;
+  usedFallback: boolean;
+  reason?: ReceiptFallbackReason;
+  errorDetail?: string;
+};
+
+type ParseLogger = {
+  warn: (obj: unknown, msg?: string) => void;
+  error: (obj: unknown, msg?: string) => void;
+  info: (obj: unknown, msg?: string) => void;
 };
 
 const extractedReceiptSchema = {
@@ -149,12 +164,33 @@ export function createSampleFallbackParser(reason: ReceiptWarning = 'provider_un
   };
 }
 
+export function formatOpenAIError(error: unknown): string {
+  if (error instanceof APIError) {
+    const code = typeof error.error === 'object' && error.error && 'code' in error.error
+      ? String((error.error as { code?: unknown }).code)
+      : undefined;
+    const type = typeof error.error === 'object' && error.error && 'type' in error.error
+      ? String((error.error as { type?: unknown }).type)
+      : undefined;
+    const parts = [
+      error.status ? `status=${error.status}` : undefined,
+      type ? `type=${type}` : undefined,
+      code ? `code=${code}` : undefined,
+      error.message,
+    ].filter(Boolean);
+    return parts.join(' | ');
+  }
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
 export function createOpenAIReceiptParser(apiKey: string): ReceiptParser {
   const client = new OpenAI({ apiKey });
   return {
     name: 'openai-gpt-4o',
     async parseReceiptImage(input) {
-      const dataUrl = `data:${input.mimeType};base64,${input.bytes.toString('base64')}`;
+      const mimeType = input.mimeType === 'image/jpg' ? 'image/jpeg' : input.mimeType;
+      const dataUrl = `data:${mimeType};base64,${input.bytes.toString('base64')}`;
       const response = await client.chat.completions.create({
         model: 'gpt-4o',
         temperature: 0,
@@ -195,14 +231,36 @@ export function createReceiptParser(env: NodeJS.ProcessEnv = process.env): Recei
 export async function parseWithFallback(
   parser: ReceiptParser,
   input: ReceiptParseInput,
-): Promise<{ draft: ExtractedReceipt; usedFallback: boolean }> {
+  log?: ParseLogger,
+): Promise<ParseWithFallbackResult> {
   if (parser.name === 'sample-fallback') {
-    return { draft: await parser.parseReceiptImage(input), usedFallback: true };
+    log?.warn(
+      { parser: parser.name },
+      'Receipt extraction using sample fallback (OPENAI_API_KEY missing/empty). Set apps/api/.env OPENAI_API_KEY and restart the API.',
+    );
+    return {
+      draft: await parser.parseReceiptImage(input),
+      usedFallback: true,
+      reason: 'provider_unavailable',
+    };
   }
+
   try {
-    return { draft: await parser.parseReceiptImage(input), usedFallback: false };
-  } catch {
+    const draft = await parser.parseReceiptImage(input);
+    log?.info({ parser: parser.name, items: draft.items.length }, 'OpenAI receipt extraction succeeded');
+    return { draft, usedFallback: false };
+  } catch (error) {
+    const errorDetail = formatOpenAIError(error);
+    log?.error(
+      { parser: parser.name, err: error, errorDetail, bytes: input.bytes.length, mimeType: input.mimeType },
+      'OpenAI receipt extraction failed; using sample fallback',
+    );
     const fallback = createSampleFallbackParser('parse_failed');
-    return { draft: await fallback.parseReceiptImage(input), usedFallback: true };
+    return {
+      draft: await fallback.parseReceiptImage(input),
+      usedFallback: true,
+      reason: 'parse_failed',
+      errorDetail,
+    };
   }
 }

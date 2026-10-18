@@ -72,11 +72,16 @@ export default function ReceiptScreen() {
 
     setBusy(true);
     try {
-      const { draft, usedFallback } = await extractReceiptFromImage(picked);
+      const { draft, usedFallback, reason, errorDetail } = await extractReceiptFromImage(picked);
       if (usedFallback) {
+        const detail = reason === 'provider_unavailable'
+          ? 'OPENAI_API_KEY missing on the API. Set it in apps/api/.env and restart npm run api. Check GET /api/v1/health for openAiKeyPresent.'
+          : (errorDetail
+            ? `OpenAI error: ${errorDetail}`
+            : 'OpenAI parsing failed. Check the API terminal logs for status/message.');
         Alert.alert(
           'Using sample parse',
-          'Live parsing was unavailable, so labeled sample items were loaded for review.',
+          `Live parsing was unavailable, so labeled sample items were loaded for review.\n\n${detail}`,
           [{ text: 'Review', onPress: () => openReview(draft) }],
         );
         return;
