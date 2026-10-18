@@ -295,7 +295,7 @@ export function ReceiptItemCard({
           {fieldError ? <View style={cardStyles.inlineAlert}>
             <Text style={cardStyles.alertMark}>!</Text>
             <Text style={cardStyles.alertText}>{fieldError}</Text>
-          </View> : <Text style={cardStyles.editHint}>Your share updates from this percent. Everyone else splits what is left.</Text>}
+          </View> : null}
           <Pressable accessibilityRole="button" hitSlop={8} onPress={onCancelPercent}><Text style={styles.link}>Cancel</Text></Pressable>
         </View> : <View style={[cardStyles.line, visual === 'error' && cardStyles.errorLine]}>
           <View style={cardStyles.hatch}>
@@ -666,7 +666,6 @@ const cardStyles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12,
   },
   setText: { color: '#FFFFFF', fontWeight: '800', fontSize: 15 },
-  editHint: { width: '100%', color: colors.muted, fontSize: 12, lineHeight: 16 },
   inlineAlert: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 8 },
   alertMark: {
     width: 22, height: 22, borderRadius: 4, textAlign: 'center', lineHeight: 22,
