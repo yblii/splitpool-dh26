@@ -99,8 +99,8 @@ function ReviewEditor({ seed, onCancel, onSave }: {
       {draft.items.map((item, index) => {
         const open = openIndex === index;
         return <View key={`${item.id ?? 'row'}-${index}`} style={line}>
-          <Pressable accessibilityRole="button" accessibilityLabel={`${item.name || 'Item'}, ${formatMoney(item.netLineTotalCents)}. Edit.`} onPress={() => setOpenIndex(open ? -1 : index)} style={styles.row}>
-            <Text style={[styles.text, { flex: 1, fontWeight: '700' }]} numberOfLines={1}>{item.name || 'New item'}</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel={`${item.name || 'Item'}, ${formatMoney(item.netLineTotalCents)}. Edit.`} onPress={() => setOpenIndex(open ? -1 : index)} style={[styles.row, { paddingVertical: 10 }]}>
+            <Text style={[styles.text, { flex: 1, fontWeight: '700', paddingVertical: 4 }]} numberOfLines={1}>{item.name || 'New item'}</Text>
             <Text {...moneyMark} style={price}>{formatMoney(item.netLineTotalCents)}</Text>
           </Pressable>
           {open && <View style={editor}>
