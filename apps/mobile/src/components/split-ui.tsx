@@ -151,17 +151,26 @@ function createItemPan(
   });
 }
 
-export function ReceiptPaper({ title, level = 'title', dimTitle, alert, onFix, children }: {
+export function ReceiptPaper({ title, level = 'title', dimTitle, alert, onFix, onChangeTitle, children }: {
   title: string;
   level?: 'title' | 'subheading';
   dimTitle?: boolean;
   alert?: string | null;
   onFix?: () => void;
+  onChangeTitle?: (title: string) => void;
   children: ReactNode;
 }) {
+  const heading = level === 'subheading' ? paperStyles.subheading : paperStyles.title;
   return <View style={paperStyles.body}>
-    {title ? <Text style={[level === 'subheading' ? paperStyles.subheading : paperStyles.title, dimTitle && paperStyles.dimmed]}>{title}</Text> : null}
-    {title ? <View style={paperStyles.rule} /> : null}
+    {onChangeTitle ? <TextInput
+      accessibilityLabel="Restaurant"
+      value={title}
+      onChangeText={onChangeTitle}
+      placeholder="Restaurant"
+      placeholderTextColor={colors.muted}
+      style={[heading, paperStyles.titleField]}
+    /> : title ? <Text style={[heading, dimTitle && paperStyles.dimmed]}>{title}</Text> : null}
+    {title || onChangeTitle ? <View style={paperStyles.rule} /> : null}
     {children}
     {alert ? <Pressable
       accessibilityRole={onFix ? 'button' : 'text'}
@@ -628,6 +637,11 @@ const paperStyles = StyleSheet.create({
       web: { fontStyle: 'italic' as const },
       default: { fontFamily: interBoldItalic, fontWeight: 'normal' as const, fontStyle: 'normal' as const },
     }),
+  },
+  titleField: {
+    backgroundColor: 'transparent', borderWidth: 0, margin: 0, minHeight: 0,
+    paddingHorizontal: 0, paddingVertical: 0,
+    ...Platform.select({ web: { outlineWidth: 0 } }),
   },
   subheading: { ...typeScale.subheading, fontSize: 16, lineHeight: 21, textAlign: 'center', paddingTop: 2, paddingBottom: 6 },
   dimmed: { opacity: 0.25 },

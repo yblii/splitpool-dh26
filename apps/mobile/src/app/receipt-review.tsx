@@ -95,8 +95,7 @@ function ReviewEditor({ seed, onCancel, onSave }: {
     footer={<Button title="Confirm" disabled={draft.items.length === 0 || !!mismatch} onPress={() => setConfirming(true)} />}
   >
     {sample && <Text style={styles.small}>Sample items for the demo. They were not read by a scanner.</Text>}
-    <ReceiptPaper title={draft.merchant || 'Receipt'} alert={mismatch}>
-      <TextInput accessibilityLabel="Restaurant" value={draft.merchant} onChangeText={(merchant) => setDraft((current) => ({ ...current, merchant }))} style={styles.input} />
+    <ReceiptPaper title={draft.merchant} onChangeTitle={(merchant) => setDraft((current) => ({ ...current, merchant }))} alert={mismatch}>
       {draft.items.map((item, index) => {
         const open = openIndex === index;
         return <View key={`${item.id ?? 'row'}-${index}`} style={line}>
